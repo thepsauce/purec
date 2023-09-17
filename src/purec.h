@@ -1,9 +1,16 @@
 #ifndef INCLUDED_PUREC_H
 #define INCLUDED_PUREC_H
 
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+#include <locale.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <curses.h>
 
 #include <magic.h>
 #include <iconv.h>
@@ -25,6 +32,28 @@
 	__auto_type _MIN_b = (b); \
 	_MIN_a < _MIN_b ? _MIN_a : _MIN_b; \
 })
+
+char *read_file_utf8(const char *path, size_t *dest_ndata);
+
+/* Error codes (extension to errno) */
+extern int purec_errno;
+enum {
+	PESUCCESS,
+
+	PEFIRST_SYSCALL,
+	/* failed system calls */
+	PEMALLOC,
+	PESTAT,
+	PEOPEN,
+	PEICONV,
+
+	PELASR_SYSCALL,
+
+	PERACCESS, /* no read access */
+	PEWACCESS, /* no write access */
+	PECOUTSIDE, /* file changed outside */
+	PEPATH, /* problem with the input path occured */
+};
 
 #include "buffer.h"
 

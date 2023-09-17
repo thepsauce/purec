@@ -6,14 +6,17 @@
  * it uses a gap to speed up insertions and deletions.
  */
 
-#define BUFFER_GAP_SIZE 64
+#define BUFFER_GAP_SIZE 8
 
 typedef struct buffer {
 	int flags;
 	struct stat st;
 	char *path;
 	char *data;
-	size_t igap, ngap;
+	struct {
+		size_t index;
+		size_t size;
+	} gap;
 	size_t n;
 	struct buffer *next;
 } *Buffer;

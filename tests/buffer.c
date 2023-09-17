@@ -48,7 +48,7 @@ void assert_buffer_destroy(Buffer buf)
 
 void assert_buffer_read(Buffer buf, const char *path)
 {
-	//assert(buffer_read(buf, path) == 0 && "failed reading file");
+	assert(buffer_read(buf, path) == 0 && "failed reading file");
 }
 
 int main(void)
@@ -61,8 +61,8 @@ int main(void)
 	buf = assert_buffer_new();
 	buffer_dump(buf);
 
-	//assert_buffer_read(buf, "tests/buffer.c");
-	//buffer_dump(buf);
+	assert_buffer_read(buf, "tests/buffer.c");
+	buffer_dump(buf);
 
 	assert_buffer_destroy(buf);
 

@@ -5,9 +5,10 @@ do_linking=false
 program=
 do_debug=false
 
-compiler_flags="-Wall -Wextra -g -Ibuild"
-linker_flags="-g"
-linker_libs="-lmagic"
+common_flags="-g"
+compiler_flags="$common_flags -Wall -Wextra -Ibuild"
+linker_flags="$common_flags"
+linker_libs="-lmagic -lcurses"
 
 set -o xtrace
 
@@ -74,6 +75,12 @@ then
 	exit_code=$?
 	time_now=$(date "+%s %N")
 	read end_seconds end_nanoseconds <<< "$time_now"
-	elapsed_time="$((10#$end_seconds - 10#$start_seconds)).$((10#$end_nanoseconds - 10#$start_nanoseconds))"
-	echo -e "exit code: \e[36m$exit_code\e[0m; elapsed time: \e[36m$elapsed_time\e[0m seconds"
+	diff_seconds=$((10#$end_seconds - 10#$start_seconds))
+	diff_nanoseconds=$((10#$end_nanoseconds - 10#$start_nanoseconds))
+	if [ $diff_nanoseconds -lt 0 ]
+	then
+		diff_seconds=$((diff_seconds - 1))
+		diff_nanoseconds=$((1000000000 + diff_nanoseconds))
+	fi
+	echo -e "exit code: \e[36m$exit_code\e[0m; elapsed time: \e[36m$diff_seconds.$diff_nanoseconds\e[0m seconds"
 fi
