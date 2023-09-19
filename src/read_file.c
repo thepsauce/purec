@@ -17,6 +17,7 @@ static int init_magic(void)
 
 __attribute__((destructor)) static void uninit_magic(void)
 {
+	/* TODO: why does this make the program crash? */
 	if (magic_cookie != NULL)
 		magic_close(magic_cookie);
 }

@@ -1,14 +1,14 @@
 #include "test.h"
 
-void buffer_dump(Buffer buf)
+void buffer_dump(Buffer *buf)
 {
 	printf("=== %s ===\n", buf->path);
-	printf("(%zu)[%zu](%zu)\n", buf->igap, buf->ngap,
-			buf->n - buf->igap);
+	printf("(%zu)[%zu](%zu)\n", buf->gap.index, buf->gap.size,
+			buf->n - buf->gap.index);
 	for (size_t i = 0;; i++) {
-		if (i == buf->igap || i == buf->igap + buf->ngap)
+		if (i == buf->gap.index || i == buf->gap.index + buf->gap.size)
 			printf("\x1b[31m|\x1b[m");
-		if (i == buf->n + buf->ngap)
+		if (i == buf->n + buf->gap.size)
 			break;
 		const unsigned char c = buf->data[i];
 		if (c < 32)
@@ -23,38 +23,38 @@ void buffer_dump(Buffer buf)
 	printf("\n=========\n");
 }
 
-Buffer assert_buffer_new(void)
+Buffer *assert_buffer_new(void)
 {
-	Buffer buf;
+	Buffer *buf;
 
 	buf = buffer_new();
 	assert(buf != NULL && "failed creating buffer");
 	return buf;
 }
 
-Buffer assert_buffer_load(const char *path)
+Buffer *assert_buffer_load(const char *path)
 {
-	Buffer buf;
+	Buffer *buf;
 
 	buf = buffer_load(path);
 	assert(buf != NULL && "failed creating buffer");
 	return buf;
 }
 
-void assert_buffer_destroy(Buffer buf)
+void assert_buffer_destroy(Buffer *buf)
 {
 	buffer_destroy(buf);
 }
 
-void assert_buffer_read(Buffer buf, const char *path)
+void assert_buffer_read(Buffer *buf, const char *path)
 {
 	assert(buffer_read(buf, path) == 0 && "failed reading file");
 }
 
 int main(void)
 {
-	Buffer buf;
-	Buffer bufs[30];
+	Buffer *buf;
+	Buffer *bufs[30];
 	const char *s1 = "I SHOULD BE AT THE END",
 	      *s2 = "AM I AT THE START?";
 

@@ -15,6 +15,7 @@
 #include <magic.h>
 #include <iconv.h>
 
+#include <dlfcn.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -56,5 +57,6 @@ enum {
 };
 
 #include "buffer.h"
+#include "window.h"
 
 #endif

@@ -1,12 +1,13 @@
 sources=$(find src -name "*.c")
 headers=$(find src -name "*.h")
+langs=$(find lang -mindepth 1 -maxdepth 1 -type d)
 objects=
 do_linking=false
 program=
 do_debug=false
 
 common_flags="-g"
-compiler_flags="$common_flags -Wall -Wextra -Ibuild"
+compiler_flags="$common_flags -Wall -Wextra -Ibuild -Isrc"
 linker_flags="$common_flags"
 linker_libs="-lmagic -lcurses"
 
@@ -29,7 +30,7 @@ do
 	o="build/${s:4:-2}.o"
 	h="${s::-2}.h"
 	objects="$objects $o"
-	if [ $s -nt $o ] || [ $h -nt $o ]
+	if [ $s -nt $o ] || [ $h -nt $o ] || [ build/purec.h.gch -nt $s ]
 	then
 		gcc $compiler_flags -c $s -o $o || exit
 		do_linking=true
@@ -40,6 +41,11 @@ if $do_linking || [ ! -f build/purec ]
 then
 	gcc $linker_flags $objects -o build/purec $linker_libs || exit
 fi
+
+for l in $langs
+do
+	gcc $compiler_flags -shared -o build/$(basename $l).so -fPIC $l/*
+done
 
 while [ ! $# = 0 ]
 do

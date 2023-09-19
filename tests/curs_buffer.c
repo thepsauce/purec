@@ -1,6 +1,6 @@
 #include "test.h"
 
-void buffer_dump(Buffer buf, WINDOW *win)
+void buffer_dump(Buffer *buf, WINDOW *win)
 {
 	wmove(win, 0, 0);
 	wprintw(win, "=== %s ===\n", buf->path);
@@ -33,7 +33,7 @@ void buffer_dump(Buffer buf, WINDOW *win)
 
 int main(void)
 {
-	Buffer buf;
+	Buffer *buf;
 	WINDOW *win;
 
 	buf = buffer_load("test.txt");

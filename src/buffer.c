@@ -1,19 +1,19 @@
 #include "purec.h"
 
-Buffer first_buffer;
+Buffer *first_buffer;
 
-static void buffer_link(Buffer buf)
+static void buffer_link(Buffer *buf)
 {
 	buf->next = first_buffer;
 	first_buffer = buf;
 }
 
-static void buffer_unlink(Buffer buf)
+static void buffer_unlink(Buffer *buf)
 {
 	if (buf == first_buffer) {
 		first_buffer = buf->next;
 	} else {
-		Buffer prev;
+		Buffer *prev;
 
 		for (prev = first_buffer;
 				prev->next != buf;
@@ -22,9 +22,9 @@ static void buffer_unlink(Buffer buf)
 	}
 }
 
-Buffer buffer_new(void)
+Buffer *buffer_new(void)
 {
-	Buffer buf;
+	Buffer *buf;
 
 	if ((buf = malloc(sizeof(*buf))) == NULL) {
 		//purec_errno = PEMALLOC;
@@ -44,7 +44,7 @@ Buffer buffer_new(void)
 	return buf;
 }
 
-void buffer_destroy(Buffer buf)
+void buffer_destroy(Buffer *buf)
 {
 	buffer_unlink(buf);
 	free(buf->path);
@@ -52,9 +52,9 @@ void buffer_destroy(Buffer buf)
 	free(buf);
 }
 
-Buffer buffer_load(const char *path)
+Buffer *buffer_load(const char *path)
 {
-	Buffer buf;
+	Buffer *buf;
 	struct stat st;
 
 	for (buf = first_buffer; buf != NULL; buf = buf->next)
@@ -91,7 +91,7 @@ Buffer buffer_load(const char *path)
 	return buf;
 }
 
-int buffer_read(Buffer buf, const char *path)
+int buffer_read(Buffer *buf, const char *path)
 {
 	char *data;
 	size_t ndata;
@@ -104,7 +104,7 @@ int buffer_read(Buffer buf, const char *path)
 	return 0;
 }
 
-int buffer_write(Buffer buf, const char *path)
+int buffer_write(Buffer *buf, const char *path)
 {
 	int fd;
 	struct stat st;
@@ -143,7 +143,7 @@ int buffer_write(Buffer buf, const char *path)
 	return 0;
 }
 
-int buffer_movegap(Buffer buf, size_t igap)
+int buffer_movegap(Buffer *buf, size_t igap)
 {
 	igap = MIN(igap, buf->n);
 	if (igap > buf->gap.index)
@@ -158,7 +158,7 @@ int buffer_movegap(Buffer buf, size_t igap)
 	return igap;
 }
 
-size_t buffer_puts(Buffer buf, const char *str, size_t nstr)
+size_t buffer_puts(Buffer *buf, const char *str, size_t nstr)
 {
 	/* if gap is too small to insert n characters, increase gap size */
 	if (nstr > buf->gap.size) {
@@ -183,7 +183,7 @@ size_t buffer_puts(Buffer buf, const char *str, size_t nstr)
 	return nstr;
 }
 
-size_t buffer_delete(Buffer buf, int dir, size_t amount)
+size_t buffer_delete(Buffer *buf, int dir, size_t amount)
 {
 	if (dir > 0) {
 		amount = MIN(amount, buf->n - buf->gap.index);
