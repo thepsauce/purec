@@ -1,36 +1,45 @@
-#include "purec.h"
+#include "frame.h"
 
-int main(int argc, char **argv)
+#include <stdio.h>
+#include <string.h>
+#include <ncurses.h>
+
+int main(void)
 {
-	edit_mode_t mode = EDIT_MODE_NORMAL;
-	Edit *edit;
+    struct buf *buf;
+    struct frame fr;
 
-	setlocale(LC_ALL, "");
+    initscr();
+    cbreak();
+    keypad(stdscr, true);
+    noecho();
 
-	initscr();
-	noecho();
-	raw();
-	keypad(stdscr, true);
-	refresh();
+    buf = create_buffer("src/main.c");
 
-	edit = edit_new(buffer_load("test.txt"), 0, 0, COLS, LINES);
-	while (1) {
-		curs_set(0);
-		mvprintw(13, 1, "want: i=%3zu, x=%2d, y=%2d",
-			edit->wantindex, edit->wantcursor.x, edit->wantcursor.y);
-		edit_update(edit);
-		mvprintw(14, 1, "curs: i=%3zu, x=%2d, y=%2d",
-			edit->buffer->gap.index, edit->cursor.x, edit->cursor.y);
-		move(edit->cursor.y, edit->cursor.x);
-		curs_set(1);
-		const int c = getch();
-		if (c == 0x03)
-			break;
-		edit_handle(edit, c, &mode);
-	}
+    memset(&fr, 0, sizeof(fr));
+    fr.x = 0;
+    fr.y = 0;
+    fr.w = COLS;
+    fr.h = LINES - 1; /* minus status bar */
+    fr.buf = buf;
 
-	curs_set(1);
-	endwin();
-	return 0;
+    set_mode(NORMAL_MODE);
+
+    while (1) {
+        erase();
+        for (size_t i = 0; i < buf->num_lines; i++) {
+            addnstr(buf->lines[i].s, buf->lines[i].n);
+            addch('\n');
+        }
+        move(LINES - 1, 0);
+        clrtoeol();
+        move(LINES - 1, 0);
+        printw("%zu/%zu:%zu", fr.cur.line + 1, buf->num_lines, fr.cur.col + 1);
+        move(fr.cur.line, fr.cur.col);
+        while (handle_input(&fr, getch()) == 0);
+    }
+
+    delete_buffer(buf);
+    endwin();
+    return 0;
 }
-
