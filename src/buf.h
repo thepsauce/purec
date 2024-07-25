@@ -1,40 +1,17 @@
 #ifndef BUF_H
 #define BUF_H
 
+/* * * * * * * *
+ *    Buffer    * * * * *
+ * * * * * * * */
+
 #include "mode.h"
 
 #include <stdlib.h>
 
 #include <sys/stat.h>
 
-/// if the line has a gdb breakpoint
-#define LINE_BREAKPOINT 0x1
-/// if the line is hidden
-#define LINE_HIDDEN 0x2
-/// if the line should be ignored
-#define LINE_IGNORE 0x4
-
-struct line {
-    /// special flags (`LINE_*`)
-    int flags;
-    /// data of the line
-    char *s;
-    /// number of bytes on this line
-    size_t n;
-    /// starting from this line, how many lines should be inserted extra
-    size_t inc;
-};
-
-/// text was inserted (`text` is the inserted text)
-#define UNDO_INSERT 1
-/// text was deleted (`text` is the deleted text)
-#define UNDO_DELETE 2
-/// text was replaced (`text` is the xor of the text plus additional bytes)
-#define UNDO_REPLACE 3
-
 struct undo_event {
-    /// type of the event (`UNDO_*`)
-    int type;
     /// position of the event
     struct pos pos;
     /// changed text
@@ -66,7 +43,59 @@ struct buf {
     size_t event_i;
 };
 
+/**
+ * Allocates a buffer and adds it to the buffer list.
+ *
+ * @param path  File path (can be `NULL` for an empty buffer)
+ *
+ * @return Allocated buffer.
+ */
 struct buf *create_buffer(const char *path);
+
+/**
+ * Deletes a buffer and removes it from the buffer list.
+ *
+ * @param buf   The buffer to delete.
+ */
 void delete_buffer(struct buf *buf);
+
+/**
+ * Insert given number of lines starting from given index.
+ *
+ * This function does NO clipping on `line_i`.
+ *
+ * @param buf       Buffer to delete within.
+ * @param line_i    Line index to append to.
+ * @param num_lines Number of lines to insert.
+ *
+ * @return First line that was inserted.
+ */
+struct line *insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
+
+/**
+ * Delete given number of lines starting from given index.
+ *
+ * This function does clipping.
+ *
+ * @param buf       Buffer to delete within.
+ * @param line_i    Inclusive line index to delete from.
+ * @param num_lines Number of lines to delete
+ *
+ * @return 1 if anything was deleted, 0 otherwise.
+ */
+int delete_lines(struct buf *buf, size_t line_i, size_t num_lines);
+
+/**
+ * Deletes given inclusive range.
+ *
+ * This function does clipping and swapping so that `from` comes before `to`.
+ *
+ * @param buf   Buffer to delete within.
+ * @param from  Start of deletion.
+ * @param to    End of deletion.
+ *
+ * @return 1 if anything was deleted, 0 otherwise.
+ */
+int delete_range(struct buf *buf, const struct pos *from, const struct pos *to);
 
 #endif
