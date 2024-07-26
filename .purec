@@ -1,5 +1,0 @@
-__PROJECT_FILE=true
-project_name="purec"
-project_source_dirs=( "src" )
-project_common_flags=( -D_GNU_SOURCE -std=gnu99 -g -fsanitize=address -Wall -Wextra -Wpedantic -Werror )
-project_linker_libs=( -lncursesw )
