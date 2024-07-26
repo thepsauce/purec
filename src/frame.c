@@ -2,6 +2,7 @@
 #include "mode.h"
 #include "macros.h"
 
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -76,6 +77,52 @@ void adjust_cursor(struct frame *frame)
     }
     line = &buf->lines[frame->cur.line];
     frame->cur.col = MIN(frame->vct, get_mode_line_end(line));
+}
+
+int do_motion(struct frame *frame, int motion)
+{
+    int r = 0;
+
+    switch (motion) {
+    case MOTION_LEFT:
+        r = move_horz(frame, correct_counter(Mode.counter), -1);
+        break;
+
+    case MOTION_RIGHT:
+        r = move_horz(frame, correct_counter(Mode.counter), 1);
+        break;
+
+    case MOTION_DOWN:
+        r = move_vert(frame, correct_counter(Mode.counter), 1);
+        break;
+
+    case MOTION_UP:
+        r = move_vert(frame, correct_counter(Mode.counter), -1);
+        break;
+
+    case MOTION_HOME:
+        r = move_horz(frame, SIZE_MAX, -1);
+        break;
+
+    case MOTION_END:
+        r = move_horz(frame, SIZE_MAX, 1);
+        break;
+
+    case MOTION_PREV:
+        r = move_dir(frame, correct_counter(Mode.counter), -1);
+        break;
+
+    case MOTION_NEXT:
+        r = move_dir(frame, correct_counter(Mode.counter), 1);
+        break;
+
+    case MOTION_HOME_SP:
+        r = move_horz(frame, frame->cur.col -
+                get_line_indent(frame->buf, frame->cur.line), -1);
+        break;
+    }
+    Mode.counter = 0;
+    return r;
 }
 
 int move_vert(struct frame *frame, size_t dist, int dir)

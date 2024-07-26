@@ -1,6 +1,7 @@
 #include "frame.h"
 #include "buf.h"
 #include "mode.h"
+#include "macros.h"
 
 #include <ctype.h>
 #include <ncurses.h>
@@ -15,16 +16,34 @@ size_t safe_mul(size_t a, size_t b)
     return c;
 }
 
-#define correct(c) ((c)==0?1:(c))
-
 int normal_handle_input(int c)
 {
-    int r = 0;
-    struct pos old_cur;
-    struct line *line;
-    size_t col;
+    static int motions[KEY_MAX] = {
+        ['h'] = MOTION_LEFT,
+        ['l'] = MOTION_RIGHT,
+        ['k'] = MOTION_UP,
+        ['j'] = MOTION_DOWN,
 
-    old_cur = SelFrame->cur;
+        ['0'] = MOTION_HOME,
+        ['$'] = MOTION_END,
+
+        [KEY_HOME] = MOTION_HOME,
+        [KEY_END] = MOTION_END,
+
+        ['I'] = MOTION_HOME_SP,
+        ['A'] = MOTION_END,
+
+        ['a'] = MOTION_RIGHT,
+
+        [0x7f] = MOTION_PREV,
+        [KEY_BACKSPACE] = MOTION_PREV,
+        [' '] = MOTION_PREV,
+    };
+
+    int r = 0;
+    struct pos old_cur, new_cur;
+    int e_c;
+
     switch (c) {
     case '\x1b':
         move_horz(SelFrame, 1, -1);
@@ -32,108 +51,78 @@ int normal_handle_input(int c)
         r = 1;
         break;
 
-    /* go to change or delete extra mode */
+    /* change or delete */
     case 'c':
     case 'd':
-        if (Mode.extra != 0) {
-            /* TODO: change indents */
-            r = delete_lines(SelFrame->buf, SelFrame->cur.line,
-                    safe_mul(correct(Mode.extra_counter),
-                        correct(Mode.counter)));
-            adjust_cursor(SelFrame);
-            Mode.extra = 0;
-            break;
-        }
-        Mode.pos = SelFrame->cur;
         Mode.extra_counter = Mode.counter;
         Mode.counter = 0;
-        Mode.extra = c == 'c' ? EXTRA_CHANGE : EXTRA_DELETE;
-        return 0;
+        e_c = getch_digit();
+        old_cur = SelFrame->cur;
+        Mode.counter = safe_mul(correct_counter(Mode.counter),
+                correct_counter(Mode.extra_counter));
+        switch (e_c) {
+        case 'c':
+            if (c != 'c') {
+                break;
+            }
+            r = delete_lines(SelFrame->buf, SelFrame->cur.line,
+                    Mode.counter - 1);
+            /* TODO: re indent line */
+            if (SelFrame->buf->lines[SelFrame->cur.line].n != 0) {
+                SelFrame->buf->lines[SelFrame->cur.line].n = 0;
+                r = 1;
+            }
+            adjust_cursor(SelFrame);
+            break;
 
-    case 'I':
-        line = &SelFrame->buf->lines[SelFrame->cur.line];
-        col = 0;
-        while (isblank(line->s[col])) {
-            col++;
-        }
-        r = move_horz(SelFrame, SelFrame->cur.col - col, -1);
-        set_mode(INSERT_MODE);
-        break;
+        case 'd':
+            if (c != 'd') {
+                break;
+            }
+            r = delete_lines(SelFrame->buf, SelFrame->cur.line, Mode.counter);
+            adjust_cursor(SelFrame);
+            break;
 
-    case KEY_HOME:
-    case '0':
-        if (Mode.counter != 0) {
-            shift_add_counter(0);
-            return 1;
+        default:
+            do_motion(SelFrame, motions[e_c]);
+            r = delete_range(SelFrame->buf, &old_cur, &SelFrame->cur);
+            if (old_cur.line < SelFrame->cur.line ||
+                    (old_cur.line == SelFrame->cur.line &&
+                     old_cur.col < SelFrame->cur.col)) {
+                SelFrame->cur = old_cur;
+            }
         }
-        r = move_horz(SelFrame, SIZE_MAX, -1);
+        if (c == 'c') {
+            set_mode(INSERT_MODE);
+        }
         break;
 
     case 'x':
-        r = delete_range(SelFrame->buf, &SelFrame->cur, &SelFrame->cur);
+        new_cur = SelFrame->cur;
+        new_cur.col += correct_counter(Mode.counter);
+        r = delete_range(SelFrame->buf, &SelFrame->cur, &new_cur);
         break;
 
     case 'X':
-        r = move_horz(SelFrame, 1, -1);
+        old_cur = SelFrame->cur;
+        r = move_horz(SelFrame, correct_counter(Mode.counter), -1);
         delete_range(SelFrame->buf, &SelFrame->cur, &old_cur);
         break;
 
-    case '1':
-    case '2':
-    case '3':
-    case '4':
-    case '5':
-    case '6':
-    case '7':
-    case '8':
-    case '9':
-        shift_add_counter(c - '0');
-        return 1;
+    case 'u':
+        r = (int) undo_event(SelFrame->buf);
+        break;
+
+    case CONTROL('R'):
+        r = (int) redo_event(SelFrame->buf);
+        break;
 
     case 'A':
-        set_mode(INSERT_MODE);
-        /* fall through */
-    case KEY_END:
-    case '$':
-        r = move_horz(SelFrame, SIZE_MAX, 1);
-        break;
-
-    case KEY_LEFT:
-    case 'h':
-        r = move_horz(SelFrame, Mode.counter == 0 ? 1 : Mode.counter, -1);
-        break;
-
-    case KEY_DOWN:
-    case 'j':
-        r = move_vert(SelFrame, Mode.counter == 0 ? 1 : Mode.counter, 1);
-        break;
-
-    case KEY_UP:
-    case 'k':
-        r = move_vert(SelFrame, Mode.counter == 0 ? 1 : Mode.counter, -1);
-        break;
-
-    case KEY_BACKSPACE:
-    case 0x7f:
-        r = move_dir(SelFrame, Mode.counter == 0 ? 1 : Mode.counter, -1);
-        break;
-
-    case ' ':
-        r = move_dir(SelFrame, Mode.counter == 0 ? 1 : Mode.counter, 1);
-        break;
-
     case 'a':
-        set_mode(INSERT_MODE);
-        /* fall through */
-    case KEY_RIGHT:
-    case 'l':
-        r = move_horz(SelFrame, Mode.counter == 0 ? 1 : Mode.counter, 1);
-        break;
-
+    case 'I':
     case 'i':
         set_mode(INSERT_MODE);
         break;
     }
-    Mode.counter = 0;
-    return r;
+    return r + do_motion(SelFrame, motions[c]);
 }

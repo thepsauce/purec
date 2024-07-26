@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include <ncurses.h>
+
 struct mode Mode;
 
 void shift_add_counter(int d)
@@ -19,6 +21,17 @@ void shift_add_counter(int d)
     Mode.counter = new_counter;
 }
 
+int getch_digit(void)
+{
+    int c;
+
+    while (c = getch(), (c == '0' && Mode.counter != 0) ||
+            (c >= '1' && c <= '9')) {
+        shift_add_counter(c - '0');
+    }
+    return c;
+}
+
 size_t get_mode_line_end(struct line *line)
 {
     if (Mode.type != NORMAL_MODE) {
@@ -28,10 +41,14 @@ size_t get_mode_line_end(struct line *line)
     return line->n == 0 ? 0 : line->n - 1;
 }
 
+size_t correct_counter(size_t counter)
+{
+    return counter == 0 ? 1 : counter;
+}
+
 void set_mode(int mode)
 {
     Mode.type = mode;
-    Mode.extra = 0;
     switch (mode) {
     case NORMAL_MODE:
     case VISUAL_MODE:

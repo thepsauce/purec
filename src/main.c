@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
+
 #include <ncurses.h>
 
 int main(void)
@@ -39,7 +40,7 @@ int main(void)
         move(LINES - 1, 0);
         printw("%zu/%zu:%zu", fr.cur.line + 1, buf->num_lines, fr.cur.col + 1);
         move(fr.cur.line, fr.cur.col);
-        while (normal_handle_input(getch()) == 0);
+        while (normal_handle_input(getch_digit()) == 0);
     }
 
     delete_buffer(buf);

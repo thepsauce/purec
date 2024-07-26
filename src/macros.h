@@ -24,5 +24,12 @@
  */
 #define MIN(a, b) ((a)>(b)?(b):(a))
 
+/**
+ * Get the control code of a letter.
+ *
+ * X becomes C-X.
+ */
+#define CONTROL(k) ((k)-'A'+1)
+
 #endif
 

@@ -50,6 +50,39 @@ int move_dir(struct frame *frame, size_t dist, int dir);
 void adjust_cursor(struct frame *frame);
 
 /**
+ * All motions use the counter to perform the operation count times.
+ */
+
+/// move to the left
+#define MOTION_LEFT     1
+/// move to the right
+#define MOTION_RIGHT    2
+/// move up
+#define MOTION_UP       3
+/// move down
+#define MOTION_DOWN     4
+/// move to the beginning of the line
+#define MOTION_HOME     5
+/// move to the end of the line
+#define MOTION_END      6
+/// move to the next character
+#define MOTION_NEXT     7
+/// move to the previous character
+#define MOTION_PREV     8
+/// move to the beginning of the line but skip white space
+#define MOTION_HOME_SP  9
+
+/**
+ * Do a special cursor motion.
+ *
+ * @param frame     Frame to perform the motion within.
+ * @param motion    Motion to perform (`MOTION_*`).
+ *
+ * @return 0 if the cursor stayed unchanged, 1 otherwise
+ */
+int do_motion(struct frame *frame, int motion);
+
+/**
  * Moves the cursor in vertical direction (up and down) and returns true if
  * there was movement.
  *
