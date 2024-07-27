@@ -46,6 +46,7 @@ int normal_handle_input(int c)
     int r = 0;
     struct pos old_cur, new_cur;
     int e_c;
+    struct undo_event *ev;
 
     switch (c) {
     case '\x1b':
@@ -128,12 +129,28 @@ int normal_handle_input(int c)
         break;
 
     case 'u':
-        r = (int) undo_event(SelFrame->buf);
-        break;
+        ev = undo_event(SelFrame->buf);
+        if (ev == NULL) {
+            return 0;
+        }
+        SelFrame->cur = ev->cur;
+        /* since the event could have been made in insert mode,
+         * we need to clip it. just like below in redo
+         */
+        SelFrame->cur.col = MIN(SelFrame->cur.col, get_mode_line_end(
+                    &SelFrame->buf->lines[SelFrame->cur.line]));
+        return 1;
 
     case CONTROL('R'):
-        r = (int) redo_event(SelFrame->buf);
-        break;
+        ev = redo_event(SelFrame->buf);
+        if (ev == NULL) {
+            return 0;
+        }
+        SelFrame->cur = ev->cur;
+        /* this is what the above text is referring to */
+        SelFrame->cur.col = MIN(SelFrame->cur.col, get_mode_line_end(
+                    &SelFrame->buf->lines[SelFrame->cur.line]));
+        return 1;
 
     case 'A':
     case 'a':

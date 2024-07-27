@@ -77,18 +77,18 @@ void add_event(struct buf *buf, struct undo_event *ev);
  *
  * @param buf   Buffer to undo in.
  *
- * @return true if an event was undone, false if all events are undone.
+ * @return The event undone or `NULL` if there was none.
  */
-bool undo_event(struct buf *buf);
+struct undo_event *undo_event(struct buf *buf);
 
 /**
  * Redo an undone event.
  *
  * @param buf   Buffer to redo in.
  *
- * @return true if an event was redone, false if no event can be redone.
+ * @return The event redone or `NULL` if there was none.
  */
-bool redo_event(struct buf *buf);
+struct undo_event *redo_event(struct buf *buf);
 
 /**
  * Gets the line indentation in bytes.

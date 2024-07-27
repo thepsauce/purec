@@ -74,7 +74,7 @@ void add_event(struct buf *buf, struct undo_event *ev)
     buf->num_events = buf->event_i;
 }
 
-bool undo_event(struct buf *buf)
+struct undo_event *undo_event(struct buf *buf)
 {
     struct undo_event *ev;
     size_t line, col;
@@ -83,7 +83,7 @@ bool undo_event(struct buf *buf)
     struct pos from, to;
 
     if (buf->event_i == 0) {
-        return false;
+        return NULL;
     }
     ev = &buf->events[--buf->event_i];
     line = ev->pos.line;
@@ -114,13 +114,13 @@ bool undo_event(struct buf *buf)
         }
 
         to.line = line;
-        to.col = l;
+        to.col = col + l;
         _delete_range(buf, &from, &to);
     }
-    return true;
+    return ev;
 }
 
-bool redo_event(struct buf *buf)
+struct undo_event *redo_event(struct buf *buf)
 {
     struct undo_event *ev;
     size_t line;
@@ -130,7 +130,7 @@ bool redo_event(struct buf *buf)
     struct pos from, to;
 
     if (buf->event_i == buf->num_events) {
-        return false;
+        return NULL;
     }
     ev = &buf->events[buf->event_i++];
     line = ev->pos.line;
@@ -159,13 +159,13 @@ bool redo_event(struct buf *buf)
         }
 
         to.line = line;
-        to.col = l;
+        to.col = col + l;
         _delete_range(buf, &from, &to);
     } else if (ev->del_len < ev->ins_len) {
         _insert_text(buf, &from, &ev->text[ev->del_len],
                 ev->ins_len - ev->del_len);
     }
-    return true;
+    return ev;
 }
 
 size_t get_line_indent(struct buf *buf, size_t line_i)
