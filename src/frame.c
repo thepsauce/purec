@@ -128,6 +128,14 @@ int do_motion(struct frame *frame, int motion)
     case MOTION_FILE_END:
         r = move_vert(frame, SIZE_MAX, 1);
         break;
+
+    case MOTION_PAGE_UP:
+        r = move_vert(frame, frame->h * 2 / 3, -1);
+        break;
+
+    case MOTION_PAGE_DOWN:
+        r = move_vert(frame, frame->h * 2 / 3, 1);
+        break;
     }
     Mode.counter = 0;
     return r;

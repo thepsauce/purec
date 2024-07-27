@@ -41,6 +41,9 @@ int normal_handle_input(int c)
         [0x7f] = MOTION_PREV,
         [KEY_BACKSPACE] = MOTION_PREV,
         [' '] = MOTION_PREV,
+
+        [KEY_PPAGE] = MOTION_PAGE_UP,
+        [KEY_NPAGE] = MOTION_PAGE_DOWN,
     };
 
     int r = 0;

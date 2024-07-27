@@ -54,27 +54,31 @@ void adjust_cursor(struct frame *frame);
  */
 
 /// move to the left
-#define MOTION_LEFT     1
+#define MOTION_LEFT         1
 /// move to the right
-#define MOTION_RIGHT    2
+#define MOTION_RIGHT        2
 /// move up
-#define MOTION_UP       3
+#define MOTION_UP           3
 /// move down
-#define MOTION_DOWN     4
+#define MOTION_DOWN         4
 /// move to the beginning of the line
-#define MOTION_HOME     5
+#define MOTION_HOME         5
 /// move to the end of the line
-#define MOTION_END      6
+#define MOTION_END          6
 /// move to the next character
-#define MOTION_NEXT     7
+#define MOTION_NEXT         7
 /// move to the previous character
-#define MOTION_PREV     8
+#define MOTION_PREV         8
 /// move to the beginning of the line but skip white space
-#define MOTION_HOME_SP  9
+#define MOTION_HOME_SP      9
 /// move to the beginning of the file
-#define MOTION_FILE_BEG 10
+#define MOTION_FILE_BEG     10
 /// move to the end of the file
-#define MOTION_FILE_END 11
+#define MOTION_FILE_END     11
+/// move a page up
+#define MOTION_PAGE_UP      12
+/// move a page down
+#define MOTION_PAGE_DOWN    13
 
 /**
  * Do a special cursor motion.
