@@ -40,7 +40,11 @@ int main(void)
         move(LINES - 1, 0);
         printw("%zu/%zu:%zu", fr.cur.line + 1, buf->num_lines, fr.cur.col + 1);
         move(fr.cur.line, fr.cur.col);
-        while (normal_handle_input(getch_digit()) == 0);
+        if (Mode.type == NORMAL_MODE) {
+            while (normal_handle_input(getch_digit()) == 0);
+        } else {
+            while (insert_handle_input(getch_digit()) == 0);
+        }
     }
 
     delete_buffer(buf);

@@ -99,18 +99,22 @@ int normal_handle_input(int c)
             if (c != 'd') {
                 break;
             }
-            r = delete_lines(SelFrame->buf, SelFrame->cur.line, Mode.counter);
+            r = delete_lines(SelFrame->buf, &SelFrame->cur, Mode.counter);
             adjust_cursor(SelFrame);
             break;
 
         default:
+            Mode.type = INSERT_MODE;
             do_motion(SelFrame, motions[e_c]);
+            Mode.type = NORMAL_MODE;
             r = delete_range(SelFrame->buf, &old_cur, &SelFrame->cur);
             if (old_cur.line < SelFrame->cur.line ||
                     (old_cur.line == SelFrame->cur.line &&
                      old_cur.col < SelFrame->cur.col)) {
                 SelFrame->cur = old_cur;
             }
+            SelFrame->cur.col = MIN(SelFrame->cur.col, get_mode_line_end(
+                        &SelFrame->buf->lines[SelFrame->cur.line]));
         }
         if (c == 'c') {
             set_mode(INSERT_MODE);

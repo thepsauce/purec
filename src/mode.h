@@ -171,4 +171,11 @@ void set_mode(int mode);
  */
 int normal_handle_input(int c);
 
+/**
+ * Handles a key input for the insert mode.
+ *
+ * @return Whether the ui needs to be updated.
+ */
+int insert_handle_input(int c);
+
 #endif

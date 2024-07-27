@@ -168,12 +168,13 @@ void _insert_text(struct buf *buf, struct pos *pos,
  * This function does clipping and adds the operation as event.
  *
  * @param buf       Buffer to delete within.
- * @param line_i    Inclusive line index to delete from.
+ * @param pos       Position to delete from (column is just for book keeping, so
+ *                  adding the column to the generated event).
  * @param num_lines Number of lines to delete.
  *
  * @return 1 if anything was deleted, 0 otherwise.
  */
-int delete_lines(struct buf *buf, size_t line_i, size_t num_lines);
+int delete_lines(struct buf *buf, const struct pos *pos, size_t num_lines);
 
 /**
  * Deletes given inclusive range.
