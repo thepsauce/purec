@@ -105,7 +105,8 @@ size_t get_line_indent(struct buf *buf, size_t line_i);
 /**
  * Insert given number of lines starting from given index.
  *
- * This function does NO clipping on `line_i` and no event is added.
+ * If `line_i` is out of bounds, it is set to the last line. All added lines are
+ * initialized to 0 and no event is added.
  *
  * @param buf       Buffer to delete within.
  * @param line_i    Line index to append to.
@@ -114,6 +115,50 @@ size_t get_line_indent(struct buf *buf, size_t line_i);
  * @return First line that was inserted.
  */
 struct line *insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
+
+/**
+ * Insert given number of lines starting from given index.
+ *
+ * Behaves similar to `insert_lines()` but does do out of bounds checking nor
+ * initialization of the added lines.
+ *
+ * @param buf       Buffer to delete within.
+ * @param line_i    Line index to append to.
+ * @param num_lines Number of lines to insert.
+ *
+ * @return First line that was inserted.
+ *
+ * @see insert_lines()
+ */
+struct line *_insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
+
+/**
+ * Inserts text at given position.
+ *
+ * This functions adds an event but does NO clipping.
+ *
+ * @param buf       Buffer to insert text in.
+ * @param pos       Position to insert text from.
+ * @param text      Text to insert.
+ * @param len_text  Length of the text to insert.
+ *
+ * @return 0 if `len_text` is 0, 1 otherwise.
+ */
+int insert_text(struct buf *buf, struct pos *pos,
+        const char *text, size_t len_text);
+
+/**
+ * Inserts text at given position.
+ *
+ * This functions adds NO event and does NO clipping.
+ *
+ * @param buf       Buffer to insert text in.
+ * @param pos       Position to insert text from.
+ * @param text      Text to insert.
+ * @param len_text  Length of the text to insert.
+ */
+void _insert_text(struct buf *buf, struct pos *pos,
+        const char *text, size_t len_text);
 
 /**
  * Delete given number of lines starting from given index.
@@ -134,6 +179,15 @@ int delete_lines(struct buf *buf, size_t line_i, size_t num_lines);
  * This function does clipping and swapping so that `from` comes before `to`.
  * The operation is added as event.
  *
+ * Example deleting the entire text of a buffer with 20 lines:
+ * ```C
+ * struct pos from = { 0, 0 };
+ * struct pos to = { buf->num_lines, 0 };
+ * delete_range(&buf, &from, &to);
+ * ```
+ * Note that as long as `to.line` is greater than or equal to `buf->num_lines`,
+ * this function is safe and it simply deletes until the end of the buffer.
+ *
  * @param buf   Buffer to delete within.
  * @param from  Start of deletion.
  * @param to    End of deletion.
@@ -141,5 +195,16 @@ int delete_lines(struct buf *buf, size_t line_i, size_t num_lines);
  * @return 1 if anything was deleted, 0 otherwise.
  */
 int delete_range(struct buf *buf, const struct pos *from, const struct pos *to);
+
+/**
+ * Same as delete_range() but no clipping, no event adding.
+ *
+ * @param buf   Buffer to delete within.
+ * @param from  Start of deletion.
+ * @param to    End of deletion.
+ *
+ * @see delete_range()
+ */
+void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto);
 
 #endif
