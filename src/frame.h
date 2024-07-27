@@ -40,9 +40,9 @@ extern struct frame *SelFrame;
 int move_dir(struct frame *frame, size_t dist, int dir);
 
 /**
- * This adjust the cursor to an in bound position.
+ * This places the cursor at `vct` and places it in bound vertically.
  *
- * If the cursor is out of bounds vertically, it is set to the last line, then
+ * If the cursor is out of bounds vertically, it is set to the last line. Then
  * the vertical column tracker is used to adjust the cursor horizontally.
  *
  * @param frame Frame to adjust the cursor within.

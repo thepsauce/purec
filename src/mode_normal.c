@@ -40,7 +40,7 @@ int normal_handle_input(int c)
 
         [0x7f] = MOTION_PREV,
         [KEY_BACKSPACE] = MOTION_PREV,
-        [' '] = MOTION_PREV,
+        [' '] = MOTION_NEXT,
 
         [KEY_PPAGE] = MOTION_PAGE_UP,
         [KEY_NPAGE] = MOTION_PAGE_DOWN,
