@@ -83,8 +83,7 @@ int normal_handle_input(int c)
             if (c != 'c') {
                 break;
             }
-            r = delete_lines(SelFrame->buf, SelFrame->cur.line,
-                    Mode.counter - 1);
+            r = delete_lines(SelFrame->buf, &SelFrame->cur, Mode.counter - 1);
             /* TODO: re indent line */
             if (SelFrame->buf->lines[SelFrame->cur.line].n != 0) {
                 SelFrame->buf->lines[SelFrame->cur.line].n = 0;
@@ -125,7 +124,7 @@ int normal_handle_input(int c)
     case 'X':
         old_cur = SelFrame->cur;
         r = move_horz(SelFrame, correct_counter(Mode.counter), -1);
-        delete_range(SelFrame->buf, &SelFrame->cur, &old_cur);
+        delete_range(SelFrame->buf, &old_cur, &SelFrame->cur);
         break;
 
     case 'u':

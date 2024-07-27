@@ -15,6 +15,8 @@
 struct undo_event {
     /// position of the event
     struct pos pos;
+    /// cursor position at the time of the event
+    struct pos cur;
     /// number of bytes inserted
     size_t ins_len;
     /// number of bytes deleted
