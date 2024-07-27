@@ -120,6 +120,14 @@ int do_motion(struct frame *frame, int motion)
         r = move_horz(frame, frame->cur.col -
                 get_line_indent(frame->buf, frame->cur.line), -1);
         break;
+
+    case MOTION_FILE_BEG:
+        r = move_vert(frame, SIZE_MAX, -1);
+        break;
+
+    case MOTION_FILE_END:
+        r = move_vert(frame, SIZE_MAX, 1);
+        break;
     }
     Mode.counter = 0;
     return r;

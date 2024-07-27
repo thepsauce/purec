@@ -71,6 +71,10 @@ void adjust_cursor(struct frame *frame);
 #define MOTION_PREV     8
 /// move to the beginning of the line but skip white space
 #define MOTION_HOME_SP  9
+/// move to the beginning of the file
+#define MOTION_FILE_BEG 10
+/// move to the end of the file
+#define MOTION_FILE_END 11
 
 /**
  * Do a special cursor motion.

@@ -35,6 +35,9 @@ int normal_handle_input(int c)
 
         ['a'] = MOTION_RIGHT,
 
+        ['g'] = MOTION_FILE_BEG,
+        ['G'] = MOTION_FILE_END,
+
         [0x7f] = MOTION_PREV,
         [KEY_BACKSPACE] = MOTION_PREV,
         [' '] = MOTION_PREV,
@@ -49,6 +52,20 @@ int normal_handle_input(int c)
         move_horz(SelFrame, 1, -1);
         set_mode(NORMAL_MODE);
         r = 1;
+        break;
+
+    case 'g':
+        Mode.extra_counter = Mode.counter;
+        Mode.counter = 0;
+        e_c = getch_digit();
+        switch (e_c) {
+        case 'g':
+        case 'G':
+            c = e_c;
+            break;
+        default:
+            e_c = 0;
+        }
         break;
 
     /* change or delete */
