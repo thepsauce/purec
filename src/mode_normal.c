@@ -112,6 +112,7 @@ int normal_handle_input(int c)
         if (c == 'c') {
             set_mode(INSERT_MODE);
         }
+        c = 0;
         break;
 
     case 'x':

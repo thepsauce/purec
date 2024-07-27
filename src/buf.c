@@ -295,11 +295,13 @@ int delete_lines(struct buf *buf, size_t line_i, size_t num_lines)
     /* get the deleted text for undo */
     ev.pos.line = line_i;
     ev.pos.col = 0;
+    ev.ins_len = 0;
     ev.del_len = 0;
     for (size_t i = line_i; i < end; i++) {
         ev.del_len += buf->lines[i].n + 1;
     }
     ev.text = xmalloc(ev.del_len);
+
     del_i = 0;
     for (size_t i = line_i; i < end; i++) {
         memcpy(&ev.text[del_i], buf->lines[i].s,
@@ -331,6 +333,8 @@ int delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto
     struct pos from, to;
     struct pos tmp;
     struct line *fl, *tl;
+    struct undo_event ev;
+    size_t del_i;
 
     from = *pfrom;
     to = *pto;
@@ -339,8 +343,8 @@ int delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto
     if (from.line >= buf->num_lines) {
         from.line = buf->num_lines - 1;
     }
-    if (to.line >= buf->num_lines) {
-        to.line = buf->num_lines - 1;
+    if (to.line > buf->num_lines) {
+        to.line = buf->num_lines;
     }
 
     /* swap if needed */
@@ -371,6 +375,38 @@ int delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto
     if (from.line == to.line && from.col == to.col) {
         return 0;
     }
+
+    /* get the deleted text for undo */
+    ev.pos = from;
+    ev.ins_len = 0;
+    if (from.line != to.line) {
+        ev.del_len = buf->lines[from.line].n - from.col + 1;
+        for (size_t i = from.line + 1; i < to.line; i++) {
+            ev.del_len += buf->lines[i].n + 1;
+        }
+        ev.del_len += to.col;
+        ev.text = xmalloc(ev.del_len);
+
+        del_i = 0;
+        memcpy(&ev.text[del_i], &buf->lines[from.line].s[from.col],
+                buf->lines[from.line].n - from.col);
+        del_i += buf->lines[from.line].n - from.col;
+        ev.text[del_i++] = '\n';
+
+        for (size_t i = from.line + 1; i < to.line; i++) {
+            memcpy(&ev.text[del_i], buf->lines[i].s, buf->lines[i].n);
+            del_i += buf->lines[i].n;
+            ev.text[del_i++] = '\n';
+        }
+        if (to.line != buf->num_lines) {
+            memcpy(&ev.text[del_i], buf->lines[to.line].s, to.col);
+        }
+    } else {
+        ev.del_len = to.col - from.col;
+        ev.text = xmalloc(ev.del_len);
+        memcpy(&ev.text[0], &buf->lines[from.line].s[from.col], ev.del_len);
+    }
+    add_event(buf, &ev);
 
     _delete_range(buf, &from, &to);
     return 1;
@@ -406,8 +442,8 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
         for (size_t i = from.line + 1; i <= to.line; i++) {
             free(buf->lines[i].s);
         }
-        buf->num_lines -= to.line - from.line;
         memmove(&fl[1], &tl[1],
                 sizeof(*buf->lines) * (buf->num_lines - to.line));
+        buf->num_lines -= to.line - from.line;
     }
 }
