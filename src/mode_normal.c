@@ -1,20 +1,10 @@
 #include "frame.h"
 #include "buf.h"
 #include "mode.h"
-#include "macros.h"
+#include "util.h"
 
 #include <ctype.h>
 #include <ncurses.h>
-
-size_t safe_mul(size_t a, size_t b)
-{
-    size_t c;
-
-    if (__builtin_mul_overflow(a, b, &c)) {
-        return SIZE_MAX;
-    }
-    return c;
-}
 
 static void clip_column(struct frame *frame)
 {
