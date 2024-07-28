@@ -16,6 +16,8 @@ int main(void)
     keypad(stdscr, true);
     noecho();
 
+    set_tabsize(4);
+
     //buf = create_buffer("../VM_jsm/cases.h");
     buf = create_buffer("src/main.c");
 
