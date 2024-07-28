@@ -23,6 +23,8 @@ int insert_handle_input(int c)
 
     int r = 0;
     char ch[1];
+    size_t n;
+    struct pos old_cur, new_cur;
 
     switch (c) {
     case '\x1b':
@@ -30,6 +32,42 @@ int insert_handle_input(int c)
         set_mode(NORMAL_MODE);
         r = 1;
         break;
+
+    case '\n':
+        ch[0] = '\n';
+        insert_text(SelFrame->buf, &SelFrame->cur, ch, 1);
+        do_motion(SelFrame, MOTION_NEXT);
+        return 1;
+
+    case '\t':
+        ch[0] = ' ';
+        n = TABSIZE - SelFrame->cur.col % TABSIZE;
+        for (size_t i = 0; i < n; i++) {
+            insert_text(SelFrame->buf, &SelFrame->cur, ch, 1);
+        }
+        Mode.counter = n;
+        do_motion(SelFrame, MOTION_NEXT);
+        return 1;
+
+    case KEY_DC:
+        old_cur = SelFrame->cur;
+        r = move_dir(SelFrame, 1, 1);
+        ev = delete_range(buf, &old_cur, &SelFrame->cur);
+        if (ev != NULL) {
+            ev->cur = old_cur;
+        }
+        SelFrame->cur = old_cur;
+        return r;
+
+    case 0x7f:
+    case KEY_BACKSPACE:
+        old_cur = SelFrame->cur;
+        r = move_dir(SelFrame, 1, -1);
+        ev = delete_range(buf, &old_cur, &SelFrame->cur);
+        if (ev != NULL) {
+            ev->cur = old_cur;
+        }
+        return r;
     }
     ch[0] = c;
     if (c < 0x100 && ch[0] >= ' ' && motions[c] == 0) {
@@ -37,5 +75,5 @@ int insert_handle_input(int c)
         do_motion(SelFrame, MOTION_NEXT);
         return 1;
     }
-    return r + do_motion(SelFrame, motions[c]);
+    return do_motion(SelFrame, motions[c]);
 }
