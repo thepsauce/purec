@@ -1,7 +1,7 @@
 #include "frame.h"
 #include "buf.h"
 #include "mode.h"
-#include "macros.h"
+#include "util.h"
 
 #include <ctype.h>
 #include <ncurses.h>

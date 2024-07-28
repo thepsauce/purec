@@ -1,5 +1,5 @@
 #include "buf.h"
-#include "macros.h"
+#include "util.h"
 #include "xalloc.h"
 
 #include <ctype.h>

@@ -1,6 +1,6 @@
 #include "frame.h"
 #include "mode.h"
-#include "macros.h"
+#include "util.h"
 
 #include <ctype.h>
 #include <stdint.h>
