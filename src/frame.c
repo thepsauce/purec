@@ -137,7 +137,6 @@ int do_motion(struct frame *frame, int motion)
         r = move_vert(frame, frame->h * 2 / 3, 1);
         break;
     }
-    Mode.counter = 0;
     return r;
 }
 
