@@ -16,6 +16,12 @@ size_t safe_mul(size_t a, size_t b)
     return c;
 }
 
+static void clip_column(struct frame *frame)
+{
+    frame->cur.col = MIN(frame->cur.col, get_mode_line_end(
+                &frame->buf->lines[frame->cur.line]));
+}
+
 int normal_handle_input(int c)
 {
     static int motions[KEY_MAX] = {
@@ -113,8 +119,7 @@ int normal_handle_input(int c)
                      old_cur.col < SelFrame->cur.col)) {
                 SelFrame->cur = old_cur;
             }
-            SelFrame->cur.col = MIN(SelFrame->cur.col, get_mode_line_end(
-                        &SelFrame->buf->lines[SelFrame->cur.line]));
+            clip_column(SelFrame);
         }
         if (c == 'c') {
             set_mode(INSERT_MODE);
@@ -135,27 +140,29 @@ int normal_handle_input(int c)
         break;
 
     case 'u':
-        ev = undo_event(SelFrame->buf);
-        if (ev == NULL) {
-            return 0;
+        for (size_t i = 0; i < correct_counter(Mode.counter); i++) {
+            ev = undo_event(SelFrame->buf);
+            if (ev == NULL) {
+                return 0;
+            }
+            SelFrame->cur = ev->cur;
+            /* since the event could have been made in insert mode,
+             * we need to clip it. just like below in redo
+             */
+            clip_column(SelFrame);
         }
-        SelFrame->cur = ev->cur;
-        /* since the event could have been made in insert mode,
-         * we need to clip it. just like below in redo
-         */
-        SelFrame->cur.col = MIN(SelFrame->cur.col, get_mode_line_end(
-                    &SelFrame->buf->lines[SelFrame->cur.line]));
         return 1;
 
     case CONTROL('R'):
-        ev = redo_event(SelFrame->buf);
-        if (ev == NULL) {
-            return 0;
+        for (size_t i = 0; i < correct_counter(Mode.counter); i++) {
+            ev = redo_event(SelFrame->buf);
+            if (ev == NULL) {
+                return 0;
+            }
+            SelFrame->cur = ev->cur;
+            /* this is what the above text is referring to */
+            clip_column(SelFrame);
         }
-        SelFrame->cur = ev->cur;
-        /* this is what the above text is referring to */
-        SelFrame->cur.col = MIN(SelFrame->cur.col, get_mode_line_end(
-                    &SelFrame->buf->lines[SelFrame->cur.line]));
         return 1;
 
     case 'A':
