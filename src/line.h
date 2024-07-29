@@ -17,8 +17,6 @@ struct line {
     char *s;
     /// number of bytes on this line
     size_t n;
-    /// starting from this line, how many lines should be inserted extra
-    size_t inc;
 };
 
 #endif

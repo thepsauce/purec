@@ -15,6 +15,14 @@ struct pos {
     size_t col;
 };
 
+/**
+ * Sets `p1` to the position that comes first and `p2` to last.
+ *
+ * @param p1    The first position.
+ * @param p2    The second position.
+ */
+void sort_positions(struct pos *p1, struct pos *p2);
+
 #define NORMAL_MODE 0
 #define INSERT_MODE 1
 #define VISUAL_MODE 2
@@ -75,7 +83,7 @@ extern struct bind {
     { "n", "h", "go to the left" },
     { "n", "i", "enter insert mode" },
     { "n", "j", "go down" },
-    { "n", "k", "go up} },
+    { "n", "k", "go up" },
     { "n", "l", "go to the right" },
     { "n", "m", "set a mark" },
     { "n", "n", "go to next match" },

@@ -22,29 +22,29 @@ int insert_handle_input(int c)
     };
 
     int r = 0;
-    char ch[1];
+    struct undo_event *ev;
+    char ch;
     size_t n;
-    struct pos old_cur, new_cur;
+    struct pos old_cur;
 
+    ch = c;
     switch (c) {
     case '\x1b':
         move_horz(SelFrame, 1, -1);
         set_mode(NORMAL_MODE);
-        r = 1;
-        break;
+        return 1;
 
     case '\n':
-        ch[0] = '\n';
-        insert_text(SelFrame->buf, &SelFrame->cur, ch, 1);
+        ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, 1);
+        ev->cur = SelFrame->cur;
         do_motion(SelFrame, MOTION_NEXT);
         return 1;
 
     case '\t':
-        ch[0] = ' ';
+        ch = ' ';
         n = TABSIZE - SelFrame->cur.col % TABSIZE;
-        for (size_t i = 0; i < n; i++) {
-            insert_text(SelFrame->buf, &SelFrame->cur, ch, 1);
-        }
+        ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, n);
+        ev->cur = SelFrame->cur;
         Mode.counter = n;
         do_motion(SelFrame, MOTION_NEXT);
         return 1;
@@ -69,9 +69,9 @@ int insert_handle_input(int c)
         }
         return r;
     }
-    ch[0] = c;
-    if (c < 0x100 && ch[0] >= ' ' && motions[c] == 0) {
-        insert_text(SelFrame->buf, &SelFrame->cur, ch, 1);
+    if (c < 0x100 && ch >= ' ' && motions[c] == 0) {
+        ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, 1);
+        ev->cur = SelFrame->cur;
         do_motion(SelFrame, MOTION_NEXT);
         return 1;
     }
