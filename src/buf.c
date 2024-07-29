@@ -14,12 +14,16 @@ static int reload_file(struct buf *buf)
     size_t a_line = 0;
     ssize_t n_line;
     struct line *line;
+    size_t num_old;
 
     fp = fopen(buf->path, "r");
     if (fp == NULL) {
         printf("failed opening: %s\n", buf->path);
         return -1;
     }
+
+    num_old = buf->num_lines;
+
     buf->num_lines = 0;
     while (n_line = getline(&s_line, &a_line, fp), n_line > 0) {
         if (s_line[n_line - 1] == '\n') {
@@ -30,6 +34,13 @@ static int reload_file(struct buf *buf)
         memcpy(line->s, s_line, n_line);
         line->n = n_line;
     }
+
+    for (size_t i = buf->num_lines; i < num_old; i++) {
+        free(buf->lines[i].s);
+    }
+    buf->lines = xreallocarray(buf->lines, buf->num_lines, sizeof(*buf->lines));
+    buf->a_lines = buf->num_lines;
+
     free(s_line);
     return 0;
 }
