@@ -16,6 +16,18 @@
 size_t safe_mul(size_t a, size_t b);
 
 /**
+ * Add two numbers without overflowing.
+ *
+ * If an overflow would occur, `SIZE_MAX` is returned instead.
+ *
+ * @param a The first operand.
+ * @param b The second operand.
+ *
+ * @return Clipped sum of `a` and `b`.
+ */
+size_t safe_add(size_t a, size_t b);
+
+/**
  * Get the number of elements of a static array.
  */
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof(*(a)))

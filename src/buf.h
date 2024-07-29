@@ -9,10 +9,28 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include <sys/stat.h>
 
+/* TODO: Find a way to join events by combining their data structures,
+ * this would improve efficiency and make `flags` obsolete.
+ */
+/**
+ * Joins the events in the event list starting from `index`.
+ *
+ * @param buf   The buffer whose event list to use.
+ * @param ev    Event in the event list to start from.
+ *
+ * @return The event itself (`ev`).
+ */
+//struct undo_event *join_events(struct buf *buf, struct undo_event *ev);
+
 struct undo_event {
+    /// whether the next event should be process together with this one
+    bool is_transient;
+    /// time of the event
+    time_t time;
     /// position of the event
     struct pos pos;
     /// cursor position at the time of the event
@@ -69,10 +87,15 @@ void delete_buffer(struct buf *buf);
 /**
  * Adds an event to the buffer event list.
  *
+ * This sets the `time` value of the event to the current time in seconds. It
+ * also sets `is_transient` to false.
+ *
  * @param buf   Buffer to add an event to.
  * @param ev    Event to add.
+ *
+ * @return The event that was added.
  */
-void add_event(struct buf *buf, struct undo_event *ev);
+struct undo_event *add_event(struct buf *buf, const struct undo_event *ev);
 
 /**
  * Undo an event.
@@ -108,7 +131,7 @@ size_t get_line_indent(struct buf *buf, size_t line_i);
  * Insert given number of lines starting from given index.
  *
  * If `line_i` is out of bounds, it is set to the last line. All added lines are
- * initialized to 0 and no event is added.
+ * initialized to 0 and no event is added. This does NOT add an event.
  *
  * @param buf       Buffer to delete within.
  * @param line_i    Line index to append to.
@@ -135,46 +158,64 @@ struct line *insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
 struct line *_insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
 
 /**
- * Inserts text at given position.
+ * Indents the line at `line_i`.
  *
- * This functions adds an event but does NO clipping.
+ * This inserts spaces at the front of the line until it "seems" indented. It
+ * also adds an event.
  *
- * @param buf       Buffer to insert text in.
- * @param pos       Position to insert text from.
- * @param text      Text to insert.
- * @param len_text  Length of the text to insert.
+ * @param buf       Buffer to indent the line in.
+ * @param line_i    Index of the line to indent.
  *
- * @return 0 if `len_text` is 0, 1 otherwise.
+ * @return Event generated from adding/removing spaces at the front of the line.
  */
-int insert_text(struct buf *buf, struct pos *pos,
-        const char *text, size_t len_text);
+struct undo_event *indent_line(struct buf *buf, size_t line_i);
 
 /**
  * Inserts text at given position.
  *
- * This functions adds NO event and does NO clipping.
+ * This functions adds an event but does NO clipping. It checks however if
+ * `len_text * repeat` overflows and reduces `repeat` until it fits into a
+ * `size_t`.
+ *
+ * To check beforehand if the operation would overflow, try:
+ * ```
+ * if (safe_mul(len_text, repeat) == SIZE_MAX) {
+ *     OVERFLOW IF len_text != 1 && repeat != 1
+ * }
+ * ```
+ * or:
+ * ```
+ * size_t prod;
+ * if (__builtin_overflow(len_text, repeat, &prod)) {
+ *     OVERFLOW
+ * }
+ * ```
  *
  * @param buf       Buffer to insert text in.
  * @param pos       Position to insert text from.
  * @param text      Text to insert.
+ * @param repeat    How many times to insert the text.
+ * @param len_text  Length of the text to insert.
+ *
+ * @return The event generated from this insertion (may be `NULL`).
+ */
+struct undo_event *insert_text(struct buf *buf, struct pos *pos,
+        const char *text, size_t len_text, size_t repeat);
+
+/**
+ * Inserts text at given position.
+ *
+ * This functions adds NO event and does NO clipping. It also does not check if
+ * the product of `len_text` and `repeat` overflow.
+ *
+ * @param buf       Buffer to insert text in.
+ * @param pos       Position to insert text from.
+ * @param text      Text to insert.
+ * @param repeat    How many times to insert the text.
  * @param len_text  Length of the text to insert.
  */
 void _insert_text(struct buf *buf, struct pos *pos,
-        const char *text, size_t len_text);
-
-/**
- * Delete given number of lines starting from given index.
- *
- * This function does clipping and adds the operation as event.
- *
- * @param buf       Buffer to delete within.
- * @param pos       Position to delete from (column is just for book keeping, so
- *                  adding the column to the generated event).
- * @param num_lines Number of lines to delete.
- *
- * @return 1 if anything was deleted, 0 otherwise.
- */
-int delete_lines(struct buf *buf, const struct pos *pos, size_t num_lines);
+        const char *text, size_t len_text, size_t repeat);
 
 /**
  * Deletes given inclusive range.
@@ -182,25 +223,41 @@ int delete_lines(struct buf *buf, const struct pos *pos, size_t num_lines);
  * This function does clipping and swapping so that `from` comes before `to`.
  * The operation is added as event.
  *
- * Example deleting the entire text of a buffer with 20 lines:
+ * Example deleting the entire text of a buffer:
  * ```C
+ * struct buf *buf = ...;
  * struct pos from = { 0, 0 };
  * struct pos to = { buf->num_lines, 0 };
- * delete_range(&buf, &from, &to);
+ * delete_range(buf, &from, &to);
  * ```
- * Note that as long as `to.line` is greater than or equal to `buf->num_lines`,
- * this function is safe and it simply deletes until the end of the buffer.
  *
  * @param buf   Buffer to delete within.
  * @param from  Start of deletion.
  * @param to    End of deletion.
  *
- * @return 1 if anything was deleted, 0 otherwise.
+ * @return The event generated from this deletion (may be `NULL`).
+ *
+ * @see _delete_range()
  */
-int delete_range(struct buf *buf, const struct pos *from, const struct pos *to);
+struct undo_event *delete_range(struct buf *buf, const struct pos *from,
+        const struct pos *to);
 
 /**
  * Same as delete_range() but no clipping, no event adding.
+ *
+ * This function works in an excluseive way. If `*pfrom == *pto` is true, this
+ * is already undefined behaviour as this function EXPECTS that there is
+ * something to delete.
+ *
+ * Example:
+ * ```
+ * struct buf *buf = ...;
+ * struct pos from = { 3, 2 };
+ * struct pos to = { 4, 1 };
+ * _delete_range(buf, &from, &to);
+ * ```
+ * This deletes the line at index 4 and moves the rest of line index 4 into line
+ * index 3. The first two characters of line index 3 are deleted as well.
  *
  * @param buf   Buffer to delete within.
  * @param from  Start of deletion.
