@@ -36,6 +36,22 @@ void clip_column(struct frame *frame)
                 &frame->buf->lines[frame->cur.line]));
 }
 
+void set_cursor(struct frame *frame, const struct pos *pos)
+{
+    struct line *line;
+    struct pos new_cur;
+
+    new_cur = *pos;
+
+    if (new_cur.line >= frame->buf->num_lines) {
+        new_cur.line = frame->buf->num_lines - 1;
+    }
+    line = &frame->buf->lines[new_cur.line];
+    new_cur.col = MIN(new_cur.col, get_mode_line_end(line));
+
+    frame->cur = new_cur;
+}
+
 int do_motion(struct frame *frame, int motion)
 {
     int r = 0;

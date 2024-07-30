@@ -78,7 +78,7 @@ int normal_handle_input(int c)
             to.line = safe_add(cur.line, correct_counter(Mode.counter) - 1);
             to.col = SIZE_MAX;
             ev = delete_range(SelFrame->buf, &from, &to);
-            SelFrame->cur = from;
+            set_cursor(SelFrame, &from);
             break;
 
         case 'd':
@@ -120,7 +120,8 @@ int normal_handle_input(int c)
                      cur.col < SelFrame->cur.col)) {
                 SelFrame->cur = cur;
             }
-            clip_column(SelFrame);
+            /* setting it to itself to clip it */
+            set_cursor(SelFrame, &SelFrame->cur);
         }
         if (ev != NULL) {
             ev->undo_cur = cur;
@@ -163,11 +164,7 @@ int normal_handle_input(int c)
             if (ev == NULL) {
                 return 0;
             }
-            SelFrame->cur = ev->undo_cur;
-            /* since the event could have been made in insert mode,
-             * we need to clip it. just like below in redo
-             */
-            clip_column(SelFrame);
+            set_cursor(SelFrame, &ev->undo_cur);
         }
         return 1;
 
@@ -177,9 +174,7 @@ int normal_handle_input(int c)
             if (ev == NULL) {
                 return 0;
             }
-            SelFrame->cur = ev->redo_cur;
-            /* this is what the above text is referring to */
-            clip_column(SelFrame);
+            set_cursor(SelFrame, &ev->redo_cur);
         }
         return 1;
 
