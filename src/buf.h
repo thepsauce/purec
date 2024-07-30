@@ -16,6 +16,7 @@
 /* TODO: Find a way to join events by combining their data structures,
  * this would improve efficiency and make `flags` obsolete.
  */
+
 /**
  * Joins the events in the event list starting from `index`.
  *

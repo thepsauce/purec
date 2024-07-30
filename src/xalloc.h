@@ -24,9 +24,19 @@ void *xrealloc(void *ptr, size_t size);
 void *xreallocarray(void *ptr, size_t nmemb, size_t size);
 
 /**
+ * Combination of `xmalloc()` and `memcpy()`.
+ */
+void *xmemdup(const void *ptr, size_t size);
+
+/**
  * Like `strdup()` but exit when the allocation fails.
  */
 void *xstrdup(const char *s);
+
+/**
+ * Like `strndup()` but exit when the allocation fails.
+ */
+void *xstrndup(const char *s, size_t n);
 
 /**
  * Like `asprintf()` but exit on failure.

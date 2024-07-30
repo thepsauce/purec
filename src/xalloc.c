@@ -67,6 +67,24 @@ void *xreallocarray(void *ptr, size_t nmemb, size_t size)
     return ptr;
 }
 
+void *xmemdup(const void *ptr, size_t size)
+{
+    char *p_dup;
+
+    if (size == 0) {
+        return NULL;
+    }
+
+    p_dup = xmalloc(size);
+    if (p_dup == NULL) {
+        fprintf(stderr, "xmemdup(%p, %zu): %s\n",
+                ptr, size, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    memcpy(p_dup, ptr, size);
+    return p_dup;
+}
+
 void *xstrdup(const char *s)
 {
     char *s_dup;
@@ -75,6 +93,19 @@ void *xstrdup(const char *s)
     if (s_dup == NULL) {
         fprintf(stderr, "strdup(%s): %s\n",
                 s, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    return s_dup;
+}
+
+void *xstrndup(const char *s, size_t n)
+{
+    char *s_dup;
+
+    s_dup = strndup(s, n);
+    if (s_dup == NULL) {
+        fprintf(stderr, "strndup(%.*s, %zu): %s\n",
+                (int) n, s, n, strerror(errno));
         exit(EXIT_FAILURE);
     }
     return s_dup;

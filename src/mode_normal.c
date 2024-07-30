@@ -1,4 +1,3 @@
-#include "xalloc.h"
 #include "cmd.h"
 #include "frame.h"
 #include "buf.h"
@@ -6,7 +5,6 @@
 #include "util.h"
 
 #include <ctype.h>
-#include <string.h>
 #include <ncurses.h>
 
 int normal_handle_input(int c)
@@ -207,6 +205,10 @@ int normal_handle_input(int c)
         indent_line(SelFrame->buf, SelFrame->cur.line + 1);
         do_motion(SelFrame, MOTION_DOWN);
         ev->redo_cur = SelFrame->cur;
+        return 1;
+
+    case ':':
+        read_command_line();
         return 1;
 
     case 'A':

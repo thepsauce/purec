@@ -8,12 +8,13 @@
 
 int main(void)
 {
-    struct buf *buf;
-    struct frame fr;
-    int (*input_handlers[])(int c) = {
+    static int (*const input_handlers[])(int c) = {
         [NORMAL_MODE] = normal_handle_input,
         [INSERT_MODE] = insert_handle_input,
     };
+
+    struct buf *buf;
+    struct frame fr;
 
     initscr();
     cbreak();
@@ -31,7 +32,7 @@ int main(void)
     fr.x = 0;
     fr.y = 0;
     fr.w = COLS;
-    fr.h = LINES - 1; /* minus status bar */
+    fr.h = LINES - 2; /* minus status bar, command line */
     fr.buf = buf;
 
     set_mode(NORMAL_MODE);
@@ -40,14 +41,9 @@ int main(void)
 
     while (1) {
         erase();
-        for (size_t i = 0; i < MIN(buf->num_lines, (size_t) fr.h); i++) {
-            mvaddnstr(i, 0, buf->lines[i].s, buf->lines[i].n);
-        }
-        move(LINES - 1, 0);
-        clrtoeol();
-        move(LINES - 1, 0);
-        printw("%zu/%zu:%zu", fr.cur.line + 1, buf->num_lines, fr.cur.col + 1);
-        move(fr.cur.line, fr.cur.col);
+        render_frame(&fr);
+        move(SelFrame->cur.line - SelFrame->scroll.line,
+                SelFrame->cur.col - SelFrame->scroll.col);
         curs_set(1);
         while (Mode.counter = 0,
                 input_handlers[Mode.type](getch_digit()) == 0) {
