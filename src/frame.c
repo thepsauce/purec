@@ -8,64 +8,6 @@
 
 struct frame *SelFrame;
 
-int move_dir(struct frame *frame, size_t dist, int dir)
-{
-    struct buf *buf;
-    size_t old_dist;
-    size_t end, right;
-
-    buf = frame->buf;
-    old_dist = dist;
-    if (dir < 0) {
-        while (dist > 0) {
-            if (frame->cur.col == 0) {
-                if (frame->cur.line == 0) {
-                    break;
-                }
-                dist--;
-                frame->cur.line--;
-                frame->cur.col =
-                    get_mode_line_end(&buf->lines[frame->cur.line]);
-                continue;
-            }
-            if (dist >= frame->cur.col) {
-                dist -= frame->cur.col;
-                frame->cur.col = 0;
-            } else {
-                frame->cur.col -= dist;
-                dist = 0;
-            }
-        }
-    } else {
-
-        while (dist > 0) {
-            end = get_mode_line_end(&buf->lines[frame->cur.line]);
-            right = end - frame->cur.col;
-            if (right == 0) {
-                if (frame->cur.line + 1 == buf->num_lines) {
-                    break;
-                }
-                dist--;
-                frame->cur.line++;
-                frame->cur.col = 0;
-                continue;
-            }
-            if (dist >= right) {
-                frame->cur.col = end;
-                dist -= right;
-            } else {
-                frame->cur.col += dist;
-                dist = 0;
-            }
-        }
-    }
-
-    if (old_dist != dist) {
-        return 1;
-    }
-    return 0;
-}
-
 void adjust_cursor(struct frame *frame)
 {
     struct buf *buf;
@@ -77,6 +19,21 @@ void adjust_cursor(struct frame *frame)
     }
     line = &buf->lines[frame->cur.line];
     frame->cur.col = MIN(frame->vct, get_mode_line_end(line));
+}
+
+void adjust_scroll(struct frame *frame)
+{
+    if (frame->cur.line < frame->scroll.line) {
+        frame->scroll.line = frame->cur.line;
+    } else if (frame->cur.line >= frame->scroll.line + frame->h) {
+        frame->scroll.line = frame->cur.line - frame->h + 1;
+    }
+}
+
+void clip_column(struct frame *frame)
+{
+    frame->cur.col = MIN(frame->cur.col, get_mode_line_end(
+                &frame->buf->lines[frame->cur.line]));
 }
 
 int do_motion(struct frame *frame, int motion)
@@ -140,8 +97,69 @@ int do_motion(struct frame *frame, int motion)
     return r;
 }
 
+int move_dir(struct frame *frame, size_t dist, int dir)
+{
+    struct buf *buf;
+    size_t old_dist;
+    size_t end, right;
+
+    buf = frame->buf;
+    old_dist = dist;
+    if (dir < 0) {
+        while (dist > 0) {
+            if (frame->cur.col == 0) {
+                if (frame->cur.line == 0) {
+                    break;
+                }
+                dist--;
+                frame->cur.line--;
+                frame->cur.col =
+                    get_mode_line_end(&buf->lines[frame->cur.line]);
+                continue;
+            }
+            if (dist >= frame->cur.col) {
+                dist -= frame->cur.col;
+                frame->cur.col = 0;
+            } else {
+                frame->cur.col -= dist;
+                dist = 0;
+            }
+        }
+    } else {
+
+        while (dist > 0) {
+            end = get_mode_line_end(&buf->lines[frame->cur.line]);
+            right = end - frame->cur.col;
+            if (right == 0) {
+                if (frame->cur.line + 1 == buf->num_lines) {
+                    break;
+                }
+                dist--;
+                frame->cur.line++;
+                frame->cur.col = 0;
+                continue;
+            }
+            if (dist >= right) {
+                frame->cur.col = end;
+                dist -= right;
+            } else {
+                frame->cur.col += dist;
+                dist = 0;
+            }
+        }
+    }
+
+    adjust_scroll(frame);
+
+    if (old_dist != dist) {
+        return 1;
+    }
+    return 0;
+}
+
 int move_vert(struct frame *frame, size_t dist, int dir)
 {
+    int r = 0;
     struct buf *buf;
     size_t old_line;
 
@@ -161,11 +179,13 @@ int move_vert(struct frame *frame, size_t dist, int dir)
             frame->cur.line = MIN(dist + frame->cur.line, buf->num_lines - 1);
         }
     }
+
     if (old_line != frame->cur.line) {
         adjust_cursor(frame);
-        return 1;
+        r = 1;
     }
-    return 0;
+    adjust_scroll(frame);
+    return r;
 }
 
 int move_horz(struct frame *frame, size_t dist, int dir)
