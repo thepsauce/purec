@@ -298,12 +298,12 @@ struct undo_event *insert_text(struct buf *buf, struct pos *pos,
 void _insert_text(struct buf *buf, struct pos *pos,
         const char *text, size_t len_text, size_t repeat)
 {
-    struct line *at_line;
-    struct line *line;
-    size_t num_lines = 0;
     size_t i, j;
-    size_t first_end;
+    size_t num_lines = 0;
+    struct line *line;
     size_t n;
+    struct line *at_line;
+    size_t first_end;
 
     for (i = 0; i < len_text; i++) {
         if (text[i] == '\n') {
@@ -351,10 +351,10 @@ void _insert_text(struct buf *buf, struct pos *pos,
     /* add the end of the first line to the front of the last line */
     /* `line` overshoots the last line, so decrement it */
     line--;
-    n = line->n;
     line->n += at_line->n - pos->col;
     line->s = xrealloc(line->s, line->n);
-    memmove(&line->s[line->n], &line->s[0], n);
+    memmove(&line->s[at_line->n - pos->col], &line->s[0],
+            line->n - (at_line->n - pos->col));
     memcpy(&line->s[0], &at_line->s[pos->col], at_line->n - pos->col);
 
     /* trim first line and insert first text segment */
@@ -388,7 +388,8 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
     /* clip columns */
     from.col = MIN(from.col, buf->lines[from.line].n);
     if (to.line == buf->num_lines) {
-        to.col = 0;
+        to.line--;
+        to.col = buf->lines[to.line].n;
     } else {
         to.col = MIN(to.col, buf->lines[to.line].n);
     }
@@ -449,6 +450,9 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
     } else if (to.line >= buf->num_lines) {
         /* trim the line */
         fl->n = from.col;
+        if (from.line > 0) {
+            from.line--;
+        }
         /* delete the remaining lines */
         for (size_t i = from.line + 1; i < buf->num_lines; i++) {
             free(buf->lines[i].s);
