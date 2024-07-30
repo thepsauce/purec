@@ -36,25 +36,28 @@ int insert_handle_input(int c)
 
     case '\n':
         ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, 1);
-        ev->cur = SelFrame->cur;
+        ev->undo_cur = SelFrame->cur;
         do_motion(SelFrame, MOTION_NEXT);
+        ev->redo_cur = SelFrame->cur;
         return 1;
 
     case '\t':
         ch = ' ';
         n = TABSIZE - SelFrame->cur.col % TABSIZE;
         ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, n);
-        ev->cur = SelFrame->cur;
+        ev->undo_cur = SelFrame->cur;
         Mode.counter = n;
         do_motion(SelFrame, MOTION_NEXT);
+        ev->redo_cur = SelFrame->cur;
         return 1;
 
     case KEY_DC:
         old_cur = SelFrame->cur;
         r = do_motion(SelFrame, MOTION_NEXT);
         ev = delete_range(SelFrame->buf, &old_cur, &SelFrame->cur);
-        ev->cur = old_cur;
+        ev->undo_cur = old_cur;
         SelFrame->cur = old_cur;
+        ev->redo_cur = SelFrame->cur;
         return r;
 
     case 0x7f:
@@ -62,13 +65,15 @@ int insert_handle_input(int c)
         old_cur = SelFrame->cur;
         r = do_motion(SelFrame, MOTION_PREV);
         ev = delete_range(SelFrame->buf, &old_cur, &SelFrame->cur);
-        ev->cur = old_cur;
+        ev->undo_cur = old_cur;
+        ev->redo_cur = SelFrame->cur;
         return r;
     }
     if (c < 0x100 && ch >= ' ' && motions[c] == 0) {
         ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, 1);
-        ev->cur = SelFrame->cur;
+        ev->undo_cur = SelFrame->cur;
         do_motion(SelFrame, MOTION_NEXT);
+        ev->redo_cur = SelFrame->cur;
         return 1;
     }
     return do_motion(SelFrame, motions[c]);

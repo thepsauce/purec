@@ -33,8 +33,10 @@ struct undo_event {
     time_t time;
     /// position of the event
     struct pos pos;
-    /// cursor position at the time of the event
-    struct pos cur;
+    /// cursor position before the event
+    struct pos undo_cur;
+    /// cursor position after the event
+    struct pos redo_cur;
     /// number of bytes inserted
     size_t ins_len;
     /// number of bytes deleted
@@ -156,6 +158,11 @@ struct line *insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
  * @see insert_lines()
  */
 struct line *_insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
+
+/**
+ * NOTE: The below functions that return a `struct undo_event *` do not set the
+ * `cur_undo` and `cur_redo` values, they must be set by the caller.
+ */
 
 /**
  * Indents the line at `line_i`.

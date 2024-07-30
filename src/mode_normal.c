@@ -110,7 +110,8 @@ int normal_handle_input(int c)
             clip_column(SelFrame);
         }
         if (ev != NULL) {
-            ev->cur = cur;
+            ev->undo_cur = cur;
+            ev->redo_cur = SelFrame->cur;
             r = 1;
         }
 
@@ -126,7 +127,8 @@ int normal_handle_input(int c)
         cur.col += correct_counter(Mode.counter);
         ev = delete_range(SelFrame->buf, &SelFrame->cur, &cur);
         if (ev != NULL) {
-            ev->cur = cur;
+            ev->undo_cur = cur;
+            ev->redo_cur = SelFrame->cur;
             r = 1;
         }
         break;
@@ -136,7 +138,8 @@ int normal_handle_input(int c)
         move_horz(SelFrame, correct_counter(Mode.counter), -1);
         ev = delete_range(SelFrame->buf, &cur, &SelFrame->cur);
         if (ev != NULL) {
-            ev->cur = cur;
+            ev->undo_cur = cur;
+            ev->redo_cur = SelFrame->cur;
             r = 1;
         }
         break;
@@ -147,7 +150,7 @@ int normal_handle_input(int c)
             if (ev == NULL) {
                 return 0;
             }
-            SelFrame->cur = ev->cur;
+            SelFrame->cur = ev->undo_cur;
             /* since the event could have been made in insert mode,
              * we need to clip it. just like below in redo
              */
@@ -161,7 +164,7 @@ int normal_handle_input(int c)
             if (ev == NULL) {
                 return 0;
             }
-            SelFrame->cur = ev->cur;
+            SelFrame->cur = ev->redo_cur;
             /* this is what the above text is referring to */
             clip_column(SelFrame);
         }
@@ -172,10 +175,11 @@ int normal_handle_input(int c)
         set_mode(INSERT_MODE);
         do_motion(SelFrame, MOTION_HOME);
         ev = insert_text(SelFrame->buf, &SelFrame->cur, &(char) { '\n' }, 1, 1);
-        ev->cur = cur;
+        ev->undo_cur = cur;
         ev->is_transient = true;
         indent_line(SelFrame->buf, SelFrame->cur.line);
         do_motion(SelFrame, MOTION_END);
+        ev->redo_cur = SelFrame->cur;
         return 1;
 
     case 'o':
@@ -183,10 +187,11 @@ int normal_handle_input(int c)
         set_mode(INSERT_MODE);
         do_motion(SelFrame, MOTION_END);
         ev = insert_text(SelFrame->buf, &SelFrame->cur, &(char) { '\n' }, 1, 1);
-        ev->cur = cur;
+        ev->undo_cur = cur;
         ev->is_transient = true;
         indent_line(SelFrame->buf, SelFrame->cur.line + 1);
         do_motion(SelFrame, MOTION_DOWN);
+        ev->redo_cur = SelFrame->cur;
         return 1;
 
     case 'A':
