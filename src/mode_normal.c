@@ -1,16 +1,13 @@
+#include "xalloc.h"
+#include "cmd.h"
 #include "frame.h"
 #include "buf.h"
 #include "mode.h"
 #include "util.h"
 
 #include <ctype.h>
+#include <string.h>
 #include <ncurses.h>
-
-static void clip_column(struct frame *frame)
-{
-    frame->cur.col = MIN(frame->cur.col, get_mode_line_end(
-                &frame->buf->lines[frame->cur.line]));
-}
 
 int normal_handle_input(int c)
 {
@@ -90,11 +87,29 @@ int normal_handle_input(int c)
             if (c != 'd') {
                 break;
             }
-            from.line = cur.line;
-            from.col = 0;
+
             to.line = safe_add(cur.line, correct_counter(Mode.counter));
-            to.col = 0;
+            if (to.line > SelFrame->buf->num_lines) {
+                to.line = SelFrame->buf->num_lines;
+            }
+
+            if (cur.line > 0) {
+                from.line = cur.line - 1;
+                from.col = SelFrame->buf->lines[from.line].n;
+                to.line--;
+                to.col = SelFrame->buf->lines[to.line].n;
+            } else {
+                from.line = cur.line;
+                from.col = 0;
+                to.col = 0;
+            }
+
             ev = delete_range(SelFrame->buf, &from, &to);
+            if (SelFrame->cur.line == SelFrame->buf->num_lines) {
+                do_motion(SelFrame, MOTION_UP);
+            } else {
+                clip_column(SelFrame);
+            }
             break;
 
         default:

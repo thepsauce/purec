@@ -19,6 +19,8 @@ struct frame {
     struct buf *buf;
     /// cursor position
     struct pos cur;
+    /// scrolling (there is no horizontal scrolling)
+    struct pos scroll;
     /// vertical column tracking
     size_t vct;
 };
@@ -29,15 +31,18 @@ struct frame {
 extern struct frame *SelFrame;
 
 /**
- * Moves the cursor in horizontal direct but also vertically across lines.
+ * Render the frame within its defined bounds.
  *
- * @param frame Frame to move the cursor within.
- * @param dist  Distance to move.
- * @param dir   Direction of the movement (negative or positive).
- *
- * @return 1 if a movement occured, 0 otherwise.
+ * @param frame The frame to render.
  */
-int move_dir(struct frame *frame, size_t dist, int dir);
+void render_frame(struct frame *frame);
+
+/**
+ * Adjusts `scroll` such that the cursor is visible.
+ *
+ * @param frame Frame to adjust the `scroll` within.
+ */
+void adjust_scroll(struct frame *frame);
 
 /**
  * This places the cursor at `vct` and places it in bound vertically.
@@ -48,6 +53,13 @@ int move_dir(struct frame *frame, size_t dist, int dir);
  * @param frame Frame to adjust the cursor within.
  */
 void adjust_cursor(struct frame *frame);
+
+/**
+ * Clips the cursor to the line end (mode aware).
+ *
+ * @param frame The frame whose cursor to use.
+ */
+void clip_column(struct frame *frame);
 
 /**
  * All motions use the counter to perform the operation count times.
@@ -89,6 +101,17 @@ void adjust_cursor(struct frame *frame);
  * @return 0 if the cursor stayed unchanged, 1 otherwise
  */
 int do_motion(struct frame *frame, int motion);
+
+/**
+ * Moves the cursor in horizontal direct but also vertically across lines.
+ *
+ * @param frame Frame to move the cursor within.
+ * @param dist  Distance to move.
+ * @param dir   Direction of the movement (negative or positive).
+ *
+ * @return 1 if a movement occured, 0 otherwise.
+ */
+int move_dir(struct frame *frame, size_t dist, int dir);
 
 /**
  * Moves the cursor in vertical direction (up and down) and returns true if
