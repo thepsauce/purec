@@ -1,6 +1,8 @@
 #include "frame.h"
 #include "util.h"
 
+#include <locale.h>
+
 #include <stdio.h>
 #include <string.h>
 
@@ -15,6 +17,8 @@ int main(void)
 
     struct buf *buf;
     struct frame fr;
+
+    setlocale(LC_ALL, "");
 
     initscr();
     cbreak();
