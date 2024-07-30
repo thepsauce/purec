@@ -36,17 +36,19 @@ int insert_handle_input(int c)
 
     case '\n':
         ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, 1);
-        ev->cur = SelFrame->cur;
+        ev->undo_cur = SelFrame->cur;
         do_motion(SelFrame, MOTION_NEXT);
+        ev->redo_cur = SelFrame->cur;
         return 1;
 
     case '\t':
         ch = ' ';
         n = TABSIZE - SelFrame->cur.col % TABSIZE;
         ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, n);
-        ev->cur = SelFrame->cur;
+        ev->undo_cur = SelFrame->cur;
         Mode.counter = n;
         do_motion(SelFrame, MOTION_NEXT);
+        ev->redo_cur = SelFrame->cur;
         return 1;
 
     case KEY_DC:
@@ -55,6 +57,7 @@ int insert_handle_input(int c)
         ev = delete_range(buf, &old_cur, &SelFrame->cur);
         if (ev != NULL) {
             ev->cur = old_cur;
+            ev->redo_cur = old_cur;
         }
         SelFrame->cur = old_cur;
         return r;
@@ -66,13 +69,15 @@ int insert_handle_input(int c)
         ev = delete_range(buf, &old_cur, &SelFrame->cur);
         if (ev != NULL) {
             ev->cur = old_cur;
+            ev->redo_cur = SelFrame->cur;
         }
         return r;
     }
     if (c < 0x100 && ch >= ' ' && motions[c] == 0) {
         ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, 1);
-        ev->cur = SelFrame->cur;
+        ev->undo_cur = SelFrame->cur;
         do_motion(SelFrame, MOTION_NEXT);
+        ev->redo_cur = SelFrame->cur;
         return 1;
     }
     return do_motion(SelFrame, motions[c]);
