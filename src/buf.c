@@ -108,6 +108,7 @@ struct undo_event *undo_event(struct buf *buf)
     if (buf->event_i == 0) {
         return NULL;
     }
+
 next_event:
     ev = &buf->events[--buf->event_i];
     if (first == NULL) {
@@ -162,6 +163,7 @@ struct undo_event *redo_event(struct buf *buf)
     if (buf->event_i == buf->num_events) {
         return NULL;
     }
+
 next_event:
     ev = &buf->events[buf->event_i++];
     if (first == NULL) {
