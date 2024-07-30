@@ -62,6 +62,16 @@ void adjust_cursor(struct frame *frame);
 void clip_column(struct frame *frame);
 
 /**
+ * Sets the cursor to a new position.
+ *
+ * This also clips vertically and horizontally, the `vct` is NOT used.
+ *
+ * @param frame Frame to set the cursor in.
+ * @param pos   The new cursor position.
+ */
+void set_cursor(struct frame *frame, const struct pos *pos);
+
+/**
  * All motions use the counter to perform the operation count times.
  */
 
