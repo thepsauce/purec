@@ -64,7 +64,7 @@ struct buf {
     size_t a_lines;
 
     /// events that occured
-    struct undo_event *events;
+    struct undo_event **events;
     /// number of ecents that occured
     size_t num_events;
     /// current event index (1 based)
