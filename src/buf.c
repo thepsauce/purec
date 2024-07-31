@@ -30,8 +30,11 @@ static int reload_file(struct buf *buf)
 
     buf->num_lines = 0;
     while (n_line = getline(&s_line, &a_line, fp), n_line > 0) {
-        if (s_line[n_line - 1] == '\n') {
-            n_line--;
+        for (; n_line > 0; n_line--) {
+            if (s_line[n_line - 1] != '\n' &&
+                    s_line[n_line - 1] != '\r') {
+                break;
+            }
         }
         line = _insert_lines(buf, buf->num_lines, 1);
         line->flags = 0;
