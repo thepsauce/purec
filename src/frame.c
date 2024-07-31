@@ -43,11 +43,21 @@ void set_cursor(struct frame *frame, const struct pos *pos)
 
     new_cur = *pos;
 
+    /* clip line */
     if (new_cur.line >= frame->buf->num_lines) {
         new_cur.line = frame->buf->num_lines - 1;
     }
+
+    /* clip column */
     line = &frame->buf->lines[new_cur.line];
     new_cur.col = MIN(new_cur.col, get_mode_line_end(line));
+
+    /* adjust scrolling */
+    if (new_cur.line < frame->scroll.line) {
+        frame->scroll.line = new_cur.line;
+    } else if (new_cur.line >= frame->scroll.line + frame->h) {
+        frame->scroll.line = new_cur.line - frame->h + 1;
+    }
 
     frame->cur = new_cur;
 }
