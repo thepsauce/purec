@@ -34,13 +34,16 @@ static int reload_file(struct buf *buf)
             n_line--;
         }
         line = _insert_lines(buf, buf->num_lines, 1);
+        line->flags = 0;
+        line->state = 0;
+        line->attribs = NULL;
         line->s = xmalloc(n_line);
         memcpy(line->s, s_line, n_line);
         line->n = n_line;
     }
 
     for (size_t i = buf->num_lines; i < num_old; i++) {
-        free(buf->lines[i].s);
+        clear_line(&buf->lines[i]);
     }
     buf->lines = xreallocarray(buf->lines, buf->num_lines, sizeof(*buf->lines));
     buf->a_lines = buf->num_lines;
@@ -73,7 +76,7 @@ void delete_buffer(struct buf *buf)
 {
     free(buf->path);
     for (size_t i = 0; i < buf->num_lines; i++) {
-        free(buf->lines[i].s);
+        clear_line(&buf->lines[i]);
     }
     free(buf->lines);
     for (size_t i = 0; i < buf->num_events; i++) {
@@ -327,6 +330,7 @@ void _insert_text(struct buf *buf, struct pos *pos,
             i += len_text;
         }
         line->n += n;
+        mark_dirty(line);
         return;
     }
 
@@ -340,6 +344,9 @@ void _insert_text(struct buf *buf, struct pos *pos,
             for (j = i; j < len_text && text[j] != '\n'; j++) {
                 (void) 0;
             }
+            line->flags = 0;
+            line->state = 0;
+            line->attribs = NULL;
             line->n = j - i;
             line->s = xmalloc(line->n);
             memcpy(&line->s[0], &text[i], line->n);
@@ -363,6 +370,8 @@ void _insert_text(struct buf *buf, struct pos *pos,
     at_line->n = pos->col + first_end;
     at_line->s = xrealloc(at_line->s, at_line->n);
     memcpy(&at_line->s[pos->col], &text[0], first_end);
+
+    mark_dirty(at_line);
 }
 
 struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
@@ -449,6 +458,7 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
     if (from.line == to.line) {
         memmove(&fl->s[from.col], &fl->s[to.col], fl->n - to.col);
         fl->n -= to.col - from.col;
+        mark_dirty(fl);
     } else if (to.line >= buf->num_lines) {
         /* trim the line */
         fl->n = from.col;
@@ -457,7 +467,7 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
         }
         /* delete the remaining lines */
         for (size_t i = from.line + 1; i < buf->num_lines; i++) {
-            free(buf->lines[i].s);
+            clear_line(&buf->lines[i]);
         }
         buf->num_lines = from.line + 1;
     } else {
@@ -468,10 +478,11 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
         memcpy(&fl->s[from.col], &tl->s[to.col], tl->n - to.col);
         /* delete the remaining lines */
         for (size_t i = from.line + 1; i <= to.line; i++) {
-            free(buf->lines[i].s);
+            clear_line(&buf->lines[i]);
         }
         memmove(&fl[1], &tl[1], sizeof(*buf->lines) *
                 (buf->num_lines - to.line - 1));
         buf->num_lines -= to.line - from.line;
+        mark_dirty(fl);
     }
 }
