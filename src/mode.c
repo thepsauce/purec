@@ -1,10 +1,9 @@
 #include "mode.h"
 #include "buf.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdint.h>
-
-#include <ncurses.h>
 
 void sort_positions(struct pos *p1, struct pos *p2)
 {
@@ -21,6 +20,18 @@ void sort_positions(struct pos *p1, struct pos *p2)
             p2->col = tmp.col;
         }
     }
+}
+
+char *Message;
+
+void format_message(const char *fmt, ...)
+{
+    va_list l;
+
+    free(Message);
+    va_start(l, fmt);
+    vasprintf(&Message, fmt, l);
+    va_end(l);
 }
 
 struct mode Mode;
