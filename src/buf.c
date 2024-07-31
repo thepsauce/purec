@@ -83,7 +83,8 @@ void delete_buffer(struct buf *buf)
     }
     free(buf->lines);
     for (size_t i = 0; i < buf->num_events; i++) {
-        free(buf->events[i].text);
+        free(buf->events[i]->text);
+        free(buf->events[i]);
     }
     free(buf->events);
     free(buf);
@@ -93,19 +94,27 @@ struct undo_event *add_event(struct buf *buf, const struct undo_event *copy_ev)
 {
     struct undo_event *ev;
 
+    /* free old events */
+    for (size_t i = buf->event_i; i < buf->num_events; i++) {
+        free(buf->events[i]->text);
+        free(buf->events[i]);
+    }
+
     buf->events = xreallocarray(buf->events, buf->event_i + 1,
             sizeof(*buf->events));
-    ev = &buf->events[buf->event_i++];
-    buf->num_events = buf->event_i;
+    ev = xmalloc(sizeof(*ev));
     *ev = *copy_ev;
     ev->is_transient = false;
     ev->time = time(NULL);
+
+    buf->events[buf->event_i++] = ev;
+    buf->num_events = buf->event_i;
     return ev;
 }
 
 struct undo_event *undo_event(struct buf *buf)
 {
-    struct undo_event *ev, *first = NULL;
+    struct undo_event *ev;
     size_t line, col;
     size_t m;
     size_t l;
@@ -116,10 +125,7 @@ struct undo_event *undo_event(struct buf *buf)
     }
 
 next_event:
-    ev = &buf->events[--buf->event_i];
-    if (first == NULL) {
-        first = ev;
-    }
+    ev = buf->events[--buf->event_i];
     line = ev->pos.line;
     col = ev->pos.col;
 
@@ -154,7 +160,7 @@ next_event:
     if (ev->is_transient && buf->event_i > 0) {
         goto next_event;
     }
-    return first;
+    return ev;
 }
 
 struct undo_event *redo_event(struct buf *buf)
@@ -171,7 +177,7 @@ struct undo_event *redo_event(struct buf *buf)
     }
 
 next_event:
-    ev = &buf->events[buf->event_i++];
+    ev = buf->events[buf->event_i++];
     if (first == NULL) {
         first = ev;
     }
