@@ -135,6 +135,7 @@ size_t get_line_indent(struct buf *buf, size_t line_i);
  *
  * If `line_i` is out of bounds, it is set to the last line. All added lines are
  * initialized to 0 and no event is added. This does NOT add an event.
+ * All lines following `line_i` are marked as dirty.
  *
  * @param buf       Buffer to delete within.
  * @param line_i    Line index to append to.
@@ -215,6 +216,7 @@ struct undo_event *insert_text(struct buf *buf, struct pos *pos,
  *
  * This functions adds NO event and does NO clipping. It also does not check if
  * the product of `len_text` and `repeat` overflow.
+ * This marks the changed lines as dirty.
  *
  * @param buf       Buffer to insert text in.
  * @param pos       Position to insert text from.
@@ -256,6 +258,7 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *from,
  * This function works in an excluseive way. If `*pfrom == *pto` is true, this
  * is already undefined behaviour as this function EXPECTS that there is
  * something to delete.
+ * This marks the changed lines as dirty.
  *
  * Example:
  * ```
