@@ -23,6 +23,19 @@ struct pos {
  */
 void sort_positions(struct pos *p1, struct pos *p2);
 
+/**
+ * Message that is rendered at the bottom of the screen.
+ */
+extern char *Message;
+
+/**
+ * Formats the message like `printf()` and puts it into `Message`.
+ *
+ * @param fmt   Format string.
+ * @param ...   Format arguments.
+ */
+void format_message(const char *fmt, ...);
+
 #define NORMAL_MODE 0
 #define INSERT_MODE 1
 #define VISUAL_MODE 2

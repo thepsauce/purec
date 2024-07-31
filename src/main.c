@@ -10,13 +10,17 @@
 
 int main(void)
 {
-    static int (*const input_handlers[])(int c) = {
-        [NORMAL_MODE] = normal_handle_input,
-        [INSERT_MODE] = insert_handle_input,
+    static const struct input_handler {
+        int (*handler)(int c);
+        int (*getter_ch)(void);
+    } input_handlers[] = {
+        [NORMAL_MODE] = { normal_handle_input, getch_digit },
+        [INSERT_MODE] = { insert_handle_input, getch },
     };
 
     struct buf *buf;
     struct frame fr;
+    const struct input_handler *ih;
 
     setlocale(LC_ALL, "");
 
@@ -46,11 +50,15 @@ int main(void)
     while (1) {
         erase();
         render_frame(&fr);
+        if (Message != NULL) {
+            move(LINES - 1, 0);
+            addstr(Message);
+        }
         move(SelFrame->cur.line - SelFrame->scroll.line,
                 SelFrame->cur.col - SelFrame->scroll.col);
         curs_set(1);
-        while (Mode.counter = 0,
-                input_handlers[Mode.type](getch_digit()) == 0) {
+        while (Mode.counter = 0, ih = &input_handlers[Mode.type],
+                ih->handler(ih->getter_ch()) == 0) {
             (void) 0;
         }
         curs_set(0);
