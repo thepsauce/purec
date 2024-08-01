@@ -6,6 +6,19 @@
 #include <ctype.h>
 #include <string.h>
 
+struct render_info {
+    struct frame *frame;
+    struct line *cur_line;
+
+    struct line *prev_line;
+    struct line *line;
+    size_t line_i;
+
+    struct pos sel_beg;
+    struct pos sel_end;
+    bool has_sel;
+};
+
 #define STATE_NULL 0
 #define STATE_START 1
 #define STATE_WORD 2
@@ -13,17 +26,17 @@
 /**
  * Simply highlight all words in bold.
  */
-static void highlight_line(struct frame *frame, struct line *line, size_t state)
+static void highlight_line(struct render_info *ri, size_t state)
 {
-    size_t i = 0;
+    struct line *line;
+    size_t i;
     char ch;
+
+    line = ri->line;
 
     line->attribs = xreallocarray(line->attribs, line->n,
             sizeof(*line->attribs));
     memset(line->attribs, 0, sizeof(*line->attribs) * line->n);
-
-    (void) frame;
-    //fprintf(stderr, "highlighting line no. %zu {%.*s}\n", line - frame->buf->lines, (int) line->n, line->s);
 
     for (i = 0; i < line->n; i++) {
         ch = line->s[i];
@@ -57,40 +70,45 @@ static void highlight_line(struct frame *frame, struct line *line, size_t state)
 /**
  * Updates line highlighting and renders the line.
  */
-static void render_line(struct frame *frame, struct line *line)
+static void render_line(struct render_info *ri)
 {
-    struct line *prev_line;
-    struct line *cur_line;
+    struct line *line;
     int w = 0;
     struct attr *a;
+    struct pos p;
 
-    if (line == frame->buf->lines) {
-        prev_line = NULL;
-    } else {
-        prev_line = line - 1;
-    }
-
+    line = ri->line;
     if (line->state == 0) {
-        if (prev_line == NULL) {
-            highlight_line(frame, line, STATE_START);
+        if (ri->line_i == 0) {
+            highlight_line(ri, STATE_START);
         } else {
-            highlight_line(frame, line,
-                    prev_line->state == 0 ? STATE_START : prev_line->state);
+            highlight_line(ri, ri->prev_line->state == 0 ? STATE_START :
+                    ri->prev_line->state);
         }
     }
 
-    cur_line = &frame->buf->lines[frame->cur.line];
-    for (size_t i = 0; i < line->n && w != frame->w;) {
-        a = &line->attribs[i];
-        attr_set(a->a, a->cp, NULL);
-        if (a->cc == NULL || line == cur_line) {
-            addch(line->s[i]);
-            i++;
+    p.col = 0;
+    p.line = ri->line_i;
+
+    for (p.col = 0; p.col < line->n && w != ri->frame->w;) {
+        a = &line->attribs[p.col];
+        if (ri->has_sel && is_in_range(&p, &ri->sel_beg, &ri->sel_end)) {
+            attr_set(a->a ^ A_REVERSE, 0, NULL);
+        } else {
+            attr_set(a->a, a->cp, NULL);
+        }
+        if (a->cc == NULL || line == ri->cur_line) {
+            addch(line->s[p.col]);
+            p.col++;
         } else {
             addstr(a->cc);
-            i += 2;
+            p.col += 2;
         }
         w++;
+    }
+    if (ri->has_sel && is_in_range(&p, &ri->sel_beg, &ri->sel_end)) {
+        attr_set(A_REVERSE, 0, NULL);
+        addch(' ');
     }
 }
 
@@ -98,14 +116,32 @@ void render_frame(struct frame *frame)
 {
     struct buf *buf;
     int perc;
+    struct render_info ri;
 
     buf = frame->buf;
+
+    ri.frame = frame;
+    ri.cur_line = &buf->lines[frame->cur.line];
+    ri.prev_line = frame->scroll.line == 0 ? NULL :
+        &buf->lines[frame->scroll.line - 1];
+
+    ri.has_sel = Mode.type == VISUAL_MODE && frame == SelFrame;
+    if (ri.has_sel) {
+        ri.sel_beg = frame->cur;
+        ri.sel_end = Mode.pos;
+        sort_positions(&ri.sel_beg, &ri.sel_end);
+    }
+
     for (size_t i = frame->scroll.line; i < MIN(buf->num_lines,
                 (size_t) (frame->scroll.line + frame->h)); i++) {
         move(i - frame->scroll.line, 0);
-        render_line(frame, &buf->lines[i]);
+        ri.line_i = i;
+        ri.line = &buf->lines[i];
+        render_line(&ri);
+        ri.prev_line = ri.line;
     }
 
+    attr_set(0, 0, NULL);
     move(frame->y + frame->h, 0);
     clrtoeol();
     move(frame->y + frame->h, 0);

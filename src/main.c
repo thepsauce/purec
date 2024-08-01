@@ -16,6 +16,7 @@ int main(void)
     } input_handlers[] = {
         [NORMAL_MODE] = { normal_handle_input, getch_digit },
         [INSERT_MODE] = { insert_handle_input, getch },
+        [VISUAL_MODE] = { visual_handle_input, getch_digit },
     };
 
     struct buf *buf;

@@ -1,26 +1,10 @@
 #include "mode.h"
+#include "frame.h"
 #include "buf.h"
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdint.h>
-
-void sort_positions(struct pos *p1, struct pos *p2)
-{
-    struct pos tmp;
-
-    if (p1->line > p2->line) {
-        tmp = *p1;
-        *p1 = *p2;
-        *p2 = tmp;
-    } else if (p1->line == p2->line) {
-        if (p1->col > p2->col) {
-            tmp.col = p1->col;
-            p1->col = p2->col;
-            p2->col = tmp.col;
-        }
-    }
-}
 
 char *Message;
 
@@ -79,14 +63,23 @@ void set_mode(int mode)
     Mode.type = mode;
     switch (mode) {
     case NORMAL_MODE:
-    case VISUAL_MODE:
         /* steady block */
         printf("\x1b[\x30 q");
         break;
+
+    case VISUAL_MODE:
+        /* steady block */
+        printf("\x1b[\x30 q");
+        format_message("-- VISUAL --");
+        Mode.pos = SelFrame->cur;
+        break;
+
     case INSERT_MODE:
         /* vertical bar cursor (blinking) */
         printf("\x1b[\x35 q");
+        format_message("-- INSERT --");
         break;
+
     default:
         printf("set_mode - invalid mode: %d", mode);
         abort();
