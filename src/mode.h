@@ -6,22 +6,7 @@
  * ** *** **** *** ** */
 
 #include "line.h"
-
-/**
- * Position within "something".
- */
-struct pos {
-    size_t line;
-    size_t col;
-};
-
-/**
- * Sets `p1` to the position that comes first and `p2` to last.
- *
- * @param p1    The first position.
- * @param p2    The second position.
- */
-void sort_positions(struct pos *p1, struct pos *p2);
+#include "util.h"
 
 /**
  * Message that is rendered at the bottom of the screen.
@@ -125,7 +110,7 @@ extern struct mode {
     size_t extra_counter;
     /// counter
     size_t counter;
-    /// saved cursor positon
+    /// saved cursor positon (for visual mode)
     struct pos pos;
     /// normal mode
     struct normal_mode {
@@ -198,5 +183,12 @@ int normal_handle_input(int c);
  * @return Whether the ui needs to be updated.
  */
 int insert_handle_input(int c);
+
+/**
+ * Handles a key input for the visual mode.
+ *
+ * @return Whether the ui needs to be updated.
+ */
+int visual_handle_input(int c);
 
 #endif

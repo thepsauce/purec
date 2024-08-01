@@ -79,10 +79,10 @@ int normal_handle_input(int c)
             from.col = 0;
             to.line = safe_add(from.line, correct_counter(Mode.counter) - 1);
             to.col = SIZE_MAX;
-            ev = delete_range(SelFrame->buf, &from, &to);
+            ev = delete_range(buf, &from, &to);
             ev->is_transient = true;
-            indent_line(SelFrame->buf, from.line)->is_transient = true;
-            from.col = SelFrame->buf->lines[from.line].n;
+            indent_line(buf, from.line)->is_transient = true;
+            from.col = buf->lines[from.line].n;
             set_cursor(SelFrame, &from);
             break;
 
@@ -92,23 +92,23 @@ int normal_handle_input(int c)
             }
 
             to.line = safe_add(cur.line, correct_counter(Mode.counter));
-            if (to.line > SelFrame->buf->num_lines) {
-                to.line = SelFrame->buf->num_lines;
+            if (to.line > buf->num_lines) {
+                to.line = buf->num_lines;
             }
 
             if (cur.line > 0) {
                 from.line = cur.line - 1;
-                from.col = SelFrame->buf->lines[from.line].n;
+                from.col = buf->lines[from.line].n;
                 to.line--;
-                to.col = SelFrame->buf->lines[to.line].n;
+                to.col = buf->lines[to.line].n;
             } else {
                 from.line = cur.line;
                 from.col = 0;
                 to.col = 0;
             }
 
-            ev = delete_range(SelFrame->buf, &from, &to);
-            if (SelFrame->cur.line == SelFrame->buf->num_lines) {
+            ev = delete_range(buf, &from, &to);
+            if (SelFrame->cur.line == buf->num_lines) {
                 /* just go up once */
                 Mode.counter = 0;
                 do_motion(SelFrame, MOTION_UP);
@@ -121,7 +121,7 @@ int normal_handle_input(int c)
             Mode.type = INSERT_MODE;
             do_motion(SelFrame, motions[e_c]);
             Mode.type = NORMAL_MODE;
-            ev = delete_range(SelFrame->buf, &cur, &SelFrame->cur);
+            ev = delete_range(buf, &cur, &SelFrame->cur);
             if (cur.line < SelFrame->cur.line ||
                     (cur.line == SelFrame->cur.line &&
                      cur.col < SelFrame->cur.col)) {
@@ -140,7 +140,7 @@ int normal_handle_input(int c)
     case 'x':
         cur = SelFrame->cur;
         cur.col += correct_counter(Mode.counter);
-        ev = delete_range(SelFrame->buf, &SelFrame->cur, &cur);
+        ev = delete_range(buf, &SelFrame->cur, &cur);
         if (ev != NULL) {
             ev->undo_cur = cur;
             ev->redo_cur = SelFrame->cur;
@@ -151,7 +151,7 @@ int normal_handle_input(int c)
     case 'X':
         cur = SelFrame->cur;
         move_horz(SelFrame, correct_counter(Mode.counter), -1);
-        ev = delete_range(SelFrame->buf, &cur, &SelFrame->cur);
+        ev = delete_range(buf, &cur, &SelFrame->cur);
         if (ev != NULL) {
             ev->undo_cur = cur;
             ev->redo_cur = SelFrame->cur;
@@ -161,7 +161,7 @@ int normal_handle_input(int c)
 
     case 'u':
         for (size_t i = 0; i < correct_counter(Mode.counter); i++) {
-            ev = undo_event(SelFrame->buf);
+            ev = undo_event(buf);
             if (ev == NULL) {
                 return 0;
             }
@@ -171,7 +171,7 @@ int normal_handle_input(int c)
 
     case CONTROL('R'):
         for (size_t i = 0; i < correct_counter(Mode.counter); i++) {
-            ev = redo_event(SelFrame->buf);
+            ev = redo_event(buf);
             if (ev == NULL) {
                 return 0;
             }
@@ -183,10 +183,10 @@ int normal_handle_input(int c)
         cur = SelFrame->cur;
         set_mode(INSERT_MODE);
         do_motion(SelFrame, MOTION_HOME);
-        ev = insert_text(SelFrame->buf, &SelFrame->cur, &(char) { '\n' }, 1, 1);
+        ev = insert_text(buf, &SelFrame->cur, &(char) { '\n' }, 1, 1);
         ev->undo_cur = cur;
         ev->is_transient = true;
-        indent_line(SelFrame->buf, SelFrame->cur.line)->is_transient = true;
+        indent_line(buf, SelFrame->cur.line)->is_transient = true;
         do_motion(SelFrame, MOTION_END);
         ev->redo_cur = SelFrame->cur;
         return 1;
@@ -195,16 +195,51 @@ int normal_handle_input(int c)
         cur = SelFrame->cur;
         set_mode(INSERT_MODE);
         do_motion(SelFrame, MOTION_END);
-        ev = insert_text(SelFrame->buf, &SelFrame->cur, &(char) { '\n' }, 1, 1);
+        ev = insert_text(buf, &SelFrame->cur, &(char) { '\n' }, 1, 1);
         ev->undo_cur = cur;
         ev->is_transient = true;
-        indent_line(SelFrame->buf, SelFrame->cur.line + 1)->is_transient = true;
+        indent_line(buf, SelFrame->cur.line + 1)->is_transient = true;
         do_motion(SelFrame, MOTION_DOWN);
         ev->redo_cur = SelFrame->cur;
         return 1;
 
     case ':':
         read_command_line();
+        return 1;
+
+    case '{':
+        for (size_t i = SelFrame->cur.line; i > 0; ) {
+            i--;
+            if (buf->lines[i].n == 0) {
+                if (Mode.counter > 1) {
+                    Mode.counter--;
+                    continue;
+                }
+                Mode.counter = SelFrame->cur.line - i;
+                return do_motion(SelFrame, MOTION_UP);
+            }
+        }
+        Mode.counter = SelFrame->cur.line;
+        return do_motion(SelFrame, MOTION_UP);
+
+    case '}':
+        for (size_t i = SelFrame->cur.line + 1; i < buf->num_lines; i++) {
+            if (buf->lines[i].n == 0) {
+                if (Mode.counter > 1) {
+                    Mode.counter--;
+                    continue;
+                }
+                Mode.counter = i - SelFrame->cur.line;
+                return do_motion(SelFrame, MOTION_DOWN);
+            }
+        }
+        Mode.counter = buf->num_lines - 1 - SelFrame->cur.line;
+        return do_motion(SelFrame, MOTION_DOWN);
+
+    case 'v':
+    case 'V':
+    case CONTROL('V'):
+        set_mode(VISUAL_MODE);
         return 1;
 
     case 'A':

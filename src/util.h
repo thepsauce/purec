@@ -2,6 +2,35 @@
 #define UTIL_H
 
 #include <stddef.h>
+#include <stdbool.h>
+
+/**
+ * Position within "something".
+ */
+struct pos {
+    size_t line;
+    size_t col;
+};
+
+/**
+ * Sets `p1` to the position that comes first and `p2` to last.
+ *
+ * @param p1    The first position.
+ * @param p2    The second position.
+ */
+void sort_positions(struct pos *p1, struct pos *p2);
+
+/**
+ * Checks whether given position is within given range.
+ *
+ * @param pos   The position to check.
+ * @param from  The starting position of the range.
+ * @param to    The end position of the range.
+ *
+ * @return Whether the position is in given range.
+ */
+bool is_in_range(const struct pos *pos,
+        const struct pos *from, const struct pos *to);
 
 /**
  * Multiply two numbers without overflowing.
