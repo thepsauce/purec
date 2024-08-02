@@ -373,7 +373,8 @@ void _insert_text(struct buf *buf, struct pos *pos,
     line->s = xrealloc(line->s, line->n);
     memmove(&line->s[at_line->n - pos->col], &line->s[0],
             line->n - (at_line->n - pos->col));
-    memcpy(&line->s[0], &at_line->s[pos->col], at_line->n - pos->col);
+    memcpy(&line->s[line->n - (at_line->n - pos->col)],
+            &at_line->s[pos->col], at_line->n - pos->col);
 
     /* trim first line and insert first text segment */
     at_line->n = pos->col + first_end;
