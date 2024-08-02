@@ -11,6 +11,10 @@
  * A frame is a rectangle on the screen that shows a buffer.
  *
  * It allows a cursor to move over the buffer and make changes.
+ *
+ * Note that the frame does not implement any buffer editing functions itself,
+ * it merely shows the buffer and allows to move through it. `buf.h/c` implement
+ * all edit operations.
  */
 struct frame {
     /// position and size on the screen
@@ -41,8 +45,10 @@ void render_frame(struct frame *frame);
  * Adjusts `scroll` such that the cursor is visible.
  *
  * @param frame Frame to adjust the `scroll` within.
+ *
+ * @return Whether scrolling occured.
  */
-void adjust_scroll(struct frame *frame);
+int adjust_scroll(struct frame *frame);
 
 /**
  * This places the cursor at `vct` and places it in bound vertically.
@@ -101,6 +107,10 @@ void set_cursor(struct frame *frame, const struct pos *pos);
 #define MOTION_PAGE_UP      12
 /// move a page down
 #define MOTION_PAGE_DOWN    13
+/// move up a paragraph
+#define MOTION_PARA_UP      14
+/// move down a paragraph
+#define MOTION_PARA_DOWN    15
 
 /**
  * Do a special cursor motion.
@@ -136,6 +146,16 @@ int move_dir(struct frame *frame, size_t dist, int dir);
 int move_vert(struct frame *frame, size_t dist, int dir);
 
 /**
+ * Sets the line of the cursor to given line (clipped).
+ *
+ * @param frame Frame to move the cursor in.
+ * @param line  Line to move to.
+ *
+ * @return Whether movement occured.
+ */
+int set_vert(struct frame *frame, size_t line);
+
+/**
  * Moves the cursor in horizontal direction (left and right) and returns true if
  * there was movement.
  *
@@ -146,5 +166,15 @@ int move_vert(struct frame *frame, size_t dist, int dir);
  * @return 1 if a movement occured, 0 otherwise.
  */
 int move_horz(struct frame *frame, size_t dist, int dir);
+
+/**
+ * Sets the column of the cursor to given column (clipped).
+ *
+ * @param frame Frame to move the cursor in.
+ * @param col   Column to move to.
+ *
+ * @return Whether movement occured.
+ */
+int set_horz(struct frame *frame, size_t col);
 
 #endif

@@ -21,13 +21,17 @@ void adjust_cursor(struct frame *frame)
     frame->cur.col = MIN(frame->vct, get_mode_line_end(line));
 }
 
-void adjust_scroll(struct frame *frame)
+int adjust_scroll(struct frame *frame)
 {
     if (frame->cur.line < frame->scroll.line) {
         frame->scroll.line = frame->cur.line;
-    } else if (frame->cur.line >= frame->scroll.line + frame->h) {
-        frame->scroll.line = frame->cur.line - frame->h + 1;
+        return 1;
     }
+    if (frame->cur.line >= frame->scroll.line + frame->h) {
+        frame->scroll.line = frame->cur.line - frame->h + 1;
+        return 1;
+    }
+    return 0;
 }
 
 void clip_column(struct frame *frame)
@@ -59,68 +63,90 @@ void set_cursor(struct frame *frame, const struct pos *pos)
         frame->scroll.line = new_cur.line - frame->h + 1;
     }
 
+    /* set vct */
+    frame->vct = new_cur.col;
+
     frame->cur = new_cur;
 }
 
 int do_motion(struct frame *frame, int motion)
 {
-    int r = 0;
+    size_t new_line;
 
     switch (motion) {
     case MOTION_LEFT:
-        r = move_horz(frame, correct_counter(Mode.counter), -1);
-        break;
+        return move_horz(frame, correct_counter(Mode.counter), -1);
 
     case MOTION_RIGHT:
-        r = move_horz(frame, correct_counter(Mode.counter), 1);
-        break;
+        return move_horz(frame, correct_counter(Mode.counter), 1);
 
     case MOTION_DOWN:
-        r = move_vert(frame, correct_counter(Mode.counter), 1);
-        break;
+        return move_vert(frame, correct_counter(Mode.counter), 1);
 
     case MOTION_UP:
-        r = move_vert(frame, correct_counter(Mode.counter), -1);
-        break;
+        return move_vert(frame, correct_counter(Mode.counter), -1);
 
     case MOTION_HOME:
-        r = move_horz(frame, SIZE_MAX, -1);
-        break;
+        return move_horz(frame, SIZE_MAX, -1);
 
     case MOTION_END:
-        r = move_horz(frame, SIZE_MAX, 1);
-        break;
+        return move_horz(frame, SIZE_MAX, 1);
 
     case MOTION_PREV:
-        r = move_dir(frame, correct_counter(Mode.counter), -1);
-        break;
+        return move_dir(frame, correct_counter(Mode.counter), -1);
 
     case MOTION_NEXT:
-        r = move_dir(frame, correct_counter(Mode.counter), 1);
-        break;
+        return move_dir(frame, correct_counter(Mode.counter), 1);
 
     case MOTION_HOME_SP:
-        r = move_horz(frame, frame->cur.col -
+        return move_horz(frame, frame->cur.col -
                 get_line_indent(frame->buf, frame->cur.line), -1);
-        break;
 
     case MOTION_FILE_BEG:
-        r = move_vert(frame, SIZE_MAX, -1);
-        break;
+        return set_vert(frame, correct_counter(Mode.counter) - 1);
 
     case MOTION_FILE_END:
-        r = move_vert(frame, SIZE_MAX, 1);
-        break;
+        new_line = correct_counter(Mode.counter);
+        if (new_line >= frame->buf->num_lines) {
+            return move_vert(frame, SIZE_MAX, 1);
+        }
+        new_line = frame->buf->num_lines - new_line;
+        return set_vert(frame, new_line);
 
     case MOTION_PAGE_UP:
-        r = move_vert(frame, frame->h * 2 / 3, -1);
-        break;
+        return move_vert(frame, frame->h * 2 / 3, -1);
 
     case MOTION_PAGE_DOWN:
-        r = move_vert(frame, frame->h * 2 / 3, 1);
-        break;
+        return move_vert(frame, frame->h * 2 / 3, 1);
+
+    case MOTION_PARA_UP:
+        for (size_t i = SelFrame->cur.line; i > 0; ) {
+            i--;
+            if (SelFrame->buf->lines[i].n == 0) {
+                if (Mode.counter > 1) {
+                    Mode.counter--;
+                    continue;
+                }
+                return move_vert(frame, SelFrame->cur.line - i, -1);
+            }
+        }
+        return move_vert(frame, SelFrame->cur.line, -1);
+
+    case MOTION_PARA_DOWN:
+        for (size_t i = SelFrame->cur.line + 1; i < SelFrame->buf->num_lines;
+                i++) {
+            if (SelFrame->buf->lines[i].n == 0) {
+                if (Mode.counter > 1) {
+                    Mode.counter--;
+                    continue;
+                }
+                return move_vert(SelFrame, i - SelFrame->cur.line, 1);
+            }
+        }
+        return move_vert(SelFrame,
+                SelFrame->buf->num_lines - 1 - SelFrame->cur.line, 1);
     }
-    return r;
+    return 0;
 }
 
 int move_dir(struct frame *frame, size_t dist, int dir)
@@ -175,9 +201,7 @@ int move_dir(struct frame *frame, size_t dist, int dir)
         }
     }
 
-    adjust_scroll(frame);
-
-    if (old_dist != dist) {
+    if (adjust_scroll(frame) || old_dist != dist) {
         return 1;
     }
     return 0;
@@ -210,8 +234,15 @@ int move_vert(struct frame *frame, size_t dist, int dir)
         adjust_cursor(frame);
         r = 1;
     }
-    adjust_scroll(frame);
-    return r;
+    return r | adjust_scroll(frame);
+}
+
+int set_vert(struct frame *frame, size_t line)
+{
+    if (line < frame->cur.line) {
+        return move_vert(frame, frame->cur.line - line, -1);
+    }
+    return move_vert(frame, line - frame->cur.line, 1);
 }
 
 int move_horz(struct frame *frame, size_t dist, int dir)
@@ -249,4 +280,12 @@ int move_horz(struct frame *frame, size_t dist, int dir)
         return 1;
     }
     return 0;
+}
+
+int set_horz(struct frame *frame, size_t col)
+{
+    if (col < frame->cur.col) {
+        return move_vert(frame, frame->cur.col - col, -1);
+    }
+    return move_vert(frame, col - frame->cur.col, 1);
 }

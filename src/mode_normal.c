@@ -35,6 +35,9 @@ int normal_handle_input(int c)
 
         [KEY_PPAGE] = MOTION_PAGE_UP,
         [KEY_NPAGE] = MOTION_PAGE_DOWN,
+
+        ['{'] = MOTION_PARA_UP,
+        ['}'] = MOTION_PARA_DOWN,
     };
 
     int r = 0;
@@ -49,6 +52,8 @@ int normal_handle_input(int c)
         Mode.extra_counter = Mode.counter;
         Mode.counter = 0;
         e_c = getch_digit();
+        Mode.counter = safe_mul(correct_counter(Mode.counter),
+                correct_counter(Mode.extra_counter));
         switch (e_c) {
         case 'g':
         case 'G':
@@ -188,7 +193,7 @@ int normal_handle_input(int c)
         ev = insert_text(buf, &SelFrame->cur, &(char) { '\n' }, 1, 1);
         ev->undo_cur = cur;
         ev->is_transient = true;
-        indent_line(buf, SelFrame->cur.line)->is_transient = true;
+        indent_line(buf, SelFrame->cur.line);
         do_motion(SelFrame, MOTION_END);
         ev->redo_cur = SelFrame->cur;
         return 1;
@@ -200,7 +205,7 @@ int normal_handle_input(int c)
         ev = insert_text(buf, &SelFrame->cur, &(char) { '\n' }, 1, 1);
         ev->undo_cur = cur;
         ev->is_transient = true;
-        indent_line(buf, SelFrame->cur.line + 1)->is_transient = true;
+        indent_line(buf, SelFrame->cur.line + 1);
         do_motion(SelFrame, MOTION_DOWN);
         ev->redo_cur = SelFrame->cur;
         return 1;
@@ -208,35 +213,6 @@ int normal_handle_input(int c)
     case ':':
         read_command_line();
         return 1;
-
-    case '{':
-        for (size_t i = SelFrame->cur.line; i > 0; ) {
-            i--;
-            if (buf->lines[i].n == 0) {
-                if (Mode.counter > 1) {
-                    Mode.counter--;
-                    continue;
-                }
-                Mode.counter = SelFrame->cur.line - i;
-                return do_motion(SelFrame, MOTION_UP);
-            }
-        }
-        Mode.counter = SelFrame->cur.line;
-        return do_motion(SelFrame, MOTION_UP);
-
-    case '}':
-        for (size_t i = SelFrame->cur.line + 1; i < buf->num_lines; i++) {
-            if (buf->lines[i].n == 0) {
-                if (Mode.counter > 1) {
-                    Mode.counter--;
-                    continue;
-                }
-                Mode.counter = i - SelFrame->cur.line;
-                return do_motion(SelFrame, MOTION_DOWN);
-            }
-        }
-        Mode.counter = buf->num_lines - 1 - SelFrame->cur.line;
-        return do_motion(SelFrame, MOTION_DOWN);
 
     case 'v':
         set_mode(VISUAL_MODE);
