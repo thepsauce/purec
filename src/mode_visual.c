@@ -60,8 +60,8 @@ int visual_handle_input(int c)
         Mode.counter = safe_mul(correct_counter(Mode.counter),
                 correct_counter(Mode.extra_counter));
         switch (e_c) {
-        case 'g':
         case 'G':
+        case 'g':
             c = e_c;
             break;
         default:
@@ -97,8 +97,11 @@ int visual_handle_input(int c)
                 sel.end.col = 0;
                 sel.end.line++;
                 line_based = true;
+            } else if (Mode.type == VISUAL_LINE_MODE) {
+                line_based = true;
             } else {
-                line_based = Mode.type == VISUAL_LINE_MODE;
+                line_based = false;
+                sel.end.col++;
             }
             if ((c == 'C' || c == 'c') && line_based) {
                 sel.end.line--;
@@ -124,7 +127,21 @@ int visual_handle_input(int c)
 
     case 'U':
     case 'u':
-        /* TODO: case conversion */
+        get_selection(&sel);
+        if (sel.is_block) {
+            ev = change_block(SelFrame->buf, &sel.beg, &sel.end,
+                    c == 'U' ? toupper : tolower);
+        } else {
+            sel.end.col++;
+            ev = change_range(SelFrame->buf, &sel.beg, &sel.end,
+                    c == 'U' ? toupper : tolower);
+        }
+        set_mode(NORMAL_MODE);
+        if (ev == NULL) {
+            return 0;
+        }
+        ev->undo_cur = SelFrame->cur;
+        ev->redo_cur = Mode.pos;
         return 1;
 
     case 'O':
