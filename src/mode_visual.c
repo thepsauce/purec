@@ -35,6 +35,9 @@ int visual_handle_input(int c)
 
         [KEY_PPAGE] = MOTION_PAGE_UP,
         [KEY_NPAGE] = MOTION_PAGE_DOWN,
+
+        ['{'] = MOTION_PARA_UP,
+        ['}'] = MOTION_PARA_DOWN,
     };
 
     int r = 0;
