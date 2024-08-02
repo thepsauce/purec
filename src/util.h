@@ -21,6 +21,14 @@ struct pos {
 void sort_positions(struct pos *p1, struct pos *p2);
 
 /**
+ * Sets `p1` to the upper left corner and `p2` to the lower right corner.
+ *
+ * @param p1    The first position.
+ * @param p2    The second position.
+ */
+void sort_block_positions(struct pos *p1, struct pos *p2);
+
+/**
  * Checks whether given position is within given range.
  *
  * @param pos   The position to check.
@@ -30,6 +38,18 @@ void sort_positions(struct pos *p1, struct pos *p2);
  * @return Whether the position is in given range.
  */
 bool is_in_range(const struct pos *pos,
+        const struct pos *from, const struct pos *to);
+
+/**
+ * Checks whether given position is within given block.
+ *
+ * @param pos   The position to check.
+ * @param from  The upper left position of the block.
+ * @param to    The lower right position of the block.
+ *
+ * @return Whether the position is in given block.
+ */
+bool is_in_block(const struct pos *pos,
         const struct pos *from, const struct pos *to);
 
 /**

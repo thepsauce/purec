@@ -21,13 +21,13 @@ extern char *Message;
  */
 void format_message(const char *fmt, ...);
 
-#define NORMAL_MODE 0
-#define INSERT_MODE 1
-#define VISUAL_MODE 2
+#define NORMAL_MODE 0 /* 0 */
+#define INSERT_MODE 1 /* 1 */
 
-#define EXTRA_NOTHING 0
-#define EXTRA_DELETE 1
-#define EXTRA_CHANGE 2
+#define IS_VISUAL(mode) (!!((mode)&2))
+#define VISUAL_MODE 2 /* 2 */
+#define VISUAL_LINE_MODE (2|1) /* 3 */
+#define VISUAL_BLOCK_MODE (2|4) /* 6 */
 
 /*
 extern struct bind {
@@ -121,6 +121,17 @@ extern struct mode {
     } normal;
 } Mode;
 
+struct selection {
+    /// if the selection is active
+    bool exists;
+    /// if it is a block selection
+    bool is_block;
+    /// beginning of the selection
+    struct pos beg;
+    /// end of the selection
+    struct pos end;
+};
+
 /**
  * Multiplies the counter by 10 and adds given number to it.
  *
@@ -166,9 +177,32 @@ size_t correct_counter(size_t counter);
 /**
  * Sets the new mode and does any transition needed like changing cursor shape.
  *
+ * If the current mode is not a visual mode but the new mode is, `Mode.pos` is
+ * set to the cursor position within the current frame (`SelFrame`). This is
+ * used to render the selection and do actions upon it.
+ *
  * @param mode  The new mode.
  */
 void set_mode(int mode);
+
+/**
+ * Get the selection of the current frame.
+ *
+ * @param sel   Get the selection within the current frame.
+ *
+ * @return Whether there is a selection.
+ */
+bool get_selection(struct selection *sel);
+
+/**
+ * Checks whether the given point is within the given selection.
+ *
+ * @param sel   The selection to check.
+ * @param pos   The point to check.
+ *
+ * @return Whether the point is within the selection.
+ */
+bool is_in_selection(const struct selection *sel, const struct pos *pos);
 
 /**
  * Handles a key input for the normal mode.

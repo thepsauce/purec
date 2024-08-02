@@ -19,6 +19,17 @@ void sort_positions(struct pos *p1, struct pos *p2)
     }
 }
 
+void sort_block_positions(struct pos *p1, struct pos *p2)
+{
+    struct pos p;
+
+    p = *p1;
+    p1->line = MIN(p.line, p2->line);
+    p1->col = MIN(p.col, p2->col);
+    p2->line = MAX(p.line, p2->line);
+    p2->col = MAX(p.col, p2->col);
+}
+
 bool is_in_range(const struct pos *pos,
         const struct pos *from, const struct pos *to)
 {
@@ -29,6 +40,16 @@ bool is_in_range(const struct pos *pos,
         return false;
     }
     if (pos->line == to->line && pos->col > to->col) {
+        return false;
+    }
+    return true;
+}
+
+bool is_in_block(const struct pos *pos,
+        const struct pos *from, const struct pos *to)
+{
+    if (pos->line < from->line || pos->line > to->line ||
+            pos->col < from->col || pos->col > to->col) {
         return false;
     }
     return true;

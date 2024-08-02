@@ -38,10 +38,12 @@ int normal_handle_input(int c)
     };
 
     int r = 0;
+    struct buf *buf;
     struct pos cur, from, to;
     int e_c;
     struct undo_event *ev;
 
+    buf = SelFrame->buf;
     switch (c) {
     case 'g':
         Mode.extra_counter = Mode.counter;
@@ -237,9 +239,15 @@ int normal_handle_input(int c)
         return do_motion(SelFrame, MOTION_DOWN);
 
     case 'v':
-    case 'V':
-    case CONTROL('V'):
         set_mode(VISUAL_MODE);
+        return 1;
+
+    case 'V':
+        set_mode(VISUAL_LINE_MODE);
+        return 1;
+
+    case CONTROL('V'):
+        set_mode(VISUAL_BLOCK_MODE);
         return 1;
 
     case 'A':

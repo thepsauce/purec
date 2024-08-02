@@ -60,29 +60,82 @@ size_t correct_counter(size_t counter)
 
 void set_mode(int mode)
 {
-    Mode.type = mode;
-    switch (mode) {
-    case NORMAL_MODE:
-        /* steady block */
-        printf("\x1b[\x30 q");
-        break;
+    const char *format_messages[] = {
+        [NORMAL_MODE] = "",
 
-    case VISUAL_MODE:
-        /* steady block */
-        printf("\x1b[\x30 q");
-        format_message("-- VISUAL --");
-        Mode.pos = SelFrame->cur;
-        break;
+        [INSERT_MODE] = "-- INSERT --",
 
-    case INSERT_MODE:
-        /* vertical bar cursor (blinking) */
-        printf("\x1b[\x35 q");
-        format_message("-- INSERT --");
-        break;
+        [VISUAL_MODE] = "-- VISUAL --",
+        [VISUAL_LINE_MODE] = "-- VISUAL LINE --",
+        [VISUAL_BLOCK_MODE] = "-- VISUAL BLOCK --",
+    };
 
-    default:
-        printf("set_mode - invalid mode: %d", mode);
+    const char cursors[] = {
+        [NORMAL_MODE] = '\x30',
+
+        [INSERT_MODE] = '\x35',
+
+        [VISUAL_MODE] = '\x30',
+        [VISUAL_LINE_MODE] = '\x30',
+        [VISUAL_BLOCK_MODE] = '\x30',
+    };
+
+    if (format_messages[mode] == NULL) {
+        endwin();
+        fprintf(stderr, "set_mode - invalid mode: %d", mode);
         abort();
     }
+
+    printf("\x1b[%c q", cursors[mode]);
     fflush(stdout);
+
+    if (IS_VISUAL(mode) && !IS_VISUAL(Mode.type)) {
+        Mode.pos = SelFrame->cur;
+    }
+
+    format_message(format_messages[mode]);
+
+    if (mode == NORMAL_MODE) {
+        clip_column(SelFrame);
+    }
+
+    Mode.type = mode;
+}
+
+bool get_selection(struct selection *sel)
+{
+    sel->exists = IS_VISUAL(Mode.type);
+    if (!sel->exists) {
+        return false;
+    }
+
+    if (Mode.type == VISUAL_BLOCK_MODE) {
+        sel->is_block = true;
+        sel->beg.line = MIN(SelFrame->cur.line, Mode.pos.line);
+        sel->beg.col = MIN(SelFrame->cur.col, Mode.pos.col);
+        sel->end.line = MAX(SelFrame->cur.line, Mode.pos.line);
+        sel->end.col = MAX(SelFrame->cur.col, Mode.pos.col);
+    } else {
+        sel->is_block = false;
+        sel->beg = SelFrame->cur;
+        sel->end = Mode.pos;
+        sort_positions(&sel->beg, &sel->end);
+        if (Mode.type == VISUAL_LINE_MODE) {
+            sel->beg.col = 0;
+            sel->end.col = 0;
+            sel->end.line++;
+        }
+    }
+    return true;
+}
+
+bool is_in_selection(const struct selection *sel, const struct pos *pos)
+{
+    if (!sel->exists) {
+        return false;
+    }
+    if (sel->is_block) {
+        return is_in_block(pos, &sel->beg, &sel->end);
+    }
+    return is_in_range(pos, &sel->beg, &sel->end);
 }
