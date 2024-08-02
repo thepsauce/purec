@@ -131,12 +131,11 @@ next_event:
 
     m = MIN(ev->ins_len, ev->del_len);
     for (size_t i = 0; i < m; i++) {
-        if (col == buf->lines[line].n) {
+        while (col == buf->lines[line].n) {
             line++;
             col = 0;
         }
-        buf->lines[line].s[col] ^= ev->text[i];
-        col++;
+        buf->lines[line].s[col++] ^= ev->text[i];
     }
 
     from.col = col;
@@ -187,12 +186,11 @@ next_event:
     /* XOR the first part */
     m = MIN(ev->ins_len, ev->del_len);
     for (size_t i = 0; i < m; i++) {
-        if (col == buf->lines[line].n) {
+        while (col == buf->lines[line].n) {
             line++;
             col = 0;
         }
-        buf->lines[line].s[col] ^= ev->text[i];
-        col++;
+        buf->lines[line].s[col++] ^= ev->text[i];
     }
 
     from.line = line;
@@ -551,4 +549,156 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
 
     pev->is_transient = false;
     return first_ev;
+}
+
+struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
+        const struct pos *pto, int (*conv)(int))
+{
+    struct pos from, to;
+    struct line *line;
+    size_t to_col;
+    struct undo_event ev, *first_ev = NULL, *pev;
+    char ch;
+
+    from = *pfrom;
+    to = *pto;
+
+    sort_block_positions(&from, &to);
+
+    if (from.line >= buf->num_lines) {
+        return NULL;
+    }
+
+    to.line = MIN(to.line, buf->num_lines - 1);
+
+    for (size_t i = from.line; i <= to.line; i++) {
+        line = &buf->lines[i];
+        if (from.col >= line->n) {
+            continue;
+        }
+        to_col = MIN(to.col + 1, line->n);
+        if (to_col == 0) {
+            continue;
+        }
+
+        ev.pos.line = i;
+        ev.pos.col = from.col;
+        ev.ins_len = to_col - from.col;
+        ev.del_len = to_col - from.col;
+        ev.text = xmalloc(ev.del_len);
+        for (size_t i = 0; i < ev.del_len; i++) {
+            ch = (*conv)(line->s[i]);
+            ev.text[i] = line->s[i] ^ ch;
+            line->s[from.col + i] = ch;
+        }
+        pev = add_event(buf, &ev);
+        pev->is_transient = true;
+        if (first_ev == NULL) {
+            first_ev = pev;
+        }
+        mark_dirty(line);
+    }
+
+    if (first_ev == NULL) {
+        return NULL;
+    }
+
+    pev->is_transient = false;
+    return first_ev;
+}
+
+struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
+        const struct pos *pto, int (*conv)(int))
+{
+    struct pos from, to;
+    struct undo_event ev;
+    size_t del_i = 0;
+    struct line *line;
+    char ch;
+
+    from = *pfrom;
+    to = *pto;
+
+    /* clip lines */
+    if (from.line >= buf->num_lines) {
+        from.line = buf->num_lines - 1;
+    }
+    /* to is allowed to go out of bounds */
+    if (to.line > buf->num_lines) {
+        to.line = buf->num_lines;
+    }
+
+    /* swap if needed */
+    sort_positions(&from, &to);
+
+    /* clip columns */
+    from.col = MIN(from.col, buf->lines[from.line].n);
+    if (to.line == buf->num_lines) {
+        to.line--;
+        to.col = buf->lines[to.line].n;
+    } else {
+        to.col = MIN(to.col, buf->lines[to.line].n);
+    }
+
+    /* make sure there is text to change */
+    /* TODO: */
+    if (from.line == to.line && from.col == to.col) {
+        return 0;
+    }
+
+    ev.pos = from;
+    if (from.line != to.line) {
+        ev.del_len = buf->lines[from.line].n - from.col;
+        for (size_t i = from.line + 1; i < to.line; i++) {
+            ev.del_len += buf->lines[i].n;
+        }
+        ev.del_len += to.col;
+        ev.text = xmalloc(ev.del_len);
+
+        /* end of the first line */
+        line = &buf->lines[from.line];
+        for (size_t i = from.col; i < line->n; i++) {
+            ch = (*conv)(line->s[i]);
+            ev.text[del_i++] = line->s[i] ^ ch;
+            line->s[i] = ch;
+        }
+        mark_dirty(line);
+
+        /* lines in between */
+        for (size_t i = from.line + 1; i < to.line; i++) {
+            line = &buf->lines[i];
+            for (size_t i = 0; i < line->n; i++) {
+                ch = (*conv)(line->s[i]);
+                ev.text[del_i++] = line->s[i] ^ ch;
+                line->s[i] = ch;
+            }
+            mark_dirty(line);
+        }
+
+        /* last line */
+        if (to.line != buf->num_lines) {
+            line = &buf->lines[to.line];
+            for (size_t i = 0; i < to.col; i++) {
+                ch = (*conv)(line->s[i]);
+                ev.text[del_i++] = line->s[i] ^ ch;
+                line->s[i] = ch;
+            }
+            mark_dirty(line);
+        }
+    } else {
+        /* all change on a single line */
+        ev.del_len = to.col - from.col;
+        ev.text = xmalloc(ev.del_len);
+        line = &buf->lines[from.line];
+        for (size_t i = from.col; i < to.col; i++) {
+            ch = (*conv)(line->s[i]);
+            ev.text[del_i++] = line->s[i] ^ ch;
+            line->s[i] = ch;
+        }
+        mark_dirty(line);
+    }
+
+    /* make it a XOR event */
+    ev.ins_len = ev.del_len;
+    return add_event(buf, &ev);
 }
