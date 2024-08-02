@@ -17,6 +17,8 @@ int main(void)
         [NORMAL_MODE] = { normal_handle_input, getch_digit },
         [INSERT_MODE] = { insert_handle_input, getch },
         [VISUAL_MODE] = { visual_handle_input, getch_digit },
+        [VISUAL_BLOCK_MODE] = { visual_handle_input, getch_digit },
+        [VISUAL_LINE_MODE] = { visual_handle_input, getch_digit },
     };
 
     struct buf *buf;
@@ -44,9 +46,9 @@ int main(void)
     fr.h = LINES - 2; /* minus status bar, command line */
     fr.buf = buf;
 
-    set_mode(NORMAL_MODE);
-
     SelFrame = &fr;
+
+    set_mode(NORMAL_MODE);
 
     while (1) {
         erase();

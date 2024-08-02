@@ -157,7 +157,7 @@ next_event:
         to.col = col + l;
         _delete_range(buf, &from, &to);
     }
-    if (ev->is_transient && buf->event_i > 0) {
+    if (buf->event_i > 0 && buf->events[buf->event_i - 1]->is_transient) {
         goto next_event;
     }
     return ev;
@@ -494,4 +494,60 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
         buf->num_lines -= to.line - from.line;
         mark_dirty(fl);
     }
+}
+
+struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
+        const struct pos *pto)
+{
+    struct pos from, to;
+    struct line *line;
+    size_t to_col;
+    struct undo_event ev, *first_ev = NULL, *pev;
+
+    from = *pfrom;
+    to = *pto;
+
+    sort_block_positions(&from, &to);
+
+    if (from.line >= buf->num_lines) {
+        return NULL;
+    }
+
+    to.line = MIN(to.line, buf->num_lines - 1);
+
+    for (size_t i = from.line; i <= to.line; i++) {
+        line = &buf->lines[i];
+        if (from.col >= line->n) {
+            continue;
+        }
+        to_col = MIN(to.col + 1, line->n);
+        if (to_col == 0) {
+            continue;
+        }
+
+        ev.pos.line = i;
+        ev.pos.col = from.col;
+        ev.ins_len = 0;
+        ev.del_len = to_col - from.col;
+        ev.text = xmalloc(ev.del_len);
+        memcpy(ev.text, &line->s[from.col], ev.del_len);
+        pev = add_event(buf, &ev);
+        pev->is_transient = true;
+        if (first_ev == NULL) {
+            first_ev = pev;
+        }
+
+        line->n -= to_col;
+        memmove(&line->s[from.col], &line->s[to_col], line->n);
+        line->n += from.col;
+
+        mark_dirty(line);
+    }
+
+    if (first_ev == NULL) {
+        return NULL;
+    }
+
+    pev->is_transient = false;
+    return first_ev;
 }

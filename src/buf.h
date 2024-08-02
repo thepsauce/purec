@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 
 /* TODO: Find a way to join events by combining their data structures,
- * this would improve efficiency and make `flags` obsolete.
+ * this would improve efficiency and make `is_transient` obsolete.
  */
 
 /**
@@ -228,7 +228,7 @@ void _insert_text(struct buf *buf, struct pos *pos,
         const char *text, size_t len_text, size_t repeat);
 
 /**
- * Deletes given inclusive range.
+ * Deletes given range.
  *
  * This function does clipping and swapping so that `from` comes before `to`.
  * The operation is added as event.
@@ -277,5 +277,28 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *from,
  * @see delete_range()
  */
 void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto);
+
+/**
+ * Deletes given inclusive block.
+ *
+ * This function does clipping and swapping so that `from` comes before `to`.
+ * The operation is added as event.
+ *
+ * Example deleting the first character of all lines:
+ * ```C
+ * struct buf *buf = ...;
+ * struct pos from = { 0, 0 };
+ * struct pos to = { buf->num_lines, 0 };
+ * delete_block(buf, &from, &to);
+ * ```
+ *
+ * @param buf   Buffer to delete within.
+ * @param from  Start of deletion.
+ * @param to    End of deletion.
+ *
+ * @return The event generated from this deletion (may be `NULL`).
+ */
+struct undo_event *delete_block(struct buf *buf, const struct pos *from,
+        const struct pos *to);
 
 #endif

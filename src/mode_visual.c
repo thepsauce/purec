@@ -38,16 +38,24 @@ int visual_handle_input(int c)
     };
 
     int r = 0;
-    struct buf *buf;
     struct pos cur;
     int e_c;
+    int next_mode = NORMAL_MODE;
+    struct selection sel;
+    struct undo_event *ev, *ev_o;
+    bool line_based;
 
-    buf = SelFrame->buf;
     switch (c) {
+    case '\x1b':
+        set_mode(NORMAL_MODE);
+        return 1;
+
     case 'g':
         Mode.extra_counter = Mode.counter;
         Mode.counter = 0;
         e_c = getch_digit();
+        Mode.counter = safe_mul(correct_counter(Mode.counter),
+                correct_counter(Mode.extra_counter));
         switch (e_c) {
         case 'g':
         case 'G':
@@ -63,20 +71,67 @@ int visual_handle_input(int c)
     case 'c':
     case 'S':
     case 's':
-        set_mode(INSERT_MODE);
+        next_mode = INSERT_MODE;
         /* fall through */
     case 'D':
     case 'd':
     case 'X':
     case 'x':
+        get_selection(&sel);
+        if (sel.is_block) {
+            line_based = false;
+            if (c == 'D' || c == 'C') {
+                sel.end.col = SIZE_MAX;
+            } else if (c == 'X') {
+                sel.beg.col = 0;
+                sel.end.col = SIZE_MAX;
+            }
+            ev = delete_block(SelFrame->buf, &sel.beg, &sel.end);
+        } else {
+            if (Mode.type == VISUAL_MODE && isupper(c)) {
+                /* upgrade to line deletion */
+                sel.beg.col = 0;
+                sel.end.col = 0;
+                sel.end.line++;
+                line_based = true;
+            } else {
+                line_based = Mode.type == VISUAL_LINE_MODE;
+            }
+            if ((c == 'C' || c == 'c') && line_based) {
+                sel.end.line--;
+                sel.end.col = SelFrame->buf->lines[sel.end.line].n;
+            }
+            ev = delete_range(SelFrame->buf, &sel.beg, &sel.end);
+        }
+        if ((c == 'C' || c == 'c') && line_based) {
+            ev_o = indent_line(SelFrame->buf, sel.beg.line);
+            if (ev_o != NULL) {
+                ev->is_transient = true;
+            }
+            sel.beg.col = get_line_indent(SelFrame->buf, sel.beg.line);
+        }
+        set_mode(next_mode);
+        if (ev != NULL) {
+            ev->undo_cur = Mode.pos;
+            ev->redo_cur = SelFrame->cur;
+            set_cursor(SelFrame, &sel.beg);
+            return 1;
+        }
         break;
 
     case 'U':
     case 'u':
+        /* TODO: case conversion */
         return 1;
 
     case 'O':
     case 'o':
+        if (Mode.type == VISUAL_BLOCK_MODE && c == 'O') {
+            cur.col = SelFrame->cur.col;
+            SelFrame->cur.col = Mode.pos.col;
+            Mode.pos.col = cur.col;
+            return 1;
+        }
         /* swap the cursor */
         cur = SelFrame->cur;
         SelFrame->cur = Mode.pos;
@@ -87,43 +142,23 @@ int visual_handle_input(int c)
         read_command_line();
         return 1;
 
-    case '{':
-        for (size_t i = SelFrame->cur.line; i > 0; ) {
-            i--;
-            if (buf->lines[i].n == 0) {
-                if (Mode.counter > 1) {
-                    Mode.counter--;
-                    continue;
-                }
-                Mode.counter = SelFrame->cur.line - i;
-                return do_motion(SelFrame, MOTION_UP);
-            }
-        }
-        Mode.counter = SelFrame->cur.line;
-        return do_motion(SelFrame, MOTION_UP);
-
-    case '}':
-        for (size_t i = SelFrame->cur.line + 1; i < buf->num_lines; i++) {
-            if (buf->lines[i].n == 0) {
-                if (Mode.counter > 1) {
-                    Mode.counter--;
-                    continue;
-                }
-                Mode.counter = i - SelFrame->cur.line;
-                return do_motion(SelFrame, MOTION_DOWN);
-            }
-        }
-        Mode.counter = buf->num_lines - 1 - SelFrame->cur.line;
-        return do_motion(SelFrame, MOTION_DOWN);
-
     case 'v':
+        set_mode(Mode.type == VISUAL_MODE ? NORMAL_MODE : VISUAL_MODE);
+        return 1;
+
     case 'V':
+        set_mode(Mode.type == VISUAL_LINE_MODE ? NORMAL_MODE :
+                VISUAL_LINE_MODE);
+        return 1;
+
     case CONTROL('V'):
-        set_mode(NORMAL_MODE);
+        set_mode(Mode.type == VISUAL_BLOCK_MODE ? NORMAL_MODE :
+                VISUAL_BLOCK_MODE);
         return 1;
 
     case 'A':
     case 'I':
+        /* TODO: multi line insert */
         set_mode(INSERT_MODE);
         return 1;
     }

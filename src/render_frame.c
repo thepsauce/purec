@@ -14,9 +14,7 @@ struct render_info {
     struct line *line;
     size_t line_i;
 
-    struct pos sel_beg;
-    struct pos sel_end;
-    bool has_sel;
+    struct selection sel;
 };
 
 #define STATE_NULL 0
@@ -92,7 +90,7 @@ static void render_line(struct render_info *ri)
 
     for (p.col = 0; p.col < line->n && w != ri->frame->w;) {
         a = &line->attribs[p.col];
-        if (ri->has_sel && is_in_range(&p, &ri->sel_beg, &ri->sel_end)) {
+        if (is_in_selection(&ri->sel, &p)) {
             attr_set(a->a ^ A_REVERSE, 0, NULL);
         } else {
             attr_set(a->a, a->cp, NULL);
@@ -106,7 +104,7 @@ static void render_line(struct render_info *ri)
         }
         w++;
     }
-    if (ri->has_sel && is_in_range(&p, &ri->sel_beg, &ri->sel_end)) {
+    if (is_in_selection(&ri->sel, &p)) {
         attr_set(A_REVERSE, 0, NULL);
         addch(' ');
     }
@@ -124,12 +122,10 @@ void render_frame(struct frame *frame)
     ri.cur_line = &buf->lines[frame->cur.line];
     ri.prev_line = frame->scroll.line == 0 ? NULL :
         &buf->lines[frame->scroll.line - 1];
-
-    ri.has_sel = Mode.type == VISUAL_MODE && frame == SelFrame;
-    if (ri.has_sel) {
-        ri.sel_beg = frame->cur;
-        ri.sel_end = Mode.pos;
-        sort_positions(&ri.sel_beg, &ri.sel_end);
+    if (SelFrame != frame) {
+        ri.sel.exists = false;
+    } else {
+        get_selection(&ri.sel);
     }
 
     for (size_t i = frame->scroll.line; i < MIN(buf->num_lines,
