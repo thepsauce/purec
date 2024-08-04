@@ -14,6 +14,7 @@ struct render_info {
     struct line *line;
     size_t line_i;
 
+    bool sel_exists;
     struct selection sel;
 };
 
@@ -90,7 +91,7 @@ static void render_line(struct render_info *ri)
 
     for (p.col = 0; p.col < line->n && w != ri->frame->w;) {
         a = &line->attribs[p.col];
-        if (is_in_selection(&ri->sel, &p)) {
+        if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
             attr_set(a->a ^ A_REVERSE, 0, NULL);
         } else {
             attr_set(a->a, a->cp, NULL);
@@ -104,7 +105,7 @@ static void render_line(struct render_info *ri)
         }
         w++;
     }
-    if (is_in_selection(&ri->sel, &p)) {
+    if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
         attr_set(A_REVERSE, 0, NULL);
         addch(' ');
     }
@@ -123,9 +124,9 @@ void render_frame(struct frame *frame)
     ri.prev_line = frame->scroll.line == 0 ? NULL :
         &buf->lines[frame->scroll.line - 1];
     if (SelFrame != frame) {
-        ri.sel.exists = false;
+        ri.sel_exists = false;
     } else {
-        get_selection(&ri.sel);
+        ri.sel_exists = get_selection(&ri.sel);
     }
 
     for (size_t i = frame->scroll.line; i < MIN(buf->num_lines,

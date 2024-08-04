@@ -24,8 +24,6 @@ int visual_handle_input(int c)
         ['I'] = MOTION_HOME_SP,
         ['A'] = MOTION_END,
 
-        ['a'] = MOTION_RIGHT,
-
         ['g'] = MOTION_FILE_BEG,
         ['G'] = MOTION_FILE_END,
 
@@ -101,7 +99,12 @@ int visual_handle_input(int c)
                 line_based = true;
             } else {
                 line_based = false;
-                sel.end.col++;
+                if (sel.end.col == SelFrame->buf->lines[sel.end.line].n) {
+                    sel.end.line++;
+                    sel.end.col = 0;
+                } else {
+                    sel.end.col++;
+                }
             }
             if ((c == 'C' || c == 'c') && line_based) {
                 sel.end.line--;
@@ -112,14 +115,14 @@ int visual_handle_input(int c)
         if ((c == 'C' || c == 'c') && line_based) {
             ev_o = indent_line(SelFrame->buf, sel.beg.line);
             if (ev_o != NULL) {
-                ev->is_transient = true;
+                ev->flags |= IS_TRANSIENT;
             }
             sel.beg.col = get_line_indent(SelFrame->buf, sel.beg.line);
         }
         set_mode(next_mode);
         if (ev != NULL) {
             ev->undo_cur = Mode.pos;
-            ev->redo_cur = SelFrame->cur;
+            ev->redo_cur = sel.beg;
             set_cursor(SelFrame, &sel.beg);
             return 1;
         }
@@ -178,8 +181,24 @@ int visual_handle_input(int c)
 
     case 'A':
     case 'I':
-        /* TODO: multi line insert */
+        get_selection(&sel);
         set_mode(INSERT_MODE);
+        Mode.repeat_count = correct_counter(Mode.counter);
+        if (sel.is_block) {
+            Mode.dup_ev_from = SelFrame->buf->event_i;
+            Mode.pos = sel.beg;
+            Mode.num_dup = sel.end.line - sel.beg.line + 1;
+            if (c == 'A') {
+                move_horz(SelFrame, 1, 1);
+            }
+        } else {
+            if (c == 'A') {
+                sel.end.col++;
+                set_cursor(SelFrame, &sel.end);
+            } else {
+                set_cursor(SelFrame, &sel.beg);
+            }
+        }
         return 1;
     }
     if (r == 0) {
