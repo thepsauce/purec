@@ -36,7 +36,7 @@ static int reload_file(struct buf *buf)
                 break;
             }
         }
-        line = _insert_lines(buf, buf->num_lines, 1);
+        line = grow_lines(buf, buf->num_lines, 1);
         line->flags = 0;
         line->state = 0;
         line->attribs = NULL;
@@ -77,14 +77,20 @@ struct buf *create_buffer(const char *path)
 
 void delete_buffer(struct buf *buf)
 {
+    struct undo_event *ev;
+
     free(buf->path);
     for (size_t i = 0; i < buf->num_lines; i++) {
         clear_line(&buf->lines[i]);
     }
     free(buf->lines);
     for (size_t i = 0; i < buf->num_events; i++) {
-        free(buf->events[i]->text);
-        free(buf->events[i]);
+        ev = buf->events[i];
+        for (size_t i = 0; i < ev->num_lines; i++) {
+            free(ev->lines[i].s);
+        }
+        free(ev->lines);
+        free(ev);
     }
     free(buf->events);
     free(buf);
@@ -96,15 +102,18 @@ struct undo_event *add_event(struct buf *buf, const struct undo_event *copy_ev)
 
     /* free old events */
     for (size_t i = buf->event_i; i < buf->num_events; i++) {
-        free(buf->events[i]->text);
-        free(buf->events[i]);
+        ev = buf->events[i];
+        for (size_t i = 0; i < ev->num_lines; i++) {
+            free(ev->lines[i].s);
+        }
+        free(ev->lines);
+        free(ev);
     }
 
     buf->events = xreallocarray(buf->events, buf->event_i + 1,
             sizeof(*buf->events));
     ev = xmalloc(sizeof(*ev));
     *ev = *copy_ev;
-    ev->is_transient = false;
     ev->time = time(NULL);
 
     buf->events[buf->event_i++] = ev;
@@ -112,13 +121,39 @@ struct undo_event *add_event(struct buf *buf, const struct undo_event *copy_ev)
     return ev;
 }
 
+static void do_event(struct buf *buf, struct undo_event *ev, int flags)
+{
+    struct line *line;
+    struct pos to;
+
+    if (flags & IS_REPLACE) {
+        line = &buf->lines[ev->pos.line];
+        for (size_t i = 0; i < ev->lines[0].n; i++) {
+            line->s[i + ev->pos.col] ^= ev->lines[0].s[i];
+        }
+        mark_dirty(line);
+        for (size_t i = 1; i < ev->num_lines; i++) {
+            line = &buf->lines[i + ev->pos.line];
+            for (size_t j = 0; j < ev->lines[i].n; j++) {
+                line->s[j] ^= ev->lines[i].s[j];
+            }
+            mark_dirty(line);
+        }
+    } else if (flags & IS_INSERTION) {
+        _insert_lines(buf, &ev->pos, ev->lines, ev->num_lines);
+    } else if (flags & IS_DELETION) {
+        to.line = ev->pos.line + ev->num_lines - 1;
+        to.col = ev->lines[ev->num_lines - 1].n;
+        if (to.line == ev->pos.line) {
+            to.col += ev->pos.col;
+        }
+        _delete_range(buf, &ev->pos, &to);
+    }
+}
+
 struct undo_event *undo_event(struct buf *buf)
 {
     struct undo_event *ev;
-    size_t line, col;
-    size_t m;
-    size_t l;
-    struct pos from, to;
 
     if (buf->event_i == 0) {
         return NULL;
@@ -126,37 +161,10 @@ struct undo_event *undo_event(struct buf *buf)
 
 next_event:
     ev = buf->events[--buf->event_i];
-    line = ev->pos.line;
-    col = ev->pos.col;
+    do_event(buf, ev, ev->flags ^ (IS_INSERTION | IS_DELETION));
 
-    m = MIN(ev->ins_len, ev->del_len);
-    for (size_t i = 0; i < m; i++) {
-        while (col == buf->lines[line].n) {
-            line++;
-            col = 0;
-        }
-        buf->lines[line].s[col++] ^= ev->text[i];
-    }
-
-    from.col = col;
-    from.line = line;
-    if (ev->del_len > ev->ins_len) {
-        _insert_text(buf, &from, &ev->text[ev->ins_len],
-                ev->del_len - ev->ins_len, 1);
-    } else if (ev->del_len < ev->ins_len) {
-        /* find the end of deletion */
-        l = ev->ins_len - ev->del_len;
-        while (l > buf->lines[line].n - col) {
-            l -= buf->lines[line].n - col + 1;
-            line++;
-            col = 0;
-        }
-
-        to.line = line;
-        to.col = col + l;
-        _delete_range(buf, &from, &to);
-    }
-    if (buf->event_i > 0 && buf->events[buf->event_i - 1]->is_transient) {
+    if (buf->event_i > 0 &&
+            (buf->events[buf->event_i - 1]->flags & IS_TRANSIENT)) {
         goto next_event;
     }
     return ev;
@@ -165,11 +173,6 @@ next_event:
 struct undo_event *redo_event(struct buf *buf)
 {
     struct undo_event *ev, *first = NULL;
-    size_t line;
-    size_t col;
-    size_t m;
-    size_t l;
-    struct pos from, to;
 
     if (buf->event_i == buf->num_events) {
         return NULL;
@@ -180,38 +183,9 @@ next_event:
     if (first == NULL) {
         first = ev;
     }
-    line = ev->pos.line;
-    col = ev->pos.col;
+    do_event(buf, ev, ev->flags);
 
-    /* XOR the first part */
-    m = MIN(ev->ins_len, ev->del_len);
-    for (size_t i = 0; i < m; i++) {
-        while (col == buf->lines[line].n) {
-            line++;
-            col = 0;
-        }
-        buf->lines[line].s[col++] ^= ev->text[i];
-    }
-
-    from.line = line;
-    from.col = col;
-    if (ev->del_len > ev->ins_len) {
-        /* find the end of deletion */
-        l = ev->del_len - ev->ins_len;
-        while (l > buf->lines[line].n - col) {
-            l -= buf->lines[line].n - col + 1;
-            line++;
-            col = 0;
-        }
-
-        to.line = line;
-        to.col = col + l;
-        _delete_range(buf, &from, &to);
-    } else if (ev->del_len < ev->ins_len) {
-        _insert_text(buf, &from, &ev->text[ev->del_len],
-                ev->ins_len - ev->del_len, 1);
-    }
-    if (ev->is_transient && buf->event_i != buf->num_events) {
+    if ((ev->flags & IS_TRANSIENT) && buf->event_i != buf->num_events) {
         goto next_event;
     }
     return first;
@@ -229,19 +203,82 @@ size_t get_line_indent(struct buf *buf, size_t line_i)
     return col;
 }
 
-struct line *insert_lines(struct buf *buf, size_t line_i, size_t num_lines)
+struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
+        const struct raw_line *c_lines, size_t c_num_lines, size_t repeat)
 {
-    struct line *line;
+    struct undo_event ev;
+    struct raw_line *lines;
+    size_t num_lines;
 
-    if (line_i > buf->num_lines) {
-        line_i = buf->num_lines;
+    /* duplicate the lines */
+    num_lines = 1 + (c_num_lines - 1) * repeat;
+    lines = xreallocarray(NULL, num_lines, sizeof(*lines));
+    for (size_t i = 0; i < c_num_lines; i++) {
+        lines[i].n = c_lines[i].n;
+        lines[i].s = xmalloc(c_lines[i].n);
+        memcpy(&lines[i].s[0], &c_lines[i].s[0], c_lines[i].n);
     }
-    line = _insert_lines(buf, line_i, num_lines);
-    memset(&line[0], 0, sizeof(*line) * num_lines);
-    return line;
+
+    _insert_lines(buf, pos, lines, num_lines);
+
+    ev.flags = IS_INSERTION;
+    ev.pos = *pos;
+    ev.lines = lines;
+    ev.num_lines = num_lines;
+    return add_event(buf, &ev);
 }
 
-struct line *_insert_lines(struct buf *buf, size_t line_i, size_t num_lines)
+void _insert_lines(struct buf *buf, const struct pos *pos,
+        const struct raw_line *lines, size_t num_lines)
+{
+    const struct raw_line *raw_line;
+    struct line *line, *at_line;
+    size_t old_n;
+
+    if (num_lines == 1) {
+        raw_line = &lines[0];
+        line = &buf->lines[pos->line];
+        line->s = xrealloc(line->s, line->n + raw_line->n);
+        memmove(&line->s[pos->col + raw_line->n], &line->s[pos->col],
+                line->n - pos->col);
+        memcpy(&line->s[pos->col], &raw_line->s[0], raw_line->n);
+        line->n += raw_line->n;
+        mark_dirty(line);
+        return;
+    }
+
+    line = grow_lines(buf, pos->line + 1, num_lines - 1);
+    for (size_t i = 1; i < num_lines; i++) {
+        raw_line = &lines[i];
+        line->flags = 0;
+        line->state = 0;
+        line->attribs = NULL;
+        line->n = raw_line->n;
+        line->s = xmalloc(line->n);
+        memcpy(&line->s[0], &raw_line->s[0], raw_line->n);
+        line++;
+    }
+
+    at_line = &buf->lines[pos->line];
+    raw_line = &lines[num_lines - 1];
+
+    /* add the end of the first line to the end of the last line */
+    /* `line` overshoots the last line, so decrement it */
+    line--;
+    old_n = line->n;
+    line->n += at_line->n - pos->col;
+    line->s = xrealloc(line->s, line->n);
+    memcpy(&line->s[old_n], &at_line->s[pos->col], at_line->n - pos->col);
+
+    /* trim first line and insert first text segment */
+    at_line->n = pos->col + lines[0].n;
+    at_line->s = xrealloc(at_line->s, at_line->n);
+    memcpy(&at_line->s[pos->col], &lines[0].s[0], lines[0].n);
+
+    mark_dirty(at_line);
+}
+
+struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines)
 {
     if (buf->num_lines + num_lines > buf->a_lines) {
         buf->a_lines *= 2;
@@ -261,7 +298,7 @@ struct undo_event *indent_line(struct buf *buf, size_t line_i)
 
     size_t cur_indent, new_indent = 0;
     struct pos pos, to;
-    char sp[1] = { ' ' };
+    struct raw_line line;
 
     if (line_i == 0) {
         new_indent = 0;
@@ -272,114 +309,14 @@ struct undo_event *indent_line(struct buf *buf, size_t line_i)
     pos.line = line_i;
     pos.col = 0;
     if (new_indent > cur_indent) {
-        return insert_text(buf, &pos, sp, 1, new_indent - cur_indent);
+        line.n = new_indent - cur_indent;
+        line.s = xmalloc(new_indent - cur_indent);
+        memset(line.s, ' ', line.n);
+        return insert_lines(buf, &pos, &line, 1, 1);
     }
     to.line = line_i;
     to.col = cur_indent - new_indent;
     return delete_range(buf, &pos, &to);
-}
-
-struct undo_event *insert_text(struct buf *buf, struct pos *pos,
-        const char *text, size_t len_text, size_t repeat)
-{
-    size_t prod;
-    struct undo_event ev, *pev;
-
-    if (len_text == 0 || repeat == 0) {
-        return 0;
-    }
-
-    /* reduce repeat so that `len_text * repeat` fits into a `SIZE_MAX` */
-    if (__builtin_mul_overflow(len_text, repeat, &prod)) {
-        repeat = SIZE_MAX / len_text;
-    }
-
-    ev.pos = *pos;
-    ev.ins_len = prod;
-    ev.del_len = 0;
-    ev.text = xmalloc(ev.ins_len);
-    for (size_t i = 0; i < repeat; i++) {
-        memcpy(&ev.text[i * len_text], text, len_text);
-    }
-    pev = add_event(buf, &ev);
-
-    _insert_text(buf, pos, text, len_text, repeat);
-    return pev;
-}
-
-void _insert_text(struct buf *buf, struct pos *pos,
-        const char *text, size_t len_text, size_t repeat)
-{
-    size_t i, j;
-    size_t num_lines = 0;
-    struct line *line;
-    size_t n;
-    struct line *at_line;
-    size_t first_end;
-
-    for (i = 0; i < len_text; i++) {
-        if (text[i] == '\n') {
-            if (num_lines == 0) {
-                j = i;
-            }
-            num_lines++;
-        }
-    }
-
-    if (num_lines == 0) {
-        line = &buf->lines[pos->line];
-        n = len_text * repeat;
-        line->s = xrealloc(line->s, line->n + n);
-        memmove(&line->s[pos->col + n], &line->s[pos->col],
-                line->n - pos->col);
-        for (size_t i = pos->col; repeat > 0; repeat--) {
-            memcpy(&line->s[i], text, len_text);
-            i += len_text;
-        }
-        line->n += n;
-        mark_dirty(line);
-        return;
-    }
-
-    first_end = j;
-    line = _insert_lines(buf, pos->line + 1, num_lines * repeat);
-
-    for (; repeat > 0; repeat--) {
-        do {
-            i = j + 1;
-            /* find the next new line */
-            for (j = i; j < len_text && text[j] != '\n'; j++) {
-                (void) 0;
-            }
-            line->flags = 0;
-            line->state = 0;
-            line->attribs = NULL;
-            line->n = j - i;
-            line->s = xmalloc(line->n);
-            memcpy(&line->s[0], &text[i], line->n);
-            line++;
-        } while (j != len_text);
-        j = SIZE_MAX;
-    }
-
-    at_line = &buf->lines[pos->line];
-
-    /* add the end of the first line to the front of the last line */
-    /* `line` overshoots the last line, so decrement it */
-    line--;
-    line->n += at_line->n - pos->col;
-    line->s = xrealloc(line->s, line->n);
-    memmove(&line->s[at_line->n - pos->col], &line->s[0],
-            line->n - (at_line->n - pos->col));
-    memcpy(&line->s[line->n - (at_line->n - pos->col)],
-            &at_line->s[pos->col], at_line->n - pos->col);
-
-    /* trim first line and insert first text segment */
-    at_line->n = pos->col + first_end;
-    at_line->s = xrealloc(at_line->s, at_line->n);
-    memcpy(&at_line->s[pos->col], &text[0], first_end);
-
-    mark_dirty(at_line);
 }
 
 struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
@@ -387,7 +324,8 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
 {
     struct pos from, to;
     struct undo_event ev, *pev;
-    size_t del_i;
+    struct raw_line *lines;
+    size_t num_lines;
 
     from = *pfrom;
     to = *pto;
@@ -419,35 +357,31 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
     }
 
     /* get the deleted text for undo */
+    ev.flags = IS_DELETION;
     ev.pos = from;
-    ev.ins_len = 0;
     if (from.line != to.line) {
-        ev.del_len = buf->lines[from.line].n - from.col + 1;
-        for (size_t i = from.line + 1; i < to.line; i++) {
-            ev.del_len += buf->lines[i].n + 1;
-        }
-        ev.del_len += to.col;
-        ev.text = xmalloc(ev.del_len);
-
-        del_i = 0;
-        memcpy(&ev.text[del_i], &buf->lines[from.line].s[from.col],
+        num_lines = to.line - from.line + 1;
+        lines = xreallocarray(NULL, num_lines, sizeof(*lines));
+        init_raw_line(&lines[0], &buf->lines[from.line].s[from.col],
                 buf->lines[from.line].n - from.col);
-        del_i += buf->lines[from.line].n - from.col;
-        ev.text[del_i++] = '\n';
 
         for (size_t i = from.line + 1; i < to.line; i++) {
-            memcpy(&ev.text[del_i], buf->lines[i].s, buf->lines[i].n);
-            del_i += buf->lines[i].n;
-            ev.text[del_i++] = '\n';
+            init_raw_line(&lines[i - from.line], &buf->lines[i].s[0],
+                    buf->lines[i].n);
         }
         if (to.line != buf->num_lines) {
-            memcpy(&ev.text[del_i], &buf->lines[to.line].s[0], to.col);
+            init_raw_line(&lines[num_lines - 1], buf->lines[to.line].s, to.col);
+        } else {
+            init_raw_line(&lines[num_lines - 1], NULL, 0);
         }
     } else {
-        ev.del_len = to.col - from.col;
-        ev.text = xmalloc(ev.del_len);
-        memcpy(&ev.text[0], &buf->lines[from.line].s[from.col], ev.del_len);
+        num_lines = 1;
+        lines = xmalloc(sizeof(*lines));
+        init_raw_line(&lines[0], &buf->lines[from.line].s[from.col],
+                to.col - from.col);
     }
+    ev.lines = lines;
+    ev.num_lines = num_lines;
     pev = add_event(buf, &ev);
 
     _delete_range(buf, &from, &to);
@@ -464,8 +398,9 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
 
     fl = &buf->lines[from.line];
     if (from.line == to.line) {
-        memmove(&fl->s[from.col], &fl->s[to.col], fl->n - to.col);
-        fl->n -= to.col - from.col;
+        fl->n -= to.col;
+        memmove(&fl->s[from.col], &fl->s[to.col], fl->n);
+        fl->n += from.col;
         mark_dirty(fl);
     } else if (to.line >= buf->num_lines) {
         /* trim the line */
@@ -524,14 +459,13 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
             continue;
         }
 
+        ev.flags = IS_DELETION | IS_TRANSIENT;
         ev.pos.line = i;
         ev.pos.col = from.col;
-        ev.ins_len = 0;
-        ev.del_len = to_col - from.col;
-        ev.text = xmalloc(ev.del_len);
-        memcpy(ev.text, &line->s[from.col], ev.del_len);
+        ev.num_lines = 1;
+        ev.lines = xmalloc(sizeof(*ev.lines));
+        init_raw_line(&ev.lines[0], &line->s[from.col], to_col - from.col);
         pev = add_event(buf, &ev);
-        pev->is_transient = true;
         if (first_ev == NULL) {
             first_ev = pev;
         }
@@ -547,7 +481,7 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
         return NULL;
     }
 
-    pev->is_transient = false;
+    pev->flags ^= IS_TRANSIENT;
     return first_ev;
 }
 
@@ -581,21 +515,22 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
             continue;
         }
 
+        ev.flags = IS_REPLACE | IS_TRANSIENT;
         ev.pos.line = i;
         ev.pos.col = from.col;
-        ev.ins_len = to_col - from.col;
-        ev.del_len = to_col - from.col;
-        ev.text = xmalloc(ev.del_len);
-        for (size_t i = 0; i < ev.del_len; i++) {
+        ev.num_lines = 1;
+        ev.lines = xmalloc(sizeof(*ev.lines));
+        init_raw_line(&ev.lines[0], &line->s[from.col], to_col - from.col);
+        for (size_t i = from.col; i < to_col; i++) {
             ch = (*conv)(line->s[i]);
-            ev.text[i] = line->s[i] ^ ch;
-            line->s[from.col + i] = ch;
+            ev.lines[0].s[i - from.col] ^= ch;
+            line->s[i] = ch;
         }
         pev = add_event(buf, &ev);
-        pev->is_transient = true;
         if (first_ev == NULL) {
             first_ev = pev;
         }
+
         mark_dirty(line);
     }
 
@@ -603,7 +538,7 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
         return NULL;
     }
 
-    pev->is_transient = false;
+    pev->flags ^= IS_TRANSIENT;
     return first_ev;
 }
 
@@ -612,7 +547,6 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
 {
     struct pos from, to;
     struct undo_event ev;
-    size_t del_i = 0;
     struct line *line;
     char ch;
 
@@ -641,64 +575,70 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
     }
 
     /* make sure there is text to change */
-    /* TODO: */
+
+    /* there can be nothing to replace when the cursor is at the end of a
+     * line, so this moves `from` as high up as possible where as the latter
+     * moves `to` as much down as possible
+     */
+    while (from.line < to.line && from.col == buf->lines[from.line].n) {
+        from.line++;
+        from.col = 0;
+    }
+    while (to.col == 0 && to.line > from.line) {
+        to.line--;
+        to.col = buf->lines[to.line].n;
+    }
+
     if (from.line == to.line && from.col == to.col) {
         return 0;
     }
 
+    ev.flags = IS_REPLACE;
     ev.pos = from;
     if (from.line != to.line) {
-        ev.del_len = buf->lines[from.line].n - from.col;
-        for (size_t i = from.line + 1; i < to.line; i++) {
-            ev.del_len += buf->lines[i].n;
-        }
-        ev.del_len += to.col;
-        ev.text = xmalloc(ev.del_len);
+        ev.num_lines = to.line - from.line + 1;
+        ev.lines = xreallocarray(NULL, ev.num_lines, sizeof(*ev.lines));
 
-        /* end of the first line */
         line = &buf->lines[from.line];
+        init_raw_line(&ev.lines[0], &line->s[from.col], line->n - from.col);
         for (size_t i = from.col; i < line->n; i++) {
             ch = (*conv)(line->s[i]);
-            ev.text[del_i++] = line->s[i] ^ ch;
+            ev.lines[0].s[i - from.col] ^= ch;
             line->s[i] = ch;
         }
         mark_dirty(line);
 
-        /* lines in between */
         for (size_t i = from.line + 1; i < to.line; i++) {
             line = &buf->lines[i];
-            for (size_t i = 0; i < line->n; i++) {
-                ch = (*conv)(line->s[i]);
-                ev.text[del_i++] = line->s[i] ^ ch;
-                line->s[i] = ch;
+            init_raw_line(&ev.lines[i - from.line], &line->s[0], line->n);
+            for (size_t j = 0; j < line->n; j++) {
+                ch = (*conv)(line->s[j]);
+                ev.lines[i - from.line].s[j] ^= ch;
+                line->s[j] = ch;
             }
             mark_dirty(line);
         }
 
-        /* last line */
-        if (to.line != buf->num_lines) {
-            line = &buf->lines[to.line];
-            for (size_t i = 0; i < to.col; i++) {
-                ch = (*conv)(line->s[i]);
-                ev.text[del_i++] = line->s[i] ^ ch;
-                line->s[i] = ch;
-            }
-            mark_dirty(line);
+        line = &buf->lines[to.line];
+        init_raw_line(&ev.lines[to.line - from.line], &line->s[0], to.col);
+        for (size_t i = 0; i < to.col; i++) {
+            ch = (*conv)(line->s[i]);
+            ev.lines[to.line - from.line].s[i] ^= ch;
+            line->s[i] = ch;
         }
+        mark_dirty(line);
     } else {
-        /* all change on a single line */
-        ev.del_len = to.col - from.col;
-        ev.text = xmalloc(ev.del_len);
+        ev.num_lines = 1;
+        ev.lines = xmalloc(sizeof(*ev.lines));
         line = &buf->lines[from.line];
+        init_raw_line(&ev.lines[0], &line->s[from.col], to.col - from.col);
         for (size_t i = from.col; i < to.col; i++) {
             ch = (*conv)(line->s[i]);
-            ev.text[del_i++] = line->s[i] ^ ch;
+            ev.lines[0].s[i - from.col] ^= ch;
             line->s[i] = ch;
         }
         mark_dirty(line);
     }
 
-    /* make it a XOR event */
-    ev.ins_len = ev.del_len;
     return add_event(buf, &ev);
 }

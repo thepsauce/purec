@@ -35,68 +35,68 @@ extern struct bind {
     char b[4];
     const char *desc;
 } Binds[] = {
-    { "i", "\x1b", "enter normal mode" },
+    { "i", "\x1b", "enter normal mode" }, #
 
-    { "n", "/", "search for pattern" },
-    { "n", "?", "search for pattern backwards" },
+    { "n", "/", "search for pattern" }, ?
+    { "n", "?", "search for pattern backwards" }, ?
 
-    { "n", "A", "enter insert mode and go to the end of the line" },
-    { "n", "B", "alias: b" },
-    { "n", "C", "delete to the end of the line and enter insert mode" },
-    { "n", "D", "delete to the end of the line" },
-    { "n", "E", "alias: e" },
-    { "n", "F", "jump to previous character" },
-    { "n", "G", "go to the end of the file" },
-    { "n", "H", "go to the start of the frame" },
-    { "n", "I", "goto to the start of the line and enter insert mode" },
-    { "n", "J", "join current line with next lines" },
-    { "n", "K", "search for identifier in the manual" },
-    { "n", "L", "go to the end of the frame" },
-    { "n", "M", "go to the middle of the frame" },
-    { "n", "N", "go to the previous match" },
-    { "n", "O", "insert line above the cursor and enter insert mode" },
-    { "n", "P", "paste yanked text before the cursor" },
+    { "n", "A", "enter insert mode and go to the end of the line" }, #
+    { "n", "B", "alias: b" }, ?
+    { "n", "C", "delete to the end of the line and enter insert mode" }, ?
+    { "n", "D", "delete to the end of the line" }, ?
+    { "n", "E", "alias: e" }, ?
+    { "n", "F", "jump to previous character" }, ?
+    { "n", "G", "go to the end of the file" }, #
+    { "n", "H", "go to the start of the frame" }, ?
+    { "n", "I", "goto to the start of the line and enter insert mode" }, #
+    { "n", "J", "join current line with next lines" }, ?
+    { "n", "K", "search for identifier in the manual" }, ?
+    { "n", "L", "go to the end of the frame" }, ?
+    { "n", "M", "go to the middle of the frame" }, ?
+    { "n", "N", "go to the previous match" }, ?
+    { "n", "O", "insert line above the cursor and enter insert mode" }, #
+    { "n", "P", "paste yanked text before the cursor" }, ?
     { "n", "Q", NULL },
-    { "n", "R", "enter replace mode" },
-    { "n", "S", "alias: cc" },
-    { "n", "T", "jump after previous character" },
-    { "n", "U", "undo current line" },
-    { "n", "V", "enter visual block mode" },
-    { "n", "W", "alias: w" },
-    { "n", "X", "delete character before the cursor" },
-    { "n", "Y", "alias: yy" },
-    { "n", "Z", "open file opener" },
+    { "n", "R", "enter replace mode" }, ?
+    { "n", "S", "alias: cc" }, #
+    { "n", "T", "jump after previous character" }, ?
+    { "n", "U", "undo current line" }, ?
+    { "n", "V", "enter visual block mode" }, #
+    { "n", "W", "alias: w" }, ?
+    { "n", "X", "delete character before the cursor" }, #
+    { "n", "Y", "alias: yy" }, ?
+    { "n", "Z", "open file opener" }, ?
 
-    { "n", "a", "switch to append mode" },
-    { "n", "b", "jump to beginning of word" },
+    { "n", "a", "switch to append mode" }, #
+    { "n", "b", "jump to beginning of word" }, ?
     { "n", "c", NULL },
-    { "n", "cc", "delete line, indent line and go to insert mode" }
+    { "n", "cc", "delete line, indent line and go to insert mode" } #
     { "n", "d", NULL },
-    { "n", "dd", "delete line" },
-    { "n", "e", "jump to the end of the word" },
-    { "n", "f", "jump to given character" },
+    { "n", "dd", "delete line" }, #
+    { "n", "e", "jump to the end of the word" }, ?
+    { "n", "f", "jump to given character" }, ?
     { "n", "g", NULL },
-    { "n", "gG", "go to end of the file" },
-    { "n", "gg", "go to the beginning of the file" },
-    { "n", "h", "go to the left" },
-    { "n", "i", "enter insert mode" },
-    { "n", "j", "go down" },
-    { "n", "k", "go up" },
-    { "n", "l", "go to the right" },
-    { "n", "m", "set a mark" },
-    { "n", "n", "go to next match" },
-    { "n", "o", "add line below the cursor and enter insert mode" },
-    { "n", "p", "paste text" },
-    { "n", "q", "record macro" },
-    { "n", "r", "replace character" },
-    { "n", "s", "delete character and enter insert mode" },
-    { "n", "t", "jump right before given character" },
-    { "n", "u", "undo" },
-    { "n", "v", "enter visual mode" },
-    { "n", "w", "jump over a word" },
-    { "n", "x", "delete character" },
+    { "n", "gG", "go to end of the file" }, #
+    { "n", "gg", "go to the beginning of the file" }, #
+    { "n", "h", "go to the left" }, #
+    { "n", "i", "enter insert mode" }, #
+    { "n", "j", "go down" }, #
+    { "n", "k", "go up" }, #
+    { "n", "l", "go to the right" }, #
+    { "n", "m", "set a mark" }, ?
+    { "n", "n", "go to next match" }, ?
+    { "n", "o", "add line below the cursor and enter insert mode" }, #
+    { "n", "p", "paste text" }, ?
+    { "n", "q", "record macro" }, ?
+    { "n", "r", "replace character" }, ?
+    { "n", "s", "delete character and enter insert mode" }, #?
+    { "n", "t", "jump right before given character" }, ?
+    { "n", "u", "undo" }, #
+    { "n", "v", "enter visual mode" }, #
+    { "n", "w", "jump over a word" }, ?
+    { "n", "x", "delete character" }, #
     { "n", "y", NULL },
-    { "n", "yy", "yank line" },
+    { "n", "yy", "yank line" }, ?
     { "n", "z", NULL },
 };*/
 
@@ -110,7 +110,7 @@ extern struct mode {
     size_t extra_counter;
     /// counter
     size_t counter;
-    /// saved cursor positon (for visual mode)
+    /// saved cursor positon (for visual mode and multi line insertion)
     struct pos pos;
     /// normal mode
     struct normal_mode {
@@ -119,11 +119,15 @@ extern struct mode {
         size_t num_jumps;
         size_t jump_i;
     } normal;
+    /// how many times the last insertion should be repeated
+    size_t repeat_count;
+    /// event to duplicate from
+    size_t dup_ev_from;
+    /// number of lines to add text to
+    size_t num_dup;
 } Mode;
 
 struct selection {
-    /// if the selection is active
-    bool exists;
     /// if it is a block selection
     bool is_block;
     /// beginning of the selection
@@ -188,7 +192,12 @@ void set_mode(int mode);
 /**
  * Get the selection of the current frame.
  *
- * @param sel   Get the selection within the current frame.
+ * This simply gets the cursor position within the current frame and `Mode.pos`
+ * and sorts them, there is additional correction when the visual line mode is
+ * active. When the visual block mode is active, this is a block selection and
+ * `is_block` is set to true.
+ *
+ * @param sel   Result.
  *
  * @return Whether there is a selection.
  */

@@ -13,23 +13,18 @@
 
 #include <sys/stat.h>
 
-/* TODO: Find a way to join events by combining their data structures,
- * this would improve efficiency and make `is_transient` obsolete.
- */
-
-/**
- * Joins the events in the event list starting from `index`.
- *
- * @param buf   The buffer whose event list to use.
- * @param ev    Event in the event list to start from.
- *
- * @return The event itself (`ev`).
- */
-//struct undo_event *join_events(struct buf *buf, struct undo_event *ev);
+/// whether the next event should be process together with this one
+#define IS_TRANSIENT    0x1
+/// if this is an insertion event
+#define IS_INSERTION    0x2
+/// if this is a deletion event
+#define IS_DELETION     0x4
+/// if this is a replace event
+#define IS_REPLACE      0x8
 
 struct undo_event {
-    /// whether the next event should be process together with this one
-    bool is_transient;
+    /// flags of this event
+    int flags;
     /// time of the event
     time_t time;
     /// position of the event
@@ -38,12 +33,10 @@ struct undo_event {
     struct pos undo_cur;
     /// cursor position after the event
     struct pos redo_cur;
-    /// number of bytes inserted
-    size_t ins_len;
-    /// number of bytes deleted
-    size_t del_len;
-    /// changed text
-    char *text;
+    /// changed lines
+    struct raw_line *lines;
+    /// number of changed lines
+    size_t num_lines;
 };
 
 /**
@@ -90,8 +83,7 @@ void delete_buffer(struct buf *buf);
 /**
  * Adds an event to the buffer event list.
  *
- * This sets the `time` value of the event to the current time in seconds. It
- * also sets `is_transient` to false.
+ * This sets the `time` value of the event to the current time in seconds.
  *
  * @param buf   Buffer to add an event to.
  * @param ev    Event to add.
@@ -131,35 +123,50 @@ struct undo_event *redo_event(struct buf *buf);
 size_t get_line_indent(struct buf *buf, size_t line_i);
 
 /**
- * Insert given number of lines starting from given index.
+ * Insert given number of lines starting from given position.
  *
- * If `line_i` is out of bounds, it is set to the last line. All added lines are
- * initialized to 0 and no event is added. This does NOT add an event.
- * All lines following `line_i` are marked as dirty.
+ * All added lines are initialized to given lines or 0 if they are `NULL` and
+ * an event is added.
+ *
+ * WARNING: This function does NO clipping on `pos`.
  *
  * @param buf       Buffer to delete within.
- * @param line_i    Line index to append to.
+ * @param pos       Position to append to.
+ * @param lines     Lines to insert.
  * @param num_lines Number of lines to insert.
+ * @param repeat    How many times to repeat the insertion.
  *
- * @return First line that was inserted.
+ * @return The event generated from this insertion (may be `NULL`).
  */
-struct line *insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
+struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
+        const struct raw_line *lines, size_t num_lines, size_t repeat);
+
+/**
+ * Insert given number of lines starting from given position.
+ *
+ * WARNING: This function does NO clipping on `pos`.
+ *
+ * @param buf       Buffer to delete within.
+ * @param pos       Position to append to.
+ * @param num       Lines to insert.
+ * @param num_lines Number of lines to insert.
+ */
+void _insert_lines(struct buf *buf, const struct pos *pos,
+        const struct raw_line *lines, size_t num_lines);
 
 /**
  * Insert given number of lines starting from given index.
  *
- * Behaves similar to `insert_lines()` but does do out of bounds checking nor
- * initialization of the added lines.
+ * This simply inserts uninitialized lines after given index. NO clipping and NO
+ * adding of an event.
  *
  * @param buf       Buffer to delete within.
  * @param line_i    Line index to append to.
  * @param num_lines Number of lines to insert.
  *
  * @return First line that was inserted.
- *
- * @see insert_lines()
  */
-struct line *_insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
+struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines);
 
 /**
  * NOTE: The below functions that return a `struct undo_event *` do not set the
@@ -178,54 +185,6 @@ struct line *_insert_lines(struct buf *buf, size_t line_i, size_t num_lines);
  * @return Event generated from adding/removing spaces at the front of the line.
  */
 struct undo_event *indent_line(struct buf *buf, size_t line_i);
-
-/**
- * Inserts text at given position.
- *
- * This functions adds an event but does NO clipping. It checks however if
- * `len_text * repeat` overflows and reduces `repeat` until it fits into a
- * `size_t`.
- *
- * To check beforehand if the operation would overflow, try:
- * ```
- * if (safe_mul(len_text, repeat) == SIZE_MAX) {
- *     OVERFLOW IF len_text != 1 && repeat != 1
- * }
- * ```
- * or:
- * ```
- * size_t prod;
- * if (__builtin_overflow(len_text, repeat, &prod)) {
- *     OVERFLOW
- * }
- * ```
- *
- * @param buf       Buffer to insert text in.
- * @param pos       Position to insert text from.
- * @param text      Text to insert.
- * @param repeat    How many times to insert the text.
- * @param len_text  Length of the text to insert.
- *
- * @return The event generated from this insertion (may be `NULL`).
- */
-struct undo_event *insert_text(struct buf *buf, struct pos *pos,
-        const char *text, size_t len_text, size_t repeat);
-
-/**
- * Inserts text at given position.
- *
- * This functions adds NO event and does NO clipping. It also does not check if
- * the product of `len_text` and `repeat` overflow.
- * This marks the changed lines as dirty.
- *
- * @param buf       Buffer to insert text in.
- * @param pos       Position to insert text from.
- * @param text      Text to insert.
- * @param repeat    How many times to insert the text.
- * @param len_text  Length of the text to insert.
- */
-void _insert_text(struct buf *buf, struct pos *pos,
-        const char *text, size_t len_text, size_t repeat);
 
 /**
  * Deletes given range.

@@ -26,6 +26,7 @@ int insert_handle_input(int c)
     char ch;
     size_t n;
     struct pos old_cur;
+    struct raw_line lines[2];
 
     ch = c;
     switch (c) {
@@ -35,7 +36,9 @@ int insert_handle_input(int c)
         return 1;
 
     case '\n':
-        ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, 1);
+        lines[0].n = 0;
+        lines[1].n = 0;
+        ev = insert_lines(SelFrame->buf, &SelFrame->cur, lines, 2, 1);
         ev->undo_cur = SelFrame->cur;
         do_motion(SelFrame, MOTION_NEXT);
         ev->redo_cur = SelFrame->cur;
@@ -44,7 +47,9 @@ int insert_handle_input(int c)
     case '\t':
         ch = ' ';
         n = TABSIZE - SelFrame->cur.col % TABSIZE;
-        ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, n);
+        lines[0].s = &ch;
+        lines[0].n = 1;
+        ev = insert_lines(SelFrame->buf, &SelFrame->cur, lines, 1, n);
         ev->undo_cur = SelFrame->cur;
         Mode.counter = n;
         do_motion(SelFrame, MOTION_NEXT);
@@ -74,7 +79,9 @@ int insert_handle_input(int c)
         return r;
     }
     if (c < 0x100 && ch >= ' ' && motions[c] == 0) {
-        ev = insert_text(SelFrame->buf, &SelFrame->cur, &ch, 1, 1);
+        lines[0].s = &ch;
+        lines[0].n = 1;
+        ev = insert_lines(SelFrame->buf, &SelFrame->cur, lines, 1, 1);
         ev->undo_cur = SelFrame->cur;
         do_motion(SelFrame, MOTION_NEXT);
         ev->redo_cur = SelFrame->cur;

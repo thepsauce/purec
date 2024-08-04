@@ -36,6 +36,8 @@ int main(void)
     /* keep the cursor hidden so it does not jump around */
     curs_set(0);
 
+    set_escdelay(0);
+
     //buf = create_buffer("../VM_jsm/cases.h");
     buf = create_buffer("src/main.c");
 

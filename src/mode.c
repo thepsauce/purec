@@ -104,11 +104,6 @@ void set_mode(int mode)
 
 bool get_selection(struct selection *sel)
 {
-    sel->exists = IS_VISUAL(Mode.type);
-    if (!sel->exists) {
-        return false;
-    }
-
     if (Mode.type == VISUAL_BLOCK_MODE) {
         sel->is_block = true;
         sel->beg.line = MIN(SelFrame->cur.line, Mode.pos.line);
@@ -126,14 +121,11 @@ bool get_selection(struct selection *sel)
             sel->end.line++;
         }
     }
-    return true;
+    return IS_VISUAL(Mode.type);
 }
 
 bool is_in_selection(const struct selection *sel, const struct pos *pos)
 {
-    if (!sel->exists) {
-        return false;
-    }
     if (sel->is_block) {
         return is_in_block(pos, &sel->beg, &sel->end);
     }
