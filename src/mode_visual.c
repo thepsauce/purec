@@ -118,11 +118,17 @@ int visual_handle_input(int c)
                 ev->flags |= IS_TRANSIENT;
             }
             sel.beg.col = get_line_indent(SelFrame->buf, sel.beg.line);
+        } else {
+            ev_o = NULL;
         }
         set_mode(next_mode);
         if (ev != NULL) {
             ev->undo_cur = Mode.pos;
-            ev->redo_cur = sel.beg;
+            if (ev_o != NULL) {
+                ev_o->redo_cur = sel.beg;
+            } else {
+                ev->redo_cur = sel.beg;
+            }
             set_cursor(SelFrame, &sel.beg);
             return 1;
         }
