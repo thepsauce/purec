@@ -2,6 +2,11 @@
 
 #include <stdint.h>
 
+bool is_point_equal(const struct pos *p1, const struct pos *p2)
+{
+    return p1->line == p2->line && p1->col == p2->col;
+}
+
 void sort_positions(struct pos *p1, struct pos *p2)
 {
     struct pos tmp;

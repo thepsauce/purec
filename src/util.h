@@ -13,6 +13,16 @@ struct pos {
 };
 
 /**
+ * Checks if the points are the same.
+ *
+ * @param p1    The first position.
+ * @param p2    The second position.
+ *
+ * @return Whether the points are equal (`line` and `col` match).
+ */
+bool is_point_equal(const struct pos *p1, const struct pos *p2);
+
+/**
  * Sets `p1` to the position that comes first and `p2` to last.
  *
  * @param p1    The first position.

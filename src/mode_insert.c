@@ -6,6 +6,21 @@
 #include <ctype.h>
 #include <ncurses.h>
 
+static void attempt_join(void)
+{
+    struct undo_event *prev_ev, *ev;
+
+    if (SelFrame->buf->num_events <= Mode.ev_from_ins + 1) {
+        return;
+    }
+
+    prev_ev = SelFrame->buf->events[SelFrame->buf->num_events - 2];
+    ev = SelFrame->buf->events[SelFrame->buf->num_events - 1];
+    if (should_join(prev_ev, ev)) {
+        prev_ev->flags |= IS_TRANSIENT;
+    }
+}
+
 int insert_handle_input(int c)
 {
     static int motions[KEY_MAX] = {
@@ -40,8 +55,9 @@ int insert_handle_input(int c)
         lines[1].n = 0;
         ev = insert_lines(SelFrame->buf, &SelFrame->cur, lines, 2, 1);
         ev->undo_cur = SelFrame->cur;
-        do_motion(SelFrame, MOTION_NEXT);
+        (void) do_motion(SelFrame, MOTION_NEXT);
         ev->redo_cur = SelFrame->cur;
+        attempt_join();
         return 1;
 
     case '\t':
@@ -52,17 +68,19 @@ int insert_handle_input(int c)
         ev = insert_lines(SelFrame->buf, &SelFrame->cur, lines, 1, n);
         ev->undo_cur = SelFrame->cur;
         Mode.counter = n;
-        do_motion(SelFrame, MOTION_NEXT);
+        (void) do_motion(SelFrame, MOTION_NEXT);
         ev->redo_cur = SelFrame->cur;
+        attempt_join();
         return 1;
 
     case KEY_DC:
         old_cur = SelFrame->cur;
         r = move_dir(SelFrame, 1, 1);
-        ev = delete_range(buf, &old_cur, &SelFrame->cur);
+        ev = delete_range(SelFrame->buf, &old_cur, &SelFrame->cur);
         if (ev != NULL) {
-            ev->cur = old_cur;
+            ev->undo_cur = old_cur;
             ev->redo_cur = old_cur;
+            attempt_join();
         }
         SelFrame->cur = old_cur;
         return r;
@@ -71,10 +89,11 @@ int insert_handle_input(int c)
     case KEY_BACKSPACE:
         old_cur = SelFrame->cur;
         r = move_dir(SelFrame, 1, -1);
-        ev = delete_range(buf, &old_cur, &SelFrame->cur);
+        ev = delete_range(SelFrame->buf, &old_cur, &SelFrame->cur);
         if (ev != NULL) {
-            ev->cur = old_cur;
+            ev->undo_cur = old_cur;
             ev->redo_cur = SelFrame->cur;
+            attempt_join();
         }
         return r;
     }
@@ -83,8 +102,9 @@ int insert_handle_input(int c)
         lines[0].n = 1;
         ev = insert_lines(SelFrame->buf, &SelFrame->cur, lines, 1, 1);
         ev->undo_cur = SelFrame->cur;
-        do_motion(SelFrame, MOTION_NEXT);
+        (void) do_motion(SelFrame, MOTION_NEXT);
         ev->redo_cur = SelFrame->cur;
+        attempt_join();
         return 1;
     }
     return do_motion(SelFrame, motions[c]);
