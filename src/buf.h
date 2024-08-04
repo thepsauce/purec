@@ -81,36 +81,6 @@ struct buf *create_buffer(const char *path);
 void delete_buffer(struct buf *buf);
 
 /**
- * Adds an event to the buffer event list.
- *
- * This sets the `time` value of the event to the current time in seconds.
- *
- * @param buf   Buffer to add an event to.
- * @param ev    Event to add.
- *
- * @return The event that was added.
- */
-struct undo_event *add_event(struct buf *buf, const struct undo_event *ev);
-
-/**
- * Undo an event.
- *
- * @param buf   Buffer to undo in.
- *
- * @return The event undone or `NULL` if there was none.
- */
-struct undo_event *undo_event(struct buf *buf);
-
-/**
- * Redo an undone event.
- *
- * @param buf   Buffer to redo in.
- *
- * @return The event redone or `NULL` if there was none.
- */
-struct undo_event *redo_event(struct buf *buf);
-
-/**
  * Gets the line indentation in bytes.
  *
  * This function does NO clipping on `line_i`.
@@ -285,5 +255,58 @@ struct undo_event *change_block(struct buf *buf, const struct pos *from,
  */
 struct undo_event *change_range(struct buf *buf, const struct pos *from,
         const struct pos *to, int (*conv)(int));
+
+/**
+ * Below functions are implemented in undo.c.
+ */
+
+/**
+ * Frees given event and its data.
+ *
+ * @param ev    The event to free.
+ */
+void free_event(struct undo_event *ev);
+
+/**
+ * Checks whether it makes sense to join the two given events.
+ *
+ * Note that `ev1` must be an event that happened right before `ev2`.
+ *
+ * @param ev1   The first event.
+ * @param ev2   The second event.
+ *
+ * @return Whether it makes sense to join the events.
+ */
+bool should_join(struct undo_event *ev1, struct undo_event *ev2);
+
+/**
+ * Adds an event to the buffer event list.
+ *
+ * This sets the `time` value of the event to the current time in seconds.
+ *
+ * @param buf   Buffer to add an event to.
+ * @param ev    Event to add.
+ *
+ * @return The event that was added.
+ */
+struct undo_event *add_event(struct buf *buf, const struct undo_event *ev);
+
+/**
+ * Undo an event.
+ *
+ * @param buf   Buffer to undo in.
+ *
+ * @return The event undone or `NULL` if there was none.
+ */
+struct undo_event *undo_event(struct buf *buf);
+
+/**
+ * Redo an undone event.
+ *
+ * @param buf   Buffer to redo in.
+ *
+ * @return The event redone or `NULL` if there was none.
+ */
+struct undo_event *redo_event(struct buf *buf);
 
 #endif

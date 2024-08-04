@@ -185,7 +185,6 @@ int visual_handle_input(int c)
         set_mode(INSERT_MODE);
         Mode.repeat_count = correct_counter(Mode.counter);
         if (sel.is_block) {
-            Mode.dup_ev_from = SelFrame->buf->event_i;
             Mode.pos = sel.beg;
             Mode.num_dup = sel.end.line - sel.beg.line + 1;
             if (c == 'A') {

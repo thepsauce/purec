@@ -121,8 +121,8 @@ extern struct mode {
     } normal;
     /// how many times the last insertion should be repeated
     size_t repeat_count;
-    /// event to duplicate from
-    size_t dup_ev_from;
+    /// event from which the last insert mode started
+    size_t ev_from_ins;
     /// number of lines to add text to
     size_t num_dup;
 } Mode;

@@ -239,7 +239,6 @@ int normal_handle_input(int c)
     case 'I':
     case 'i':
         Mode.repeat_count = correct_counter(Mode.counter);
-        Mode.dup_ev_from = SelFrame->buf->event_i;
         set_mode(INSERT_MODE);
         break;
     }

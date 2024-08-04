@@ -97,6 +97,8 @@ void set_mode(int mode)
 
     if (mode == NORMAL_MODE) {
         clip_column(SelFrame);
+    } else if (mode == INSERT_MODE) {
+        Mode.ev_from_ins = SelFrame->buf->event_i;
     }
 
     Mode.type = mode;
