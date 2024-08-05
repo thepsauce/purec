@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+bool IsRunning;
+
 char *Message;
 
 void format_message(const char *fmt, ...)

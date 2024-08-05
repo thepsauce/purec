@@ -28,7 +28,7 @@ int main(void)
     setlocale(LC_ALL, "");
 
     initscr();
-    cbreak();
+    raw();
     keypad(stdscr, true);
     noecho();
 
@@ -52,7 +52,8 @@ int main(void)
 
     set_mode(NORMAL_MODE);
 
-    while (1) {
+    IsRunning = true;
+    while (IsRunning) {
         erase();
         render_frame(&fr);
         if (Message != NULL) {

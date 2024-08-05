@@ -21,6 +21,9 @@ extern char *Message;
  */
 void format_message(const char *fmt, ...);
 
+/// Whether the editor should continue.
+extern bool IsRunning;
+
 #define NORMAL_MODE 0 /* 0 */
 #define INSERT_MODE 1 /* 1 */
 

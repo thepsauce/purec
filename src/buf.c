@@ -3,6 +3,7 @@
 #include "xalloc.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -11,28 +12,126 @@
 
 /* TODO: buffer list */
 
+int write_file(struct buf *buf, const char *file)
+{
+    struct stat st;
+    FILE *fp;
+    struct line *line;
+    size_t num_bytes = 0;
+
+    if (file == NULL) {
+        if (buf->path == NULL) {
+            format_message("no file name");
+            return -1;
+        }
+        file = buf->path;
+        if (stat(file, &st) == 0) {
+            if (st.st_mtime != buf->st.st_mtime) {
+                format_message("file changed, use `:w!`");
+                return -1;
+            }
+        }
+    } else if (buf->path == NULL) {
+        buf->path = xstrdup(file);
+        file = buf->path;
+    }
+
+    fp = fopen(file, "w");
+    if (fp == NULL) {
+        format_message("could not open '%s': %s", file, strerror(errno));
+        return -1;
+    }
+
+    for (size_t i = 0; i < buf->num_lines; i++) {
+        line = &buf->lines[i];
+        fwrite(line->s, 1, line->n, fp);
+        num_bytes += line->n;
+        if (i + 1 != buf->num_lines || line->n != 0) {
+            fputc('\n', fp);
+            num_bytes++;
+        }
+    }
+
+    fclose(fp);
+
+    if (file == buf->path) {
+        stat(buf->path, &buf->st);
+        buf->save_event_i = buf->event_i;
+    }
+    format_message("%s %zuL, %zuB written", buf->path, buf->num_lines,
+            num_bytes);
+    return 0;
+}
+
+struct undo_event *read_file(struct buf *buf, const struct pos *pos,
+        const char *file)
+{
+    FILE *fp;
+    struct raw_line *lines = NULL;
+    size_t a_lines = 0;
+    size_t num_lines = 0;
+    char *s_line = NULL;
+    size_t a_line = 0;
+    ssize_t line_len;
+    struct undo_event *ev;
+
+    fp = fopen(file, "r");
+    if (fp == NULL) {
+        format_message("failed opening '%s': %s\n", file, strerror(errno));
+        return NULL;
+    }
+
+    while (line_len = getline(&s_line, &a_line, fp), line_len > 0) {
+        for (; line_len > 0; line_len--) {
+            if (s_line[line_len - 1] != '\n' &&
+                    s_line[line_len - 1] != '\r') {
+                break;
+            }
+        }
+        if (num_lines == a_lines) {
+            a_lines *= 2;
+            a_lines++;
+            lines = xreallocarray(lines, a_lines, sizeof(*lines));
+        }
+        lines[num_lines].s = xmemdup(s_line, line_len);
+        lines[num_lines].n = line_len;
+    }
+
+    free(s_line);
+    fclose(fp);
+
+    ev = insert_lines(buf, pos, lines, num_lines, 1);
+
+    for (size_t i = 0; i < num_lines; i++) {
+        free(lines[i].s);
+    }
+    free(lines);
+
+    return ev;
+}
+
 static int reload_file(struct buf *buf)
 {
     FILE *fp;
     char *s_line = NULL;
     size_t a_line = 0;
-    ssize_t n_line;
+    ssize_t line_len;
     struct line *line;
     size_t num_old;
 
     fp = fopen(buf->path, "r");
     if (fp == NULL) {
-        printf("failed opening: %s\n", buf->path);
+        format_message("failed opening '%s': %s\n", buf->path, strerror(errno));
         return -1;
     }
 
     num_old = buf->num_lines;
 
     buf->num_lines = 0;
-    while (n_line = getline(&s_line, &a_line, fp), n_line > 0) {
-        for (; n_line > 0; n_line--) {
-            if (s_line[n_line - 1] != '\n' &&
-                    s_line[n_line - 1] != '\r') {
+    while (line_len = getline(&s_line, &a_line, fp), line_len > 0) {
+        for (; line_len > 0; line_len--) {
+            if (s_line[line_len - 1] != '\n' &&
+                    s_line[line_len - 1] != '\r') {
                 break;
             }
         }
@@ -40,9 +139,9 @@ static int reload_file(struct buf *buf)
         line->flags = 0;
         line->state = 0;
         line->attribs = NULL;
-        line->s = xmalloc(n_line);
-        memcpy(line->s, s_line, n_line);
-        line->n = n_line;
+        line->s = xmalloc(line_len);
+        memcpy(line->s, s_line, line_len);
+        line->n = line_len;
     }
 
     for (size_t i = buf->num_lines; i < num_old; i++) {
