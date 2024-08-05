@@ -75,7 +75,7 @@ void *xmemdup(const void *ptr, size_t size)
         return NULL;
     }
 
-    p_dup = xmalloc(size);
+    p_dup = malloc(size);
     if (p_dup == NULL) {
         fprintf(stderr, "xmemdup(%p, %zu): %s\n",
                 ptr, size, strerror(errno));

@@ -1,7 +1,11 @@
 #include "xalloc.h"
+#include "buf.h"
 #include "cmd.h"
 #include "util.h"
+#include "frame.h"
+#include "mode.h"
 
+#include <ctype.h>
 #include <ncurses.h>
 #include <string.h>
 
@@ -20,6 +24,66 @@ static void render_command_line(void)
             MIN((size_t) (COLS - 1), CmdLine.len - CmdLine.scroll));
     clrtoeol();
     move(LINES - 1, 1 + CmdLine.index - CmdLine.scroll);
+}
+
+static int run_command(const char *cmd)
+{
+    char c;
+    bool f = false;
+
+    cmd += strspn(cmd, " \t");
+    if (cmd[0] == '\0') {
+        return 0;
+    }
+
+    if (!isalpha(cmd[0])) {
+        format_message("expected word");
+        return -1;
+    }
+
+    c = cmd[0];
+    cmd++;
+    if (cmd[0] == 'q') {
+        if (c == 'w') {
+            c = 'x';
+        }
+    }
+    if (cmd[0] == '!') {
+        f = true;
+        cmd++;
+    }
+
+    cmd += strspn(cmd, " \t");
+    switch (c) {
+    case 'w':
+        return write_file(SelFrame->buf, cmd[0] == '\0' ?
+                (f ? SelFrame->buf->path : NULL) : cmd);
+
+    case 'r':
+        read_file(SelFrame->buf, &SelFrame->cur, cmd);
+        break;
+
+    case 'x':
+        if (write_file(SelFrame->buf, cmd[0] == '\0' ?
+                        (f ? SelFrame->buf->path : NULL) : cmd) != 0 && !f) {
+            break;
+        }
+        IsRunning = false;
+        break;
+
+    case 'q':
+        if (!f && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
+            format_message("buffer has changed, use :q! to quit");
+            return 0;
+        }
+        IsRunning = false;
+        break;
+
+    default:
+        format_message("what is that command?");
+        return -1;
+    }
+    return 0;
 }
 
 void read_command_line(void)
@@ -151,8 +215,20 @@ void read_command_line(void)
     if (c == '\x1b' || CmdLine.len == 0) {
         return;
     }
+
+    /* add command to history */
     CmdLine.history = xreallocarray(CmdLine.history, CmdLine.num_history + 1,
             sizeof(*CmdLine.history));
     CmdLine.history[CmdLine.num_history++] =
         xstrndup(CmdLine.buf, CmdLine.len);
+
+    /* add null terminator */
+    if (CmdLine.len == CmdLine.a) {
+        CmdLine.a *= 2;
+        CmdLine.a++;
+        CmdLine.buf = xrealloc(CmdLine.buf, CmdLine.a);
+    }
+    CmdLine.buf[CmdLine.len] = '\0';
+
+    run_command(CmdLine.buf);
 }
