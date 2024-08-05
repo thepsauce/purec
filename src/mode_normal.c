@@ -76,10 +76,16 @@ int normal_handle_input(int c)
         Mode.extra_counter = Mode.counter;
         Mode.counter = 0;
         e_c = getch_digit();
-        cur = SelFrame->cur;
         Mode.counter = safe_mul(correct_counter(Mode.counter),
                 correct_counter(Mode.extra_counter));
 
+        /* fall through */
+    case 'D':
+        if (c == 'D') {
+            c = 'd';
+            e_c = '$';
+        }
+        cur = SelFrame->cur;
         ev = NULL;
         switch (e_c) {
         case 'c':
@@ -240,10 +246,8 @@ int normal_handle_input(int c)
     case 'i':
         Mode.repeat_count = correct_counter(Mode.counter);
         set_mode(INSERT_MODE);
+        r = 1;
         break;
     }
-    if (r == 0) {
-        return do_motion(SelFrame, motions[c]);
-    }
-    return r;
+    return r | do_motion(SelFrame, motions[c]);
 }

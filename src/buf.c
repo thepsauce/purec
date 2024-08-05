@@ -319,6 +319,7 @@ struct undo_event *indent_line(struct buf *buf, size_t line_i)
     size_t cur_indent, new_indent = 0;
     struct pos pos, to;
     struct raw_line line;
+    struct undo_event *ev;
 
     if (line_i == 0) {
         new_indent = 0;
@@ -332,7 +333,9 @@ struct undo_event *indent_line(struct buf *buf, size_t line_i)
         line.n = new_indent - cur_indent;
         line.s = xmalloc(new_indent - cur_indent);
         memset(line.s, ' ', line.n);
-        return insert_lines(buf, &pos, &line, 1, 1);
+        ev = insert_lines(buf, &pos, &line, 1, 1);
+        free(line.s);
+        return ev;
     }
     to.line = line_i;
     to.col = cur_indent - new_indent;

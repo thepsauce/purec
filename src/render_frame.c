@@ -143,8 +143,9 @@ void render_frame(struct frame *frame)
     clrtoeol();
     move(frame->y + frame->h, 0);
     perc = 100 * (frame->cur.line + 1) / buf->num_lines;
-    printw("%s%s%d%% ¶%zu/%zu☰℅%zu",
+    printw("%s%s %d%% ¶%zu/%zu☰℅%zu",
             buf->path == NULL ? "[No name]" : buf->path,
-            buf->path == NULL || buf->event_i == buf->save_event_i ? " " : "* ",
+            buf->path == NULL || buf->event_i == buf->save_event_i ?
+                "" : "[+]",
             perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1);
 }
