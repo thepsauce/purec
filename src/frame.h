@@ -27,12 +27,64 @@ struct frame {
     struct pos scroll;
     /// vertical column tracking
     size_t vct;
+    /// next frame in the linked list
+    struct frame *next;
+    /// next frame in the focus linked list
+    struct frame *next_focus;
 };
+
+/**
+ * The first frame in the linked list of frames.
+ */
+extern struct frame *FirstFrame;
 
 /**
  * Currently selected frame.
  */
 extern struct frame *SelFrame;
+
+#define SPLIT_NONE  0
+#define SPLIT_LEFT  1
+#define SPLIT_RIGHT 2
+#define SPLIT_UP    3
+#define SPLIT_DOWN  4
+
+/**
+ * Create a frame and split if off given frame.
+ *
+ * @param split The frame to split off.
+ * @param dir   The direction of splitting.
+ * @param buf   The buffer of the new frame.
+ *
+ * @return The newly created frame.
+ */
+struct frame *create_frame(struct frame *split, int dir, struct buf *buf);
+
+/**
+ * Destroys given frame and unsplits it.
+ *
+ * This function sets `IsRunning` to false if all frames are gone.
+ *
+ * @param frame The frame to destroy.
+ */
+void destroy_frame(struct frame *frame);
+
+/**
+ * Gets the frame at given position.
+ *
+ * @param x The x position to check.
+ * @param y The y position to check.
+ *
+ * @return The frame at given position.
+ */
+struct frame *frame_at(int x, int y);
+
+/**
+ * Focuses given frame.
+ *
+ * @return The last focused frame.
+ */
+struct frame *focus_frame(struct frame *frame);
 
 /**
  * Render the frame within its defined bounds.

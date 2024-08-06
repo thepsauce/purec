@@ -12,37 +12,20 @@
 
 /* TODO: buffer list */
 
-int write_file(struct buf *buf, const char *file)
+size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp)
 {
-    struct stat st;
-    FILE *fp;
     struct line *line;
     size_t num_bytes = 0;
 
-    if (file == NULL) {
-        if (buf->path == NULL) {
-            format_message("no file name");
-            return -1;
-        }
-        file = buf->path;
-        if (stat(file, &st) == 0) {
-            if (st.st_mtime != buf->st.st_mtime) {
-                format_message("file changed, use `:w!`");
-                return -1;
-            }
-        }
-    } else if (buf->path == NULL) {
-        buf->path = xstrdup(file);
-        file = buf->path;
+    to = MIN(to, buf->num_lines - 1);
+
+    if (from > to) {
+        return 0;
     }
 
-    fp = fopen(file, "w");
-    if (fp == NULL) {
-        format_message("could not open '%s': %s", file, strerror(errno));
-        return -1;
-    }
+    from = MIN(from, buf->num_lines - 1);
 
-    for (size_t i = 0; i < buf->num_lines; i++) {
+    for (size_t i = from; i <= to; i++) {
         line = &buf->lines[i];
         fwrite(line->s, 1, line->n, fp);
         num_bytes += line->n;
@@ -51,22 +34,11 @@ int write_file(struct buf *buf, const char *file)
             num_bytes++;
         }
     }
-
-    fclose(fp);
-
-    if (file == buf->path) {
-        stat(buf->path, &buf->st);
-        buf->save_event_i = buf->event_i;
-    }
-    format_message("%s %zuL, %zuB written", buf->path, buf->num_lines,
-            num_bytes);
-    return 0;
+    return num_bytes;
 }
 
-struct undo_event *read_file(struct buf *buf, const struct pos *pos,
-        const char *file)
+struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
 {
-    FILE *fp;
     struct raw_line *lines = NULL;
     size_t a_lines = 0;
     size_t num_lines = 0;
@@ -74,12 +46,6 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos,
     size_t a_line = 0;
     ssize_t line_len;
     struct undo_event *ev;
-
-    fp = fopen(file, "r");
-    if (fp == NULL) {
-        format_message("failed opening '%s': %s\n", file, strerror(errno));
-        return NULL;
-    }
 
     while (line_len = getline(&s_line, &a_line, fp), line_len > 0) {
         for (; line_len > 0; line_len--) {
@@ -98,15 +64,12 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos,
     }
 
     free(s_line);
-    fclose(fp);
 
     ev = insert_lines(buf, pos, lines, num_lines, 1);
-
     for (size_t i = 0; i < num_lines; i++) {
         free(lines[i].s);
     }
     free(lines);
-
     return ev;
 }
 

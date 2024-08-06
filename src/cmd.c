@@ -6,6 +6,7 @@
 #include "mode.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <ncurses.h>
 #include <string.h>
 
@@ -34,9 +35,6 @@ static const struct cmd {
     /* must be sorted */
     { "cq", ACCEPTS_NUMBER, cmd_cquit },
     { "cquit", ACCEPTS_NUMBER, cmd_cquit },
-
-    //{ "e", 0, cmd_edit },
-    //{ "edit", 0, cmd_edit },
 
     { "exi", 0, cmd_exit },
     { "exit", 0, cmd_exit },
@@ -117,16 +115,44 @@ static void render_command_line(void)
 
 static int run_command(char *s_cmd)
 {
-    char c;
-    bool f = false;
+    size_t len;
+    const struct cmd *cmd;
+    struct cmd_data data;
 
     s_cmd += strspn(s_cmd, " \t");
     if (s_cmd[0] == '\0') {
         return 0;
     }
 
-    if (!isalpha(cmd[0])) {
-        format_message("expected word");
+    if (isdigit(s_cmd[0])) {
+        data.from = strtoull(s_cmd, &s_cmd, 10);
+        data.has_number = true;
+    } else {
+        data.has_number = false;
+    }
+
+    if (s_cmd[0] == ',') {
+        s_cmd++;
+        data.has_range = true;
+
+        if (!data.has_number) {
+            data.from = 0;
+        }
+
+        if (isdigit(s_cmd[0])) {
+            data.to = strtoull(s_cmd, &s_cmd, 10);
+        } else {
+            data.to = SIZE_MAX;
+        }
+    } else {
+        data.has_range = false;
+    }
+
+    for (len = 0; isalpha(s_cmd[len]); ) {
+        len++;
+    }
+    if (len == 0) {
+        format_message("expected word but got: '%.*s'", 8, s_cmd);
         return -1;
     }
 
@@ -134,6 +160,41 @@ static int run_command(char *s_cmd)
     if (cmd == NULL) {
         return -1;
     }
+    if (cmd->callback == NULL) {
+        format_message("'%s' is not implemented", cmd->name);
+        return -1;
+    }
+
+    if ((cmd->flags & ACCEPTS_RANGE)) {
+        if (!data.has_range) {
+            if (!data.has_number) {
+                data.from = 0;
+            }
+            data.to = SIZE_MAX;
+        }
+    } else {
+        if (data.has_range) {
+            format_message("'%s' does not expect a range", cmd->name);
+            return -1;
+        }
+        if (data.has_number && !(cmd->flags & ACCEPTS_NUMBER)) {
+            format_message("'%s' does not expect a number", cmd->name);
+            return -1;
+        }
+    }
+
+    s_cmd += len;
+
+    if (s_cmd[0] == '!') {
+        data.force = true;
+        s_cmd++;
+    } else {
+        data.force = false;
+    }
+
+    s_cmd += strspn(s_cmd, " \t");
+    data.arg = s_cmd;
+    cmd->callback(&data);
     return 0;
 }
 

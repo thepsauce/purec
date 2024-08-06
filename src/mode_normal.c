@@ -46,6 +46,7 @@ int normal_handle_input(int c)
     int e_c;
     struct undo_event *ev;
     struct raw_line lines[2];
+    struct frame *frame;
 
     buf = SelFrame->buf;
     switch (c) {
@@ -238,6 +239,73 @@ int normal_handle_input(int c)
 
     case 'V':
         set_mode(VISUAL_LINE_MODE);
+        return 1;
+
+    case CONTROL('W'):
+        Mode.extra_counter = Mode.counter;
+        Mode.counter = 0;
+        e_c = getch_digit();
+        Mode.counter = safe_mul(correct_counter(Mode.counter),
+                correct_counter(Mode.extra_counter));
+
+        frame = SelFrame;
+        switch (e_c) {
+        case CONTROL('Q'):
+        case 'q':
+            destroy_frame(SelFrame);
+            frame = SelFrame;
+            break;
+
+        /* moving to next entries or previous entries in the focus chain is safe
+         * but not jumping to frames that have never been focused before
+         */
+        case CONTROL('P'):
+        case 'p':
+            for (frame = FirstFrame; frame->next_focus != SelFrame; ) {
+                frame = frame->next_focus;
+            }
+            SelFrame = frame;
+            break;
+
+        case CONTROL('N'):
+        case 'n':
+            SelFrame = SelFrame->next_focus;
+            frame = SelFrame;
+            break;
+
+        case CONTROL('H'):
+        case 'h':
+            frame = frame_at(SelFrame->x - 1, SelFrame->y);
+            break;
+
+        case CONTROL('J'):
+        case 'j':
+            frame = frame_at(SelFrame->x, SelFrame->y + SelFrame->h);
+            break;
+
+        case CONTROL('K'):
+        case 'k':
+            frame = frame_at(SelFrame->x, SelFrame->y - 1);
+            break;
+
+        case CONTROL('L'):
+        case 'l':
+            frame = frame_at(SelFrame->x + SelFrame->w, SelFrame->y);
+            break;
+
+        case CONTROL('V'):
+        case 'v':
+            (void) create_frame(SelFrame, SPLIT_RIGHT, SelFrame->buf);
+            break;
+
+        case CONTROL('S'):
+        case 's':
+            (void) create_frame(SelFrame, SPLIT_DOWN, SelFrame->buf);
+            break;
+        }
+        if (frame != NULL && frame != SelFrame) {
+            (void) focus_frame(frame);
+        }
         return 1;
 
     case CONTROL('V'):

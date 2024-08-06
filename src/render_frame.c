@@ -138,8 +138,8 @@ void render_frame(struct frame *frame)
     }
 
     for (size_t i = frame->scroll.line; i < MIN(buf->num_lines,
-                (size_t) (frame->scroll.line + frame->h)); i++) {
-        move(i - frame->scroll.line, x);
+                (size_t) (frame->scroll.line + frame->h - 1)); i++) {
+        move(frame->y + i - frame->scroll.line, x);
         ri.line_i = i;
         ri.line = &buf->lines[i];
         render_line(&ri);
@@ -147,11 +147,11 @@ void render_frame(struct frame *frame)
     }
 
     attr_set(0, 0, NULL);
-    move(frame->y + frame->h, x);
-    clrtoeol();
-    move(frame->y + frame->h, x);
+    if (frame->x > 0) {
+        mvvline(frame->y, frame->x, ACS_VLINE, frame->h);
+    }
     perc = 100 * (frame->cur.line + 1) / buf->num_lines;
-    printw("%s%s %d%% ¶%zu/%zu☰℅%zu",
+    mvprintw(frame->y + frame->h - 1, x, "%s%s %d%% ¶%zu/%zu☰℅%zu",
             buf->path == NULL ? "[No name]" : buf->path,
             buf->path == NULL || buf->event_i == buf->save_event_i ?
                 "" : "[+]",

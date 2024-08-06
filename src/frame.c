@@ -1,4 +1,5 @@
 #include "frame.h"
+#include "xalloc.h"
 #include "mode.h"
 #include "util.h"
 
@@ -6,7 +7,189 @@
 #include <stdint.h>
 #include <stdio.h>
 
+struct frame *FirstFrame;
 struct frame *SelFrame;
+
+struct frame *create_frame(struct frame *split, int dir, struct buf *buf)
+{
+    struct frame *frame, *f;
+    int w, h;
+
+    frame = xcalloc(1, sizeof(*frame));
+    if (buf == NULL) {
+        frame->buf = create_buffer(NULL);
+    } else {
+        frame->buf = buf;
+    }
+
+    /* TODO: CHECK for too small */
+    switch (dir) {
+    case 0:
+        frame->x = 0;
+        frame->y = 0;
+        frame->w = COLS;
+        frame->h = LINES - 1; /* minus command line */
+        break;
+
+    case SPLIT_LEFT:
+        w = split->w / 2;
+        frame->x = split->x;
+        frame->w = w;
+        frame->y = split->y;
+        frame->h = split->h;
+        split->w -= w;
+        split->x += w;
+        break;
+
+    case SPLIT_RIGHT:
+        w = split->w;
+        split->w /= 2;
+        frame->x = split->x + split->w;
+        frame->w = w - split->w;
+        frame->y = split->y;
+        frame->h = split->h;
+        break;
+
+    case SPLIT_UP:
+        h = split->h / 2;
+        frame->x = split->x;
+        frame->w = split->w;
+        frame->y = split->y;
+        frame->h = h;
+        split->h -= h;
+        split->y += h;
+        break;
+
+    case SPLIT_DOWN:
+        h = split->h;
+        split->h /= 2;
+        frame->x = split->x;
+        frame->w = split->w;
+        frame->y = split->y + split->h;
+        frame->h = h - split->h;
+        break;
+
+    default:
+        endwin();
+        abort();
+    }
+
+    /* add frame to the linked list */
+    if (FirstFrame == NULL) {
+        frame->next_focus = frame;
+        FirstFrame = frame;
+        SelFrame = frame;
+    } else {
+        for (f = FirstFrame; f->next != NULL; ) {
+            f = f->next;
+        }
+        f->next = frame;
+    }
+
+    return frame;
+}
+
+void destroy_frame(struct frame *frame)
+{
+    struct frame *f;
+    struct frame *prev_focus;
+
+    /* remove from focus chain if the frame is part of one */
+    if (frame->next_focus != NULL) {
+        for (f = FirstFrame; f->next_focus != frame; ) {
+            f = f->next_focus;
+        }
+        if (f != frame) {
+            prev_focus = f;
+            if (frame->next_focus == NULL) {
+                format_message("NOOOOOOOOO");
+            }
+            f->next_focus = frame->next_focus;
+        } else {
+            prev_focus = NULL;
+        }
+    } else {
+        prev_focus = NULL;
+    }
+
+    /* remove from linked list */
+    if (frame == FirstFrame) {
+        FirstFrame = frame->next;
+    } else {
+        for (f = FirstFrame; f->next != frame; ) {
+            f = f->next;
+        }
+        f->next = frame->next;
+    }
+
+    if (FirstFrame == NULL) {
+        IsRunning = false;
+    } else {
+        /* focus last frame if the focused frame is destroyed */
+        if (frame == SelFrame) {
+            SelFrame = prev_focus == NULL ? FirstFrame : prev_focus;
+            if (SelFrame->next_focus == NULL) {
+                SelFrame->next_focus = SelFrame;
+            }
+        }
+
+        /* find frames that can expand into this frame */
+        for (f = FirstFrame; f != NULL; f = f->next) {
+            if (f->y >= frame->y && f->y + f->h <= frame->y + frame->h) {
+                if (f->x + f->w == frame->x) {
+                    f->w += frame->w;
+                } else if (frame->x + frame->w == f->x) {
+                    f->x = frame->x;
+                    f->w += frame->w;
+                }
+            }
+
+            if (f->x >= frame->x && f->x + f->w <= frame->x + frame->w) {
+                if (f->y + f->h == frame->y) {
+                    f->h += frame->h;
+                } else if (frame->y + frame->h == f->y) {
+                    f->y = frame->y;
+                    f->h += frame->h;
+                }
+            }
+        }
+    }
+
+    free(frame);
+}
+
+struct frame *frame_at(int x, int y)
+{
+    for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (x < frame->x || y < frame->y || x >= frame->x + frame->w ||
+                y >= frame->y + frame->h) {
+            continue;
+        }
+        return frame;
+    }
+    return NULL;
+}
+
+struct frame *focus_frame(struct frame *frame)
+{
+    struct frame *prev;
+    struct frame *old_focus;
+
+    if (frame->next_focus != NULL) {
+        /* unlink it from the focus list */
+        for (prev = FirstFrame; prev->next_focus != frame; ) {
+            prev = prev->next_focus;
+        }
+        prev->next_focus = frame->next_focus;
+    }
+    /* relink it into the focus list */
+    frame->next_focus = SelFrame->next_focus;
+    SelFrame->next_focus = frame;
+
+    old_focus = SelFrame;
+    SelFrame = frame;
+    return old_focus;
+}
 
 void adjust_cursor(struct frame *frame)
 {
@@ -27,8 +210,9 @@ int adjust_scroll(struct frame *frame)
         frame->scroll.line = frame->cur.line;
         return 1;
     }
-    if (frame->cur.line >= frame->scroll.line + frame->h) {
-        frame->scroll.line = frame->cur.line - frame->h + 1;
+    /* note: minus status bar */
+    if (frame->cur.line >= frame->scroll.line + frame->h - 1) {
+        frame->scroll.line = frame->cur.line - frame->h + 2;
         return 1;
     }
     return 0;
@@ -56,17 +240,13 @@ void set_cursor(struct frame *frame, const struct pos *pos)
     line = &frame->buf->lines[new_cur.line];
     new_cur.col = MIN(new_cur.col, get_mode_line_end(line));
 
-    /* adjust scrolling */
-    if (new_cur.line < frame->scroll.line) {
-        frame->scroll.line = new_cur.line;
-    } else if (new_cur.line >= frame->scroll.line + frame->h) {
-        frame->scroll.line = new_cur.line - frame->h + 1;
-    }
-
     /* set vct */
     frame->vct = new_cur.col;
 
     frame->cur = new_cur;
+
+    /* adjust scrolling */
+    (void) adjust_scroll(frame);
 }
 
 int do_motion(struct frame *frame, int motion)
@@ -120,31 +300,31 @@ int do_motion(struct frame *frame, int motion)
         return move_vert(frame, frame->h * 2 / 3, 1);
 
     case MOTION_PARA_UP:
-        for (size_t i = SelFrame->cur.line; i > 0; ) {
+        for (size_t i = frame->cur.line; i > 0; ) {
             i--;
-            if (SelFrame->buf->lines[i].n == 0) {
+            if (frame->buf->lines[i].n == 0) {
                 if (Mode.counter > 1) {
                     Mode.counter--;
                     continue;
                 }
-                return move_vert(frame, SelFrame->cur.line - i, -1);
+                return move_vert(frame, frame->cur.line - i, -1);
             }
         }
-        return move_vert(frame, SelFrame->cur.line, -1);
+        return move_vert(frame, frame->cur.line, -1);
 
     case MOTION_PARA_DOWN:
-        for (size_t i = SelFrame->cur.line + 1; i < SelFrame->buf->num_lines;
+        for (size_t i = frame->cur.line + 1; i < frame->buf->num_lines;
                 i++) {
-            if (SelFrame->buf->lines[i].n == 0) {
+            if (frame->buf->lines[i].n == 0) {
                 if (Mode.counter > 1) {
                     Mode.counter--;
                     continue;
                 }
-                return move_vert(SelFrame, i - SelFrame->cur.line, 1);
+                return move_vert(frame, i - frame->cur.line, 1);
             }
         }
-        return move_vert(SelFrame,
-                SelFrame->buf->num_lines - 1 - SelFrame->cur.line, 1);
+        return move_vert(frame,
+                frame->buf->num_lines - 1 - frame->cur.line, 1);
     }
     return 0;
 }

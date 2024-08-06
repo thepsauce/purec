@@ -1,3 +1,4 @@
+#include "cmd.h"
 #include "frame.h"
 #include "util.h"
 
@@ -22,7 +23,6 @@ int main(void)
     };
 
     struct buf *buf;
-    struct frame fr;
     const struct input_handler *ih;
 
     setlocale(LC_ALL, "");
@@ -40,28 +40,26 @@ int main(void)
 
     //buf = create_buffer("../VM_jsm/cases.h");
     buf = create_buffer("src/main.c");
+    //buf = create_buffer(NULL);
 
-    memset(&fr, 0, sizeof(fr));
-    fr.x = 0;
-    fr.y = 0;
-    fr.w = COLS;
-    fr.h = LINES - 2; /* minus status bar, command line */
-    fr.buf = buf;
-
-    SelFrame = &fr;
+    (void) create_frame(NULL, 0, buf);
+    FirstFrame->buf = buf;
 
     set_mode(NORMAL_MODE);
 
     IsRunning = true;
     while (IsRunning) {
         erase();
-        render_frame(&fr);
+        for (struct frame *f = FirstFrame; f != NULL; f = f->next) {
+            render_frame(f);
+        }
         if (Message != NULL) {
             move(LINES - 1, 0);
             addstr(Message);
         }
-        move(SelFrame->cur.line - SelFrame->scroll.line,
-                SelFrame->cur.col - SelFrame->scroll.col);
+        move(SelFrame->y + SelFrame->cur.line - SelFrame->scroll.line,
+                (SelFrame->x == 0 ? 0 : SelFrame->x + 1) + SelFrame->cur.col -
+                SelFrame->scroll.col);
         curs_set(1);
         while (Mode.counter = 0, ih = &input_handlers[Mode.type],
                 ih->handler(ih->getter_ch()) == 0) {
@@ -70,7 +68,14 @@ int main(void)
         curs_set(0);
     }
 
-    delete_buffer(buf);
     endwin();
+
+    for (struct frame *frame = FirstFrame, *next; frame != NULL; frame = next) {
+        next = frame->next;
+        free(frame);
+    }
+
+    free(CmdLine.buf);
+    delete_buffer(buf);
     return 0;
 }
