@@ -24,7 +24,14 @@ extern struct command_line {
 
 /**
  * Reads a command line and executes given command.
+ *
+ * `beg` determines what type of command line it is. These are all options:
+ * "/"  Search
+ * "?"  Search backwards
+ * ":"  Run command
+ *
+ * @param beg   What the command line should start with, must be larger than 1.
  */
-void read_command_line(void);
+void read_command_line(const char *beg);
 
 #endif

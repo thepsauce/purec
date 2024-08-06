@@ -225,7 +225,11 @@ int normal_handle_input(int c)
         return 1;
 
     case ':':
-        read_command_line();
+        read_command_line(":");
+        return 1;
+
+    case CONTROL('C'):
+        format_message("Type  :qa!<ENTER>  to quit and abandon all changes");
         return 1;
 
     case 'v':

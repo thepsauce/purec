@@ -168,7 +168,7 @@ int visual_handle_input(int c)
         return 1;
 
     case ':':
-        read_command_line();
+        read_command_line(":'<,'>");
         return 1;
 
     case 'v':

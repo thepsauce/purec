@@ -7,7 +7,7 @@
 #include <string.h>
 
 struct render_info {
-    struct frame *frame;
+    int w;
     struct line *cur_line;
 
     struct line *prev_line;
@@ -89,7 +89,7 @@ static void render_line(struct render_info *ri)
     p.col = 0;
     p.line = ri->line_i;
 
-    for (p.col = 0; p.col < line->n && w != ri->frame->w;) {
+    for (p.col = 0; p.col < line->n && w != ri->w;) {
         a = &line->attribs[p.col];
         if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
             attr_set(a->a ^ A_REVERSE, 0, NULL);
@@ -116,10 +116,18 @@ void render_frame(struct frame *frame)
     struct buf *buf;
     int perc;
     struct render_info ri;
+    int x;
 
     buf = frame->buf;
 
-    ri.frame = frame;
+    /* correcting for the vertical separator */
+    if (frame->x == 0) {
+        x = 0;
+        ri.w = frame->w;
+    } else {
+        x = frame->x + 1;
+        ri.w = frame->w - 1;
+    }
     ri.cur_line = &buf->lines[frame->cur.line];
     ri.prev_line = frame->scroll.line == 0 ? NULL :
         &buf->lines[frame->scroll.line - 1];
@@ -131,7 +139,7 @@ void render_frame(struct frame *frame)
 
     for (size_t i = frame->scroll.line; i < MIN(buf->num_lines,
                 (size_t) (frame->scroll.line + frame->h)); i++) {
-        move(i - frame->scroll.line, 0);
+        move(i - frame->scroll.line, x);
         ri.line_i = i;
         ri.line = &buf->lines[i];
         render_line(&ri);
@@ -139,9 +147,9 @@ void render_frame(struct frame *frame)
     }
 
     attr_set(0, 0, NULL);
-    move(frame->y + frame->h, 0);
+    move(frame->y + frame->h, x);
     clrtoeol();
-    move(frame->y + frame->h, 0);
+    move(frame->y + frame->h, x);
     perc = 100 * (frame->cur.line + 1) / buf->num_lines;
     printw("%s%s %d%% ¶%zu/%zu☰℅%zu",
             buf->path == NULL ? "[No name]" : buf->path,

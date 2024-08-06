@@ -8,6 +8,8 @@
 
 bool IsRunning;
 
+int ExitCode;
+
 char *Message;
 
 void format_message(const char *fmt, ...)

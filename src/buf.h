@@ -120,8 +120,7 @@ size_t get_line_indent(struct buf *buf, size_t line_i);
 /**
  * Insert given number of lines starting from given position.
  *
- * All added lines are initialized to given lines or 0 if they are `NULL` and
- * an event is added.
+ * All added lines are initialized to given lines and an event is added.
  *
  * WARNING: This function does NO clipping on `pos`.
  *

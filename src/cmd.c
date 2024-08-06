@@ -11,28 +11,117 @@
 
 struct command_line CmdLine;
 
+#define ACCEPTS_RANGE   0x1
+#define ACCEPTS_NUMBER  0x2
+
+struct cmd_data {
+    const char *arg;
+    size_t from, to;
+    bool has_number, has_range;
+    bool force;
+};
+
+#include "cmd_impl.h"
+
+static const struct cmd {
+    /// name of the command
+    const char *name;
+    /// whether this command accepts a range
+    int flags;
+    /// callback of the command to call
+    int (*callback)(struct cmd_data *cd);
+} Commands[] = {
+    /* must be sorted */
+    { "cq", ACCEPTS_NUMBER, cmd_cquit },
+    { "cquit", ACCEPTS_NUMBER, cmd_cquit },
+
+    //{ "e", 0, cmd_edit },
+    //{ "edit", 0, cmd_edit },
+
+    { "exi", 0, cmd_exit },
+    { "exit", 0, cmd_exit },
+    { "exita", 0, cmd_exit_all },
+    { "exitall", 0, cmd_exit_all },
+
+    { "q", 0, cmd_quit },
+    { "qa", 0, cmd_quit_all },
+    { "qall", 0, cmd_quit_all },
+
+    { "quit", 0, cmd_quit },
+    { "quita", 0, cmd_quit_all },
+    { "quitall", 0, cmd_quit_all },
+
+    { "r", 0, cmd_read },
+    { "read", 0, cmd_read },
+
+    { "w", ACCEPTS_RANGE, cmd_write },
+    { "wa", 0, cmd_write_all },
+    { "wall", 0, cmd_write_all },
+
+    { "wq", ACCEPTS_RANGE, cmd_exit },
+    { "wqa", 0, cmd_exit_all },
+    { "wqall", 0, cmd_exit_all },
+
+    { "wquit", 0, cmd_exit },
+
+    { "write", ACCEPTS_RANGE, cmd_write },
+
+    { "x", 0, cmd_exit },
+    { "xit", 0, cmd_exit },
+    { "xa", 0, cmd_exit_all },
+    { "xall", 0, cmd_exit_all },
+};
+
+static const struct cmd *get_command(const char *s, size_t s_len)
+{
+    size_t l, m, r;
+    const char *name;
+    int cmp;
+
+    l = 0;
+    r = ARRAY_SIZE(Commands);
+    while (l < r) {
+        m = (l + r) / 2;
+        name = Commands[m].name;
+        cmp = strncmp(name, s, s_len);
+        if (cmp == 0) {
+            if (name[s_len] == '\0') {
+                return &Commands[m];
+            }
+            cmp = (unsigned char) name[s_len];
+        }
+
+        if (cmp < 0) {
+            l = m + 1;
+        } else {
+            r = m;
+        }
+    }
+
+    format_message("command '%.*s' does not exist, did you mean '%s'?",
+            (int) s_len, s, Commands[l].name);
+    return NULL;
+}
+
 /**
- * Renders the command line at the end of the file prepended by ':'.
+ * Renders the command line at the end of the screen.
  */
 static void render_command_line(void)
 {
     move(LINES - 1, 0);
-    attr_on(A_REVERSE, NULL);
-    addch(':');
-    attr_off(A_REVERSE, NULL);
     addnstr(&CmdLine.buf[CmdLine.scroll],
-            MIN((size_t) (COLS - 1), CmdLine.len - CmdLine.scroll));
+            MIN((size_t) COLS, CmdLine.len - CmdLine.scroll));
     clrtoeol();
-    move(LINES - 1, 1 + CmdLine.index - CmdLine.scroll);
+    move(LINES - 1, CmdLine.index - CmdLine.scroll);
 }
 
-static int run_command(const char *cmd)
+static int run_command(char *s_cmd)
 {
     char c;
     bool f = false;
 
-    cmd += strspn(cmd, " \t");
-    if (cmd[0] == '\0') {
+    s_cmd += strspn(s_cmd, " \t");
+    if (s_cmd[0] == '\0') {
         return 0;
     }
 
@@ -41,52 +130,14 @@ static int run_command(const char *cmd)
         return -1;
     }
 
-    c = cmd[0];
-    cmd++;
-    if (cmd[0] == 'q') {
-        if (c == 'w') {
-            c = 'x';
-        }
-    }
-    if (cmd[0] == '!') {
-        f = true;
-        cmd++;
-    }
-
-    cmd += strspn(cmd, " \t");
-    switch (c) {
-    case 'w':
-        return write_file(SelFrame->buf, cmd[0] == '\0' ?
-                (f ? SelFrame->buf->path : NULL) : cmd);
-
-    case 'r':
-        read_file(SelFrame->buf, &SelFrame->cur, cmd);
-        break;
-
-    case 'x':
-        if (write_file(SelFrame->buf, cmd[0] == '\0' ?
-                        (f ? SelFrame->buf->path : NULL) : cmd) != 0 && !f) {
-            break;
-        }
-        IsRunning = false;
-        break;
-
-    case 'q':
-        if (!f && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
-            format_message("buffer has changed, use :q! to quit");
-            return 0;
-        }
-        IsRunning = false;
-        break;
-
-    default:
-        format_message("what is that command?");
+    cmd = get_command(s_cmd, len);
+    if (cmd == NULL) {
         return -1;
     }
     return 0;
 }
 
-void read_command_line(void)
+void read_command_line(const char *beg)
 {
     int c;
     char ch;
@@ -95,13 +146,23 @@ void read_command_line(void)
     size_t now_len = 0;
     size_t index;
 
-    CmdLine.index = 0;
-    CmdLine.len = 0;
+
+    free(Message);
+    Message = NULL;
+
+    CmdLine.len = strlen(beg);
+    CmdLine.index = CmdLine.len;
+    if (CmdLine.a < CmdLine.len) {
+        CmdLine.a = CmdLine.len + 128;
+        CmdLine.buf = xrealloc(CmdLine.buf, CmdLine.a);
+    }
+    memcpy(CmdLine.buf, beg, CmdLine.len);
+
     CmdLine.history_index = CmdLine.num_history;
     while (render_command_line(), c = getch(), c != '\n' && c != '\x1b') {
         switch (c) {
         case KEY_HOME:
-            CmdLine.index = 0;
+            CmdLine.index = 1;
             break;
 
         case KEY_END:
@@ -109,7 +170,7 @@ void read_command_line(void)
             break;
 
         case KEY_LEFT:
-            if (CmdLine.index == 0) {
+            if (CmdLine.index == 1) {
                 break;
             }
             CmdLine.index--;
@@ -162,7 +223,7 @@ void read_command_line(void)
 
         case KEY_BACKSPACE:
         case '\x7f':
-            if (CmdLine.index == 0) {
+            if (CmdLine.index == 1) {
                 break;
             }
             memmove(&CmdLine.buf[CmdLine.index - 1],
@@ -204,8 +265,8 @@ void read_command_line(void)
             } else {
                 CmdLine.scroll -= 5;
             }
-        } else if (CmdLine.index >= CmdLine.scroll + COLS - 1) {
-            CmdLine.scroll = CmdLine.index - COLS + 7;
+        } else if (CmdLine.index >= CmdLine.scroll + COLS) {
+            CmdLine.scroll = CmdLine.index - COLS + 6;
         }
     }
 
@@ -230,5 +291,14 @@ void read_command_line(void)
     }
     CmdLine.buf[CmdLine.len] = '\0';
 
-    run_command(CmdLine.buf);
+    switch (CmdLine.buf[0]) {
+    case '?':
+    case '/':
+        /* TODO: */
+        break;
+
+    case ':':
+        run_command(&CmdLine.buf[1]);
+        break;
+    }
 }

@@ -24,6 +24,9 @@ void format_message(const char *fmt, ...);
 /// Whether the editor should continue.
 extern bool IsRunning;
 
+/// The exit code to return in `main()`.
+extern int ExitCode;
+
 #define NORMAL_MODE 0 /* 0 */
 #define INSERT_MODE 1 /* 1 */
 
