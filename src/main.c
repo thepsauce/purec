@@ -68,14 +68,19 @@ int main(void)
         curs_set(0);
     }
 
+    /* restore terminal state */
     endwin();
 
+    /* free resources */
     for (struct frame *frame = FirstFrame, *next; frame != NULL; frame = next) {
         next = frame->next;
         free(frame);
     }
 
+    while (FirstBuffer != NULL) {
+        destroy_buffer(FirstBuffer);
+    }
+
     free(CmdLine.buf);
-    delete_buffer(buf);
     return 0;
 }

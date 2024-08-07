@@ -10,7 +10,7 @@
 
 #include <ncurses.h>
 
-/* TODO: buffer list */
+struct buf *FirstBuffer;
 
 size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp)
 {
@@ -119,26 +119,45 @@ static int reload_file(struct buf *buf)
 
 struct buf *create_buffer(const char *path)
 {
-    struct buf *buf;
+    struct buf *buf, *prev;
 
     buf = xcalloc(1, sizeof(*buf));
     if (path != NULL) {
         buf->path = xstrdup(path);
         if (stat(path, &buf->st) == 0) {
             (void) reload_file(buf);
-            if (buf->num_lines > 0) {
-                return buf;
-            }
         }
     }
-    buf->lines = xcalloc(1, sizeof(*buf->lines));
-    buf->num_lines = 1;
-    buf->a_lines = 1;
+    /* make sure the buffer has at least one line */
+    if (buf->num_lines == 0) {
+        buf->lines = xcalloc(1, sizeof(*buf->lines));
+        buf->num_lines = 1;
+        buf->a_lines = 1;
+    }
+
+    /* add buffer to linked list */
+    if (FirstBuffer == NULL) {
+        FirstBuffer = buf;
+    } else {
+        /* find next id and insert */
+        for (prev = FirstBuffer; prev->next != NULL; ) {
+            if (prev->id + 1 != prev->next->id) {
+                break;
+            }
+            prev = prev->next;
+        }
+        buf->next = prev->next;
+        prev->next = buf;
+        buf->id = prev->id + 1;
+    }
+
     return buf;
 }
 
-void delete_buffer(struct buf *buf)
+void destroy_buffer(struct buf *buf)
 {
+    struct buf *prev;
+
     free(buf->path);
     for (size_t i = 0; i < buf->num_lines; i++) {
         clear_line(&buf->lines[i]);
@@ -148,6 +167,17 @@ void delete_buffer(struct buf *buf)
         free_event(buf->events[i]);
     }
     free(buf->events);
+
+    /* remove from linked list */
+    if (FirstBuffer == buf) {
+        FirstBuffer = buf->next;
+    } else {
+        for (prev = FirstBuffer; prev->next != NULL; ) {
+            prev = prev->next;
+        }
+        prev->next = buf->next;
+    }
+
     free(buf);
 }
 

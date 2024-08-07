@@ -44,6 +44,13 @@ struct undo_event {
  * least 1 and never 0.
  */
 struct buf {
+    /**
+     * Unique identifier of this buffer. The pointer returned by
+     * `create_buffer()` is also a unique identifier, however, the ID is meant
+     * to be human redable and easy to type.
+     */
+    size_t id;
+
     /// path on the file system (can be `NULL` to signal no file)
     char *path;
     /// last statistics of the file
@@ -64,23 +71,35 @@ struct buf {
     size_t num_events;
     /// current event index (1 based)
     size_t event_i;
+
+    /// next buffer in the buffer linked list
+    struct buf *next;
 };
+
+/**
+ * The first buffer in the linked list. The linked list is always sorted in
+ * ascending order with respect to the buffer ID.
+ */
+extern struct buf *FirstBuffer;
 
 /**
  * Allocates a buffer and adds it to the buffer list.
  *
  * @param path  File path (can be `NULL` for an empty buffer)
  *
- * @return Allocated buffer.
+ * @return The allocated buffer.
  */
 struct buf *create_buffer(const char *path);
 
 /**
  * Deletes a buffer and removes it from the buffer list.
  *
- * @param buf   The buffer to delete.
+ * When deleting a buffer, there will be a gap in the IDs, so the next buffer
+ * that is created will get the ID that this buffer used to have.
+ *
+ * @param buf   The buffer to destroy.
  */
-void delete_buffer(struct buf *buf);
+void destroy_buffer(struct buf *buf);
 
 /**
  * Writes lines from a buffer to a file.

@@ -101,14 +101,11 @@ struct undo_event *undo_event(struct buf *buf)
         return NULL;
     }
 
-next_event:
-    ev = buf->events[--buf->event_i];
-    do_event(buf, ev, ev->flags ^ (IS_INSERTION | IS_DELETION));
-
-    if (buf->event_i > 0 &&
-            (buf->events[buf->event_i - 1]->flags & IS_TRANSIENT)) {
-        goto next_event;
-    }
+    do {
+        ev = buf->events[--buf->event_i];
+        do_event(buf, ev, ev->flags ^ (IS_INSERTION | IS_DELETION));
+    } while (buf->event_i > 0 &&
+            (buf->events[buf->event_i - 1]->flags & IS_TRANSIENT));
     return ev;
 }
 
@@ -120,13 +117,10 @@ struct undo_event *redo_event(struct buf *buf)
         return NULL;
     }
 
-next_event:
-    ev = buf->events[buf->event_i++];
-    do_event(buf, ev, ev->flags);
-
-    if ((ev->flags & IS_TRANSIENT) && buf->event_i != buf->num_events) {
-        goto next_event;
-    }
+    do {
+        ev = buf->events[buf->event_i++];
+        do_event(buf, ev, ev->flags);
+    } while ((ev->flags & IS_TRANSIENT) && buf->event_i != buf->num_events);
     return ev;
 }
 
