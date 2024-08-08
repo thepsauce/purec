@@ -21,7 +21,7 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
             return -1;
         }
 
-        if (cd->has_range && !cd->force) {
+        if ((cd->has_range || cd->has_number) && !cd->force) {
             format_message("use ! to write partial buffer");
             return -1;
         }
@@ -51,8 +51,13 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
         buf->save_event_i = buf->event_i;
     }
 
-    format_message("%s %zuL, %zuB written", buf->path, cd->to - cd->from + 1,
-            num_bytes);
+    if (num_bytes == 0) {
+        format_message("nothing to write");
+    } else {
+        format_message("%s %zuL, %zuB written", file,
+                MIN(buf->num_lines, cd->to) - MIN(buf->num_lines, cd->from) + 1,
+                num_bytes);
+    }
     return 0;
 }
 

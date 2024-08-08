@@ -1,22 +1,21 @@
-#include "xalloc.h"
 #include "buf.h"
 #include "cmd.h"
-#include "util.h"
 #include "frame.h"
+#include "input.h"
 #include "mode.h"
+#include "util.h"
+#include "xalloc.h"
 
 #include <ctype.h>
 #include <errno.h>
 #include <ncurses.h>
 #include <string.h>
 
-struct command_line CmdLine;
-
 #define ACCEPTS_RANGE   0x1
 #define ACCEPTS_NUMBER  0x2
 
 struct cmd_data {
-    const char *arg;
+    char *arg;
     size_t from, to;
     bool has_number, has_range;
     bool force;
@@ -101,16 +100,20 @@ static const struct cmd *get_command(const char *s, size_t s_len)
     return NULL;
 }
 
-/**
- * Renders the command line at the end of the screen.
- */
-static void render_command_line(void)
+static bool read_number(char *s, char **p_s, size_t *p_n)
 {
-    move(LINES - 1, 0);
-    addnstr(&CmdLine.buf[CmdLine.scroll],
-            MIN((size_t) COLS, CmdLine.len - CmdLine.scroll));
-    clrtoeol();
-    move(LINES - 1, CmdLine.index - CmdLine.scroll);
+    if (s[0] == '\'') {
+        /* TODO: get mark */
+        s++;
+        *p_n = SIZE_MAX;
+        *p_s = s + 1;
+        return true;
+    }
+    if (!isdigit(s[0])) {
+        return false;
+    }
+    *p_n = strtoull(s, p_s, 10);
+    return true;
 }
 
 static int run_command(char *s_cmd)
@@ -124,28 +127,26 @@ static int run_command(char *s_cmd)
         return 0;
     }
 
-    if (isdigit(s_cmd[0])) {
-        data.from = strtoull(s_cmd, &s_cmd, 10);
-        data.has_number = true;
-    } else {
-        data.has_number = false;
-    }
-
-    if (s_cmd[0] == ',') {
-        s_cmd++;
+    if (s_cmd[0] == '%') {
         data.has_range = true;
-
-        if (!data.has_number) {
-            data.from = 0;
-        }
-
-        if (isdigit(s_cmd[0])) {
-            data.to = strtoull(s_cmd, &s_cmd, 10);
-        } else {
-            data.to = SIZE_MAX;
-        }
+        data.from = 0;
+        data.to = SIZE_MAX;
     } else {
-        data.has_range = false;
+        data.has_number = read_number(s_cmd, &s_cmd, &data.from);
+
+        if (s_cmd[0] == ',') {
+            s_cmd++;
+            data.has_range = true;
+
+            if (!data.has_number) {
+                data.from = 0;
+            }
+            if (!read_number(s_cmd, &s_cmd, &data.to)) {
+                data.to = SIZE_MAX;
+            }
+        } else {
+            data.has_range = false;
+        }
     }
 
     for (len = 0; isalpha(s_cmd[len]); ) {
@@ -169,8 +170,10 @@ static int run_command(char *s_cmd)
         if (!data.has_range) {
             if (!data.has_number) {
                 data.from = 0;
+                data.to = SIZE_MAX;
+            } else {
+                data.to = data.from;
             }
-            data.to = SIZE_MAX;
         }
     } else {
         if (data.has_range) {
@@ -200,166 +203,35 @@ static int run_command(char *s_cmd)
 
 void read_command_line(const char *beg)
 {
-    int c;
-    char ch;
-    char *h;
-    char *now;
-    size_t now_len = 0;
-    size_t index;
+    static char **history = NULL;
+    static size_t num_history = 0;
 
+    char *s;
 
     free(Message);
     Message = NULL;
 
-    CmdLine.len = strlen(beg);
-    CmdLine.index = CmdLine.len;
-    if (CmdLine.a < CmdLine.len) {
-        CmdLine.a = CmdLine.len + 128;
-        CmdLine.buf = xrealloc(CmdLine.buf, CmdLine.a);
-    }
-    memcpy(CmdLine.buf, beg, CmdLine.len);
+    set_input(0, LINES - 1, COLS, beg, 1, history, num_history);
 
-    CmdLine.history_index = CmdLine.num_history;
-    while (render_command_line(), c = getch(), c != '\n' && c != '\x1b') {
-        switch (c) {
-        case KEY_HOME:
-            CmdLine.index = 1;
-            break;
-
-        case KEY_END:
-            CmdLine.index = CmdLine.len;
-            break;
-
-        case KEY_LEFT:
-            if (CmdLine.index == 1) {
-                break;
-            }
-            CmdLine.index--;
-            break;
-
-        case KEY_RIGHT:
-            if (CmdLine.index == CmdLine.len) {
-                break;
-            }
-            CmdLine.index++;
-            break;
-
-        case KEY_UP:
-            if (CmdLine.history_index == 0) {
-                break;
-            }
-
-            for (index = CmdLine.history_index; index > 0; index--) {
-                h = CmdLine.history[index - 1];
-                if (strncmp(h, CmdLine.buf, CmdLine.len) == 0) {
-                    break;
-                }
-            }
-
-            if (CmdLine.history_index == CmdLine.num_history) {
-                now = xmemdup(CmdLine.buf, CmdLine.len);
-                now_len = CmdLine.len;
-            }
-            h = CmdLine.history[--CmdLine.history_index];
-            CmdLine.len = strlen(h);
-            memcpy(CmdLine.buf, h, CmdLine.len);
-            break;
-
-        case KEY_DOWN:
-            if (CmdLine.history_index == CmdLine.num_history) {
-                break;
-            }
-
-            if (CmdLine.history_index + 1 == CmdLine.num_history) {
-                memcpy(CmdLine.buf, now, now_len);
-                CmdLine.len = now_len;
-                free(now);
-                CmdLine.history_index++;
-            } else {
-                h = CmdLine.history[++CmdLine.history_index];
-                CmdLine.len = strlen(h);
-                memcpy(CmdLine.buf, h, CmdLine.len);
-            }
-            break;
-
-        case KEY_BACKSPACE:
-        case '\x7f':
-            if (CmdLine.index == 1) {
-                break;
-            }
-            memmove(&CmdLine.buf[CmdLine.index - 1],
-                    &CmdLine.buf[CmdLine.index],
-                    CmdLine.len - CmdLine.index);
-            CmdLine.len--;
-            CmdLine.index--;
-            break;
-
-        case KEY_DC:
-            if (CmdLine.index == CmdLine.len) {
-                break;
-            }
-            CmdLine.len--;
-            memmove(&CmdLine.buf[CmdLine.index],
-                    &CmdLine.buf[CmdLine.index + 1],
-                    CmdLine.len - CmdLine.index);
-            break;
-
-        default:
-            ch = c;
-            if (c >= 0x100 || ch < ' ') {
-                break;
-            }
-            if (CmdLine.len == CmdLine.a) {
-                CmdLine.a *= 2;
-                CmdLine.a++;
-                CmdLine.buf = xrealloc(CmdLine.buf, CmdLine.a);
-            }
-            memmove(&CmdLine.buf[CmdLine.index + 1],
-                    &CmdLine.buf[CmdLine.index], CmdLine.len - CmdLine.index);
-            CmdLine.buf[CmdLine.index++] = ch;
-            CmdLine.len++;
-        }
-        if (CmdLine.index < CmdLine.scroll) {
-            CmdLine.scroll = CmdLine.index;
-            if (CmdLine.scroll <= 5) {
-                CmdLine.scroll = 0;
-            } else {
-                CmdLine.scroll -= 5;
-            }
-        } else if (CmdLine.index >= CmdLine.scroll + COLS) {
-            CmdLine.scroll = CmdLine.index - COLS + 6;
-        }
+    while (render_input(), s = send_to_input(getch()), s == NULL) {
+        (void) 0;
     }
 
-    move(LINES - 1, 0);
-    clrtoeol();
-
-    if (c == '\x1b' || CmdLine.len == 0) {
+    if (s[0] == '\n') {
         return;
     }
 
-    /* add command to history */
-    CmdLine.history = xreallocarray(CmdLine.history, CmdLine.num_history + 1,
-            sizeof(*CmdLine.history));
-    CmdLine.history[CmdLine.num_history++] =
-        xstrndup(CmdLine.buf, CmdLine.len);
+    history = xreallocarray(history, num_history + 1, sizeof(*history));
+    history[num_history++] = xstrdup(&s[-Input.prefix]);
 
-    /* add null terminator */
-    if (CmdLine.len == CmdLine.a) {
-        CmdLine.a *= 2;
-        CmdLine.a++;
-        CmdLine.buf = xrealloc(CmdLine.buf, CmdLine.a);
-    }
-    CmdLine.buf[CmdLine.len] = '\0';
-
-    switch (CmdLine.buf[0]) {
+    switch (beg[0]) {
     case '?':
     case '/':
         /* TODO: */
         break;
 
     case ':':
-        run_command(&CmdLine.buf[1]);
+        run_command(s);
         break;
     }
 }

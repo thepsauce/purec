@@ -170,6 +170,18 @@ struct frame *frame_at(int x, int y)
     return NULL;
 }
 
+void set_frame_buffer(struct frame *frame, struct buf *buf)
+{
+    frame->buf->save_cur = frame->cur;
+    frame->buf->save_scroll = frame->scroll;
+
+    frame->buf = buf;
+
+    frame->cur = buf->save_cur;
+    frame->scroll = buf->save_scroll;
+    frame->vct = frame->cur.col;
+}
+
 struct frame *focus_frame(struct frame *frame)
 {
     struct frame *prev;

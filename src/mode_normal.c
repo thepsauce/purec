@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "fuzzy.h"
 #include "frame.h"
 #include "buf.h"
 #include "mode.h"
@@ -47,6 +48,8 @@ int normal_handle_input(int c)
     struct undo_event *ev;
     struct raw_line lines[2];
     struct frame *frame;
+    struct file_list file_list;
+    size_t entry;
 
     buf = SelFrame->buf;
     switch (c) {
@@ -320,6 +323,20 @@ int normal_handle_input(int c)
         set_mode(INSERT_MODE);
         r = 1;
         break;
+
+    case 'Z':
+        init_file_list(&file_list, ".");
+        if (get_deep_files(&file_list) == 0) {
+            entry = choose_fuzzy((const char**) file_list.paths, file_list.num);
+            if (entry == SIZE_MAX) {
+                format_message("[Nothing]");
+            } else {
+                buf = create_buffer(file_list.paths[entry]);
+                set_frame_buffer(SelFrame, buf);
+            }
+        }
+        clear_file_list(&file_list);
+        return 1;
     }
     return r | do_motion(SelFrame, motions[c]);
 }

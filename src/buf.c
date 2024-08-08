@@ -119,15 +119,33 @@ static int reload_file(struct buf *buf)
 
 struct buf *create_buffer(const char *path)
 {
+    char *rel_path;
     struct buf *buf, *prev;
 
-    buf = xcalloc(1, sizeof(*buf));
+    /* check if a buffer with that path exists already */
     if (path != NULL) {
-        buf->path = xstrdup(path);
-        if (stat(path, &buf->st) == 0) {
+        rel_path = get_relative_path(path);
+        for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
+            if (buf->path == NULL) {
+                continue;
+            }
+            if (strcmp(buf->path, rel_path) == 0) {
+                free(rel_path);
+                return buf;
+            }
+        }
+    } else {
+        rel_path = NULL;
+    }
+
+    buf = xcalloc(1, sizeof(*buf));
+    if (rel_path != NULL) {
+        buf->path = rel_path;
+        if (stat(rel_path, &buf->st) == 0) {
             (void) reload_file(buf);
         }
     }
+
     /* make sure the buffer has at least one line */
     if (buf->num_lines == 0) {
         buf->lines = xcalloc(1, sizeof(*buf->lines));

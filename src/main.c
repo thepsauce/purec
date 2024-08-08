@@ -1,4 +1,4 @@
-#include "cmd.h"
+#include "input.h"
 #include "frame.h"
 #include "util.h"
 
@@ -81,6 +81,7 @@ int main(void)
         destroy_buffer(FirstBuffer);
     }
 
-    free(CmdLine.buf);
+    free(Input.buf);
+    free(Input.remember);
     return 0;
 }

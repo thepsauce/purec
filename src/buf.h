@@ -51,6 +51,11 @@ struct buf {
      */
     size_t id;
 
+    /// saved cursor position
+    struct pos save_cur;
+    /// saved scrolling
+    struct pos save_scroll;
+
     /// path on the file system (can be `NULL` to signal no file)
     char *path;
     /// last statistics of the file

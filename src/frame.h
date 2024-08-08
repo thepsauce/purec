@@ -1,9 +1,9 @@
 #ifndef FRAME_H
 #define FRAME_H
 
-/**********************
- *        Frame       *
- **********************/
+/************************
+ *         Frame        *
+ ************************/
 
 #include "buf.h"
 
@@ -50,7 +50,7 @@ extern struct frame *SelFrame;
 #define SPLIT_DOWN  4
 
 /**
- * Create a frame and split if off given frame.
+ * Creates a frame and split if off given frame.
  *
  * @param split The frame to split off.
  * @param dir   The direction of splitting.
@@ -70,6 +70,13 @@ struct frame *create_frame(struct frame *split, int dir, struct buf *buf);
 void destroy_frame(struct frame *frame);
 
 /**
+ * Renders the frame within its defined bounds.
+ *
+ * @param frame The frame to render.
+ */
+void render_frame(struct frame *frame);
+
+/**
  * Gets the frame at given position.
  *
  * @param x The x position to check.
@@ -87,23 +94,24 @@ struct frame *frame_at(int x, int y);
 struct frame *focus_frame(struct frame *frame);
 
 /**
- * Render the frame within its defined bounds.
+ * Changes the buffer of a frame.
  *
- * @param frame The frame to render.
+ * @param frame The frame of which the buffer should be changed.
+ * @param buf   The new buffer of the frame.
  */
-void render_frame(struct frame *frame);
+void set_frame_buffer(struct frame *frame, struct buf *buf);
 
 /**
  * Adjusts `scroll` such that the cursor is visible.
  *
- * @param frame Frame to adjust the `scroll` within.
+ * @param frame The frame whose `scroll` to adjust.
  *
  * @return Whether scrolling occured.
  */
 int adjust_scroll(struct frame *frame);
 
 /**
- * This places the cursor at `vct` and places it in bound vertically.
+ * Places the cursor at `vct` and places it in bound vertically.
  *
  * If the cursor is out of bounds vertically, it is set to the last line. Then
  * the vertical column tracker is used to adjust the cursor horizontally.
@@ -165,7 +173,7 @@ void set_cursor(struct frame *frame, const struct pos *pos);
 #define MOTION_PARA_DOWN    15
 
 /**
- * Do a special cursor motion.
+ * Does a special cursor motion.
  *
  * @param frame     Frame to perform the motion within.
  * @param motion    Motion to perform (`MOTION_*`).
