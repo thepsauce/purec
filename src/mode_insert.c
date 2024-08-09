@@ -54,10 +54,14 @@ int insert_handle_input(int c)
         lines[0].n = 0;
         lines[1].n = 0;
         ev = insert_lines(SelFrame->buf, &SelFrame->cur, lines, 2, 1);
+        attempt_join();
         ev->undo_cur = SelFrame->cur;
         (void) do_motion(SelFrame, MOTION_NEXT);
         ev->redo_cur = SelFrame->cur;
-        attempt_join();
+        if (indent_line(SelFrame->buf, SelFrame->cur.line) != NULL) {
+            ev->flags |= IS_TRANSIENT;
+        }
+        (void) do_motion(SelFrame, MOTION_END);
         return 1;
 
     case '\t':

@@ -27,8 +27,8 @@ int normal_handle_input(int c)
 
         ['a'] = MOTION_RIGHT,
 
-        ['g'] = MOTION_FILE_BEG,
         ['G'] = MOTION_FILE_END,
+        ['g'] = MOTION_FILE_BEG,
 
         [0x7f] = MOTION_PREV,
         [KEY_BACKSPACE] = MOTION_PREV,
@@ -60,8 +60,8 @@ int normal_handle_input(int c)
         Mode.counter = safe_mul(correct_counter(Mode.counter),
                 correct_counter(Mode.extra_counter));
         switch (e_c) {
-        case 'g':
         case 'G':
+        case 'g':
             c = e_c;
             break;
         default:
@@ -85,9 +85,13 @@ int normal_handle_input(int c)
 
         /* fall through */
     case 'D':
+    case 'S':
         if (c == 'D') {
             c = 'd';
             e_c = '$';
+        } else if (c == 'S') {
+            c = 'c';
+            e_c = 'c';
         }
         cur = SelFrame->cur;
         ev = NULL;
@@ -159,12 +163,17 @@ int normal_handle_input(int c)
         break;
 
     case 'x':
+    case 's':
         cur = SelFrame->cur;
         cur.col = safe_add(cur.col, correct_counter(Mode.counter));
         ev = delete_range(buf, &SelFrame->cur, &cur);
         if (ev != NULL) {
             ev->undo_cur = SelFrame->cur;
             ev->redo_cur = SelFrame->cur;
+            r = 1;
+        }
+        if (c == 's') {
+            set_mode(INSERT_MODE);
             r = 1;
         }
         break;
