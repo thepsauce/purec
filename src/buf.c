@@ -153,6 +153,10 @@ struct buf *create_buffer(const char *path)
         buf->a_lines = 1;
     }
 
+    /* xcalloc does this alread */
+    //buf->min_dirty_i = 0;
+    buf->max_dirty_i = buf->num_lines - 1;
+
     /* add buffer to linked list */
     if (FirstBuffer == NULL) {
         FirstBuffer = buf;
@@ -259,12 +263,20 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
     return add_event(buf, &ev);
 }
 
+void update_dirty_lines(struct buf *buf, size_t from, size_t to)
+{
+    buf->min_dirty_i = MIN(buf->min_dirty_i, from);
+    buf->max_dirty_i = MAX(buf->max_dirty_i, to);
+}
+
 void _insert_lines(struct buf *buf, const struct pos *pos,
         const struct raw_line *lines, size_t num_lines)
 {
     const struct raw_line *raw_line;
     struct line *line, *at_line;
     size_t old_n;
+
+    update_dirty_lines(buf, pos->line, pos->line + num_lines - 1);
 
     if (num_lines == 1) {
         raw_line = &lines[0];
@@ -430,6 +442,9 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
     from = *pfrom;
     to = *pto;
 
+    update_dirty_lines(buf, from.line, from.line == to.line ? from.line :
+            from.line + 1);
+
     fl = &buf->lines[from.line];
     if (from.line == to.line) {
         fl->n -= to.col;
@@ -482,6 +497,8 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
     }
 
     to.line = MIN(to.line, buf->num_lines - 1);
+
+    update_dirty_lines(buf, from.line, to.line);
 
     for (size_t i = from.line; i <= to.line; i++) {
         line = &buf->lines[i];
@@ -538,6 +555,8 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
     }
 
     to.line = MIN(to.line, buf->num_lines - 1);
+
+    update_dirty_lines(buf, from.line, to.line);
 
     for (size_t i = from.line; i <= to.line; i++) {
         line = &buf->lines[i];
@@ -626,6 +645,8 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
     if (from.line == to.line && from.col == to.col) {
         return 0;
     }
+
+    update_dirty_lines(buf, from.line, to.line);
 
     ev.flags = IS_REPLACE;
     ev.pos = from;

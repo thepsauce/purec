@@ -69,6 +69,7 @@ static void do_event(struct buf *buf, struct undo_event *ev, int flags)
     struct pos to;
 
     if (flags & IS_REPLACE) {
+        update_dirty_lines(buf, ev->pos.line, ev->pos.line + ev->num_lines - 1);
         line = &buf->lines[ev->pos.line];
         for (size_t i = 0; i < ev->lines[0].n; i++) {
             line->s[i + ev->pos.col] ^= ev->lines[0].s[i];

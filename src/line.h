@@ -51,6 +51,8 @@ struct line {
     int flags;
     /// syntax highlighting state at the beginning of the next line
     size_t state;
+    /// state before the line was marked dirty
+    size_t prev_state;
     /// rendering attributes
     struct attr *attribs;
 };
@@ -62,7 +64,10 @@ struct line {
  */
 #define mark_dirty(arg_line) do { \
     struct line *const _l = (arg_line); \
-    _l->state = 0; \
+    if (_l->state != 0) { \
+        _l->prev_state = _l->state; \
+        _l->state = 0; \
+    } \
 } while (0)
 
 /**

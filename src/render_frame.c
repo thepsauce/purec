@@ -7,29 +7,136 @@
 #include <string.h>
 
 struct render_info {
+    /// the language to use
+    size_t lang;
+
+    /// the width of the rendering
     int w;
+    /// the line the cursor is on
     struct line *cur_line;
 
-    struct line *prev_line;
+    /// the line to render
     struct line *line;
+    /// the index of the line to render
     size_t line_i;
 
+    /// if a selection exists
     bool sel_exists;
+    /// the selection
     struct selection sel;
 };
 
-#define STATE_NULL 0
-#define STATE_START 1
-#define STATE_WORD 2
+struct state_ctx {
+    /// the selected language
+    size_t lang;
+    /// the current highlight group
+    size_t hi;
+    /// the current state
+    size_t state;
+    /// if the current state is finished and wants to continue to the next line
+    bool multi;
+    /// the current line
+    char *s;
+    /// the index on the current line
+    size_t i;
+    /// the length of the current line
+    size_t n;
+};
+
+#define HI_NORMAL       0
+#define HI_COMMENT      1
+#define HI_JAVADOC      2
+#define HI_TYPE         3
+#define HI_TYPE_MOD     4
+#define HI_IDENTIFIER   5
+#define HI_NUMBER       6
+#define HI_STRING       7
+#define HI_CHAR         8
+
+#define STATE_NULL      0
+#define STATE_START     1
+
+#define C_STATE_COMMENT         2
+#define C_STATE_MULTI_COMMENT   3
+#define C_STATE_STRING          4
+
+static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
+{
+    size_t l, m, r;
+    int cmp;
+
+    l = 0;
+    r = num_strs;
+    while (l < r) {
+        m = (l + r) / 2;
+        cmp = strncmp(strs[m], s, s_l);
+        if (cmp == 0 && strs[m][s_l] != '\0') {
+            cmp = (unsigned char) strs[m][s_l];
+        }
+        if (cmp == 0) {
+            return s;
+        }
+        if (cmp < 0) {
+            l = m + 1;
+        } else {
+            r = m;
+        }
+    }
+    return NULL;
+}
+
+#include "highlight_c.h"
+
+/// if the state always wants to continue to the next line
+#define STATE_MULTI_LINE 0x1
+
+struct lang_state {
+    /// currently unused, might get removed later
+    int flags;
+    /// the procedure that handles this state
+    size_t (*proc)(struct state_ctx *ctx);
+} c_lang_states[] = {
+    [STATE_START] = { 0, c_state_start },
+    [C_STATE_COMMENT] = { 0, c_state_comment },
+    [C_STATE_MULTI_COMMENT] = { STATE_MULTI_LINE, c_state_multi_comment },
+    [C_STATE_STRING] = { 0, c_state_string },
+};
+
+static const struct {
+    /// the color pair
+    int cp;
+    /// the attributes
+    int a;
+} hi_styles[] = {
+    [HI_NORMAL] = { 0, A_NORMAL },
+    [HI_COMMENT] = { 0, A_BOLD },
+    [HI_JAVADOC] = { 0, A_BOLD | A_ITALIC },
+    [HI_TYPE] = { 0, A_BOLD },
+    [HI_TYPE_MOD] = { 0, A_ITALIC },
+    [HI_IDENTIFIER] = { 0, A_BOLD },
+    [HI_NUMBER] = { 0, A_ITALIC },
+    [HI_STRING] = { 0, A_BOLD },
+    [HI_CHAR] = { 0, A_ITALIC },
+};
+
+struct lang {
+    struct lang_state *states;
+    const char *file_ext;
+} langs[] = {
+    { c_lang_states, "c\0h\0cpp\0c++\0hpp\0h++\0" },
+};
 
 /**
- * Simply highlight all words in bold.
+ * Highlight a line with syntax highlighting.
+ *
+ * @param ri    Render information.
+ * @param state The starting state.
  */
 static void highlight_line(struct render_info *ri, size_t state)
 {
     struct line *line;
-    size_t i;
-    char ch;
+    struct state_ctx ctx;
+    size_t n;
 
     line = ri->line;
 
@@ -37,67 +144,53 @@ static void highlight_line(struct render_info *ri, size_t state)
             sizeof(*line->attribs));
     memset(line->attribs, 0, sizeof(*line->attribs) * line->n);
 
-    for (i = 0; i < line->n; i++) {
-        ch = line->s[i];
-        switch (state) {
-        case STATE_START:
-            if (isalpha(ch) || ch == '_') {
-                state = STATE_WORD;
-            }
-            break;
+    ctx.lang = 0;
+    ctx.state = state;
+    ctx.multi = false;
+    ctx.hi = HI_NORMAL;
+    ctx.s = line->s;
+    ctx.i = 0;
+    ctx.n = line->n;
 
-        case STATE_WORD:
-            if (isalnum(ch) || ch == '_') {
-                state = STATE_WORD;
-            } else {
-                state = STATE_START;
-            }
-            break;
-        }
-        if (state == STATE_WORD) {
-            line->attribs[i].cp = 0;
-            line->attribs[i].a = A_BOLD;
-            line->attribs[i].cc = NULL;
+    for (ctx.i = 0; ctx.i < ctx.n; ) {
+        n = (*langs[ctx.lang].states[ctx.state].proc)(&ctx);
+        for (; n > 0; n--) {
+            line->attribs[ctx.i].cp = hi_styles[ctx.hi].cp;
+            line->attribs[ctx.i].a = hi_styles[ctx.hi].a;
+            line->attribs[ctx.i].cc = NULL;
+            ctx.i++;
         }
     }
 
-    state = STATE_START;
+    if (!ctx.multi && !(langs[ctx.lang].states[ctx.state].flags &
+                STATE_MULTI_LINE)) {
+        ctx.state = STATE_START;
+    }
 
-    line->state = state;
+    line->state = ctx.state;
 }
 
 /**
- * Updates line highlighting and renders the line.
+ * Renders a line using its cached attribute data.
+ *
+ * @param ri    Render information.
  */
 static void render_line(struct render_info *ri)
 {
-    struct line *line;
     int w = 0;
     struct attr *a;
     struct pos p;
 
-    line = ri->line;
-    if (line->state == 0) {
-        if (ri->line_i == 0) {
-            highlight_line(ri, STATE_START);
-        } else {
-            highlight_line(ri, ri->prev_line->state == 0 ? STATE_START :
-                    ri->prev_line->state);
-        }
-    }
-
-    p.col = 0;
     p.line = ri->line_i;
-
-    for (p.col = 0; p.col < line->n && w != ri->w;) {
-        a = &line->attribs[p.col];
+    for (p.col = 0; p.col < ri->line->n && w != ri->w;) {
+        a = &ri->line->attribs[p.col];
         if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
             attr_set(a->a ^ A_REVERSE, 0, NULL);
         } else {
             attr_set(a->a, a->cp, NULL);
         }
-        if (a->cc == NULL || line == ri->cur_line) {
-            addch(line->s[p.col]);
+        if (a->cc == NULL || ri->line == ri->cur_line) {
+            addch(ri->line->s[p.col]);
             p.col++;
         } else {
             addstr(a->cc);
@@ -117,6 +210,8 @@ void render_frame(struct frame *frame)
     int perc;
     struct render_info ri;
     int x;
+    size_t last_line;
+    size_t prev_state;
 
     buf = frame->buf;
 
@@ -129,21 +224,48 @@ void render_frame(struct frame *frame)
         ri.w = frame->w - 1;
     }
     ri.cur_line = &buf->lines[frame->cur.line];
-    ri.prev_line = frame->scroll.line == 0 ? NULL :
-        &buf->lines[frame->scroll.line - 1];
     if (SelFrame != frame) {
         ri.sel_exists = false;
     } else {
         ri.sel_exists = get_selection(&ri.sel);
     }
 
-    for (size_t i = frame->scroll.line; i < MIN(buf->num_lines,
-                (size_t) (frame->scroll.line + frame->h - 1)); i++) {
+    last_line = MIN(buf->num_lines,
+            (size_t) (frame->scroll.line + frame->h - 1));
+
+    prev_state = buf->min_dirty_i == 0 ? STATE_START :
+        buf->min_dirty_i == SIZE_MAX ? 0 :
+        buf->lines[buf->min_dirty_i - 1].state;
+    for (size_t i = buf->min_dirty_i; i < last_line; i++) {
+        ri.line_i = i;
+        ri.line = &buf->lines[i];
+        if (ri.line->state == 0) {
+            highlight_line(&ri, prev_state);
+            if ((ri.line->state != STATE_START ||
+                    ri.line->prev_state != STATE_START) &&
+                    i + 1 != buf->num_lines) {
+                mark_dirty(&ri.line[1]);
+            }
+        } else if (i > buf->max_dirty_i) {
+            break;
+        }
+        prev_state = ri.line->state;
+    }
+
+    const size_t mii = buf->min_dirty_i, maa = buf->max_dirty_i;
+
+    if (last_line > buf->max_dirty_i) {
+        buf->min_dirty_i = SIZE_MAX;
+        buf->max_dirty_i = 0;
+    } else {
+        buf->min_dirty_i = MAX(buf->min_dirty_i, last_line);
+    }
+
+    for (size_t i = frame->scroll.line; i < last_line; i++) {
         move(frame->y + i - frame->scroll.line, x);
         ri.line_i = i;
         ri.line = &buf->lines[i];
         render_line(&ri);
-        ri.prev_line = ri.line;
     }
 
     attr_set(0, 0, NULL);
@@ -151,9 +273,11 @@ void render_frame(struct frame *frame)
         mvvline(frame->y, frame->x, ACS_VLINE, frame->h);
     }
     perc = 100 * (frame->cur.line + 1) / buf->num_lines;
-    mvprintw(frame->y + frame->h - 1, x, "%s%s %d%% ¶%zu/%zu☰℅%zu",
+    mvprintw(frame->y + frame->h - 1, x, "%s%s %d%% ¶%zu/%zu☰℅%zu   PP%zu, %zuPP  XX%zu, %zuXX",
             buf->path == NULL ? "[No name]" : buf->path,
             buf->path == NULL || buf->event_i == buf->save_event_i ?
                 "" : "[+]",
-            perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1);
+            perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1,
+            mii, maa,
+            frame->buf->min_dirty_i, frame->buf->max_dirty_i);
 }

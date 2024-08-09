@@ -56,6 +56,11 @@ struct buf {
     /// saved scrolling
     struct pos save_scroll;
 
+    /// the first dirty line
+    size_t min_dirty_i;
+    /// the last dirty line; there might also be dirty lines in the middle
+    size_t max_dirty_i;
+
     /// path on the file system (can be `NULL` to signal no file)
     char *path;
     /// last statistics of the file
@@ -144,6 +149,21 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp);
  * @return Number of leading blank characters (' ' or '\t').
  */
 size_t get_line_indent(struct buf *buf, size_t line_i);
+
+/**
+ * Sets the `min_dirt_i` and `max_dirty_i` values within a buffer.
+ *
+ * Implementation:
+ * ```C
+ * buf->min_dirty_i = MIN(buf->min_dirty_i, from);
+ * buf->max_dirty_i = MAX(buf->max_dirty_i, to);
+ * ```
+ *
+ * @param buf   The buffer to set values in.
+ * @param from  The start of the range.
+ * @param to    The end of the range.
+ */
+void update_dirty_lines(struct buf *buf, size_t from, size_t to);
 
 /**
  * Insert lines starting from a given position.
