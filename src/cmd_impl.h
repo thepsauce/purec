@@ -68,6 +68,33 @@ int cmd_cquit(struct cmd_data *cd)
     return 0;
 }
 
+int cmd_edit(struct cmd_data *cd)
+{
+    struct file_list list;
+    size_t entry;
+    struct buf *buf;
+
+    if (cd->arg[0] == '\0') {
+        init_file_list(&list, ".");
+        if (get_deep_files(&list) == 0) {
+            entry = choose_fuzzy((const char**) list.paths, list.num);
+            if (entry == SIZE_MAX) {
+                buf = NULL;
+            } else {
+                buf = create_buffer(list.paths[entry]);
+            }
+        }
+        clear_file_list(&list);
+    } else {
+        buf = create_buffer(cd->arg);
+    }
+    if (buf == NULL) {
+        return -1;
+    }
+    set_frame_buffer(SelFrame, buf);
+    return 0;
+}
+
 int cmd_exit(struct cmd_data *cd)
 {
     if (save_buffer(cd, SelFrame->buf) != 0) {

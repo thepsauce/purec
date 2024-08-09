@@ -1,6 +1,7 @@
 #include "buf.h"
 #include "cmd.h"
 #include "frame.h"
+#include "fuzzy.h"
 #include "input.h"
 #include "mode.h"
 #include "util.h"
@@ -34,6 +35,9 @@ static const struct cmd {
     /* must be sorted */
     { "cq", ACCEPTS_NUMBER, cmd_cquit },
     { "cquit", ACCEPTS_NUMBER, cmd_cquit },
+
+    { "e", 0, cmd_edit },
+    { "edit", 0, cmd_edit },
 
     { "exi", 0, cmd_exit },
     { "exit", 0, cmd_exit },
