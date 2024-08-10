@@ -22,13 +22,13 @@
     [ ] Finish repeat insertion
     [ ] Finish multi line insertion
 
-[ ] Add multiple frames
-    [ ] Change messaeg area
+[-] Add multiple frames
+    [ ] Change message area
         [ ] Allow it to be multi line without breaking everything
         [ ] Make it a pad window for colors
-    [ ] Add frame system
-    [ ] Add split view
-    [ ] Add keybinds
+    [X] Add frame system
+    [X] Add split view
+    [X] Add keybinds
 
 [ ] Add command line options
     [ ] Add option to open files
@@ -44,14 +44,14 @@
 [ ] Add jump list
     [ ] Add jump list to each frame (or buffer?)
 
-[ ] Add syntax highlighting
-    [ ] Add C syntax
+[X] Add syntax highlighting
+    [X] Add C syntax
     [ ] Add git syntax
 
-[ ] Add file opener
+[X] Add file opener
 
-[ ] Add commands
-    [ ] Add :e for opening a file
+[-] Add commands
+    [X] Add :e for opening a file
     [ ] Add :s for substitute
 
 [ ] Add regex

@@ -39,6 +39,7 @@ int visual_handle_input(int c)
     };
 
     int r = 0;
+    struct buf *buf;
     struct pos cur;
     int e_c;
     int next_mode = NORMAL_MODE;
@@ -46,6 +47,7 @@ int visual_handle_input(int c)
     struct undo_event *ev, *ev_o;
     bool line_based;
 
+    buf = SelFrame->buf;
     switch (c) {
     case '\x1b':
         set_mode(NORMAL_MODE);
@@ -87,7 +89,9 @@ int visual_handle_input(int c)
                 sel.beg.col = 0;
                 sel.end.col = SIZE_MAX;
             }
-            ev = delete_block(SelFrame->buf, &sel.beg, &sel.end);
+            ev = delete_block(buf, &sel.beg, &sel.end);
+            sel.beg.line = SelFrame->cur.line;
+            sel.beg.col = MIN(sel.beg.col, buf->lines[sel.beg.line].n);
         } else {
             if (Mode.type == VISUAL_MODE && isupper(c)) {
                 /* upgrade to line deletion */
@@ -99,7 +103,7 @@ int visual_handle_input(int c)
                 line_based = true;
             } else {
                 line_based = false;
-                if (sel.end.col == SelFrame->buf->lines[sel.end.line].n) {
+                if (sel.end.col == buf->lines[sel.end.line].n) {
                     sel.end.line++;
                     sel.end.col = 0;
                 } else {
@@ -108,19 +112,21 @@ int visual_handle_input(int c)
             }
             if ((c == 'C' || c == 'c') && line_based) {
                 sel.end.line--;
-                sel.end.col = SelFrame->buf->lines[sel.end.line].n;
+                sel.end.col = buf->lines[sel.end.line].n;
             }
-            ev = delete_range(SelFrame->buf, &sel.beg, &sel.end);
+            ev = delete_range(buf, &sel.beg, &sel.end);
         }
+
         if ((c == 'C' || c == 'c') && line_based) {
-            ev_o = indent_line(SelFrame->buf, sel.beg.line);
+            ev_o = indent_line(buf, sel.beg.line);
             if (ev_o != NULL) {
                 ev->flags |= IS_TRANSIENT;
             }
-            sel.beg.col = get_line_indent(SelFrame->buf, sel.beg.line);
+            sel.beg.col = get_line_indent(buf, sel.beg.line);
         } else {
             ev_o = NULL;
         }
+
         set_mode(next_mode);
         if (ev != NULL) {
             ev->undo_cur = Mode.pos;
@@ -138,11 +144,11 @@ int visual_handle_input(int c)
     case 'u':
         get_selection(&sel);
         if (sel.is_block) {
-            ev = change_block(SelFrame->buf, &sel.beg, &sel.end,
+            ev = change_block(buf, &sel.beg, &sel.end,
                     c == 'U' ? toupper : tolower);
         } else {
             sel.end.col++;
-            ev = change_range(SelFrame->buf, &sel.beg, &sel.end,
+            ev = change_range(buf, &sel.beg, &sel.end,
                     c == 'U' ? toupper : tolower);
         }
         set_mode(NORMAL_MODE);

@@ -38,6 +38,11 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
         file = buf->path;
     }
 
+    if (!cd->has_range && !cd->has_number) {
+        cd->from = 0;
+        cd->to = SIZE_MAX;
+    }
+
     fp = fopen(file, "w");
     if (fp == NULL) {
         format_message("could not open '%s': %s", file, strerror(errno));

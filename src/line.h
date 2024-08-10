@@ -38,8 +38,6 @@ struct attr {
     int cp;
     /// render attributes
     attr_t a;
-    /// conceal
-    const char *cc;
 };
 
 struct line {
@@ -50,9 +48,9 @@ struct line {
     /// special flags (`LINE_*`)
     int flags;
     /// syntax highlighting state at the beginning of the next line
-    size_t state;
+    unsigned state;
     /// state before the line was marked dirty
-    size_t prev_state;
+    unsigned prev_state;
     /// rendering attributes
     struct attr *attribs;
 };

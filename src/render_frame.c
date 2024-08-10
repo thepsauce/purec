@@ -30,9 +30,9 @@ struct state_ctx {
     /// the selected language
     size_t lang;
     /// the current highlight group
-    size_t hi;
+    unsigned hi;
     /// the current state
-    size_t state;
+    unsigned state;
     /// if the current state is finished and wants to continue to the next line
     bool multi;
     /// the current line
@@ -52,13 +52,12 @@ struct state_ctx {
 #define HI_NUMBER       6
 #define HI_STRING       7
 #define HI_CHAR         8
+#define HI_PREPROC      9
+#define HI_OPERATOR     10
+#define HI_ERROR        11
 
 #define STATE_NULL      0
 #define STATE_START     1
-
-#define C_STATE_COMMENT         2
-#define C_STATE_MULTI_COMMENT   3
-#define C_STATE_STRING          4
 
 static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
 {
@@ -85,22 +84,17 @@ static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
     return NULL;
 }
 
-#include "highlight_c.h"
-
 /// if the state always wants to continue to the next line
 #define STATE_MULTI_LINE 0x1
 
 struct lang_state {
-    /// currently unused, might get removed later
+    /// flags of the state
     int flags;
     /// the procedure that handles this state
-    size_t (*proc)(struct state_ctx *ctx);
-} c_lang_states[] = {
-    [STATE_START] = { 0, c_state_start },
-    [C_STATE_COMMENT] = { 0, c_state_comment },
-    [C_STATE_MULTI_COMMENT] = { STATE_MULTI_LINE, c_state_multi_comment },
-    [C_STATE_STRING] = { 0, c_state_string },
+    unsigned (*proc)(struct state_ctx *ctx);
 };
+
+#include "highlight_c.h"
 
 static const struct {
     /// the color pair
@@ -117,6 +111,9 @@ static const struct {
     [HI_NUMBER] = { 0, A_ITALIC },
     [HI_STRING] = { 0, A_BOLD },
     [HI_CHAR] = { 0, A_ITALIC },
+    [HI_PREPROC] = { 0, A_UNDERLINE },
+    [HI_OPERATOR] = { 0, A_BOLD },
+    [HI_ERROR] = { 0, A_REVERSE },
 };
 
 struct lang {
@@ -157,7 +154,6 @@ static void highlight_line(struct render_info *ri, size_t state)
         for (; n > 0; n--) {
             line->attribs[ctx.i].cp = hi_styles[ctx.hi].cp;
             line->attribs[ctx.i].a = hi_styles[ctx.hi].a;
-            line->attribs[ctx.i].cc = NULL;
             ctx.i++;
         }
     }
@@ -189,13 +185,8 @@ static void render_line(struct render_info *ri)
         } else {
             attr_set(a->a, a->cp, NULL);
         }
-        if (a->cc == NULL || ri->line == ri->cur_line) {
-            addch(ri->line->s[p.col]);
-            p.col++;
-        } else {
-            addstr(a->cc);
-            p.col += 2;
-        }
+        addch(ri->line->s[p.col]);
+        p.col++;
         w++;
     }
     if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
@@ -252,8 +243,6 @@ void render_frame(struct frame *frame)
         prev_state = ri.line->state;
     }
 
-    const size_t mii = buf->min_dirty_i, maa = buf->max_dirty_i;
-
     if (last_line > buf->max_dirty_i) {
         buf->min_dirty_i = SIZE_MAX;
         buf->max_dirty_i = 0;
@@ -273,11 +262,9 @@ void render_frame(struct frame *frame)
         mvvline(frame->y, frame->x, ACS_VLINE, frame->h);
     }
     perc = 100 * (frame->cur.line + 1) / buf->num_lines;
-    mvprintw(frame->y + frame->h - 1, x, "%s%s %d%% ¶%zu/%zu☰℅%zu   PP%zu, %zuPP  XX%zu, %zuXX",
+    mvprintw(frame->y + frame->h - 1, x, "%s%s %d%% ¶%zu/%zu☰℅%zu",
             buf->path == NULL ? "[No name]" : buf->path,
             buf->path == NULL || buf->event_i == buf->save_event_i ?
                 "" : "[+]",
-            perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1,
-            mii, maa,
-            frame->buf->min_dirty_i, frame->buf->max_dirty_i);
+            perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1);
 }

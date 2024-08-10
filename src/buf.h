@@ -13,7 +13,7 @@
 
 #include <sys/stat.h>
 
-/// whether the next event should be process together with this one
+/// whether the next event should be processed together with this one
 #define IS_TRANSIENT    0x1
 /// if this is an insertion event
 #define IS_INSERTION    0x2
@@ -22,6 +22,16 @@
 /// if this is a replace event
 #define IS_REPLACE      0x8
 
+/**
+ * The `lines` value depends on the type of event. For a deletion event, it is
+ * the deleted text, for an insertion event it is the inserted text and for a
+ * replace event, it is a XOR of the changed text.
+ *
+ * Note: The `undo_cur` and `redo_cur` of each event transient chain is only
+ * valid for the first event in a transient chain. A transient chain start with
+ * an event that has the transient flag on and ends with the first event without
+ * the transient flag.
+ */
 struct undo_event {
     /// flags of this event
     int flags;

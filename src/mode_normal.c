@@ -195,8 +195,8 @@ int normal_handle_input(int c)
             if (ev == NULL) {
                 return 0;
             }
-            set_cursor(SelFrame, &ev->undo_cur);
         }
+        set_cursor(SelFrame, &ev->undo_cur);
         return 1;
 
     case CONTROL('R'):
@@ -205,8 +205,8 @@ int normal_handle_input(int c)
             if (ev == NULL) {
                 return 0;
             }
-            set_cursor(SelFrame, &ev->redo_cur);
         }
+        set_cursor(SelFrame, &ev->redo_cur);
         return 1;
 
     case 'O':

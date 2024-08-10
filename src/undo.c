@@ -113,6 +113,7 @@ struct undo_event *undo_event(struct buf *buf)
 struct undo_event *redo_event(struct buf *buf)
 {
     struct undo_event *ev;
+    struct undo_event *first_ev = NULL;
 
     if (buf->event_i == buf->num_events) {
         return NULL;
@@ -121,7 +122,10 @@ struct undo_event *redo_event(struct buf *buf)
     do {
         ev = buf->events[buf->event_i++];
         do_event(buf, ev, ev->flags);
+        if (first_ev == NULL) {
+            first_ev = ev;
+        }
     } while ((ev->flags & IS_TRANSIENT) && buf->event_i != buf->num_events);
-    return ev;
+    return first_ev;
 }
 

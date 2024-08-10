@@ -498,8 +498,6 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
 
     to.line = MIN(to.line, buf->num_lines - 1);
 
-    update_dirty_lines(buf, from.line, to.line);
-
     for (size_t i = from.line; i <= to.line; i++) {
         line = &buf->lines[i];
         if (from.col >= line->n) {
@@ -531,6 +529,8 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
     if (first_ev == NULL) {
         return NULL;
     }
+
+    update_dirty_lines(buf, from.line, to.line);
 
     pev->flags ^= IS_TRANSIENT;
     return first_ev;

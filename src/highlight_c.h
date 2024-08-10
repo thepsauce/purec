@@ -1,6 +1,19 @@
+#define C_STATE_COMMENT                 2
+#define C_STATE_MULTI_COMMENT           3
+#define C_STATE_STRING                  4
+#define C_STATE_PREPROC                 5
+#define C_STATE_INCLUDE                 6
+#define C_STATE_INCLUDE_STRING          7
+#define C_STATE_INCLUDE_CORNER          8
+#define C_STATE_PREPROC_STRING          9
+#define C_STATE_PREPROC_COMMENT         10
+#define C_STATE_PREPROC_MULTI_COMMENT   11
+#define C_STATE_PREPROC_TRAIL           12
+
 const char *c_types[] = {
     "char",
     "double",
+    "FILE",
     "float",
     "int",
     "long",
@@ -10,7 +23,6 @@ const char *c_types[] = {
     "typeof",
     "unsigned",
     "void",
-    "FILE",
 };
 
 const char *c_type_mods[] =  {
@@ -41,6 +53,26 @@ const char *c_identfs[] = {
     "while",
 };
 
+const char *c_preproc[] = {
+    "define",
+    "elif",
+    "else",
+    "endif",
+    "error",
+    "ident",
+    "if",
+    "ifdef",
+    "ifndef",
+    "include",
+    "include_next",
+    "line",
+    "pragma",
+    "sccs",
+    "undef",
+    "warn",
+    "warning",
+};
+
 static size_t c_get_identf(struct state_ctx *ctx)
 {
     char ch;
@@ -67,8 +99,6 @@ static size_t c_get_identf(struct state_ctx *ctx)
         } else if (bin_search(c_identfs, ARRAY_SIZE(c_identfs),
                     &ctx->s[ctx->i], n) != NULL) {
             ctx->hi = HI_IDENTIFIER;
-        } else {
-            ctx->hi = HI_NORMAL;
         }
     } else {
         n = 0;
@@ -111,6 +141,8 @@ static size_t c_read_escapist(struct state_ctx *ctx, size_t i)
     case 't':
     case 'v':
     case '\\':
+    case '\'':
+    case '\"':
         return i + 1;
 
     case 'x':
@@ -184,33 +216,35 @@ static size_t c_get_char(struct state_ctx *ctx)
     return n + 1;
 }
 
-size_t c_state_string(struct state_ctx *ctx)
+unsigned c_state_string(struct state_ctx *ctx)
 {
     size_t n;
 
     ctx->hi = HI_STRING;
     for (n = 0; ctx->i + n < ctx->n; n++) {
         if (ctx->s[ctx->i + n] == '\\') {
-            if (ctx->i + n + 1 == ctx->n) {
+            if (n != 0) {
+                /* return the part of the string before the \ */
+                return n;
+            }
+            if (ctx->i + 1 == ctx->n) {
                 ctx->hi = HI_CHAR;
                 ctx->multi = true;
                 return 1;
             }
+
+            n = c_read_escapist(ctx, 1);
             if (n == 0) {
-                n = c_read_escapist(ctx, 1);
-                if (n == 0) {
-                    ctx->hi = HI_NORMAL;
-                    return 2;
-                }
-                ctx->hi = HI_CHAR;
-                return n;
+                ctx->hi = HI_NORMAL;
+                return 2;
             }
-            /* return the part of the string before the \ */
+            ctx->hi = HI_CHAR;
             return n;
         }
 
         if (ctx->s[ctx->i + n] == '\"') {
-            ctx->state = STATE_START;
+            ctx->state = ctx->state == C_STATE_STRING ? STATE_START :
+                C_STATE_PREPROC;
             n++;
             break;
         }
@@ -218,7 +252,89 @@ size_t c_state_string(struct state_ctx *ctx)
     return n;
 }
 
-size_t c_state_start(struct state_ctx *ctx)
+unsigned c_state_include(struct state_ctx *ctx)
+{
+    switch (ctx->s[ctx->i]) {
+    case '\t':
+    case ' ':
+        ctx->hi = HI_NORMAL;
+        return 1;
+
+    case '<':
+        ctx->state = C_STATE_INCLUDE_CORNER;
+        ctx->hi = HI_STRING;
+        return 1;
+
+    case '\"':
+        ctx->state = C_STATE_INCLUDE_STRING;
+        ctx->hi = HI_STRING;
+        return 1;
+
+    default:
+        ctx->hi = HI_ERROR;
+        return ctx->n - ctx->i;
+    }
+}
+
+unsigned c_state_include_corner(struct state_ctx *ctx)
+{
+    size_t n;
+
+    ctx->hi = HI_STRING;
+    for (n = 0; ctx->i + n < ctx->n; n++) {
+        if (ctx->s[ctx->i + n] == '\\') {
+            if (n != 0) {
+                return n;
+            }
+            if (ctx->i + 1 == ctx->n) {
+                ctx->hi = HI_CHAR;
+                ctx->multi = true;
+            }
+            return 1;
+        }
+
+        if (ctx->s[ctx->i + n] == '>') {
+            ctx->state = C_STATE_PREPROC_TRAIL;
+            n++;
+            break;
+        }
+    }
+    return n;
+}
+
+unsigned c_state_include_string(struct state_ctx *ctx)
+{
+    size_t n;
+
+    ctx->hi = HI_STRING;
+    for (n = 0; ctx->i + n < ctx->n; n++) {
+        if (ctx->s[ctx->i + n] == '\\') {
+            if (n != 0) {
+                return n;
+            }
+            if (ctx->i + 1 == ctx->n) {
+                ctx->hi = HI_CHAR;
+                ctx->multi = true;
+            }
+            return 1;
+        }
+
+        if (ctx->s[ctx->i + n] == '\"') {
+            ctx->state = C_STATE_PREPROC_TRAIL;
+            n++;
+            break;
+        }
+    }
+    return n;
+}
+
+unsigned c_state_preproc_trail(struct state_ctx *ctx)
+{
+    ctx->hi = HI_ERROR;
+    return ctx->n - ctx->i;
+}
+
+unsigned c_state_common(struct state_ctx *ctx)
 {
     size_t len;
 
@@ -238,30 +354,107 @@ size_t c_state_start(struct state_ctx *ctx)
     }
 
     switch (ctx->s[ctx->i]) {
+    case '\t':
+    case ' ':
+        for (len = 1; ctx->i + len < ctx->n; len++) {
+            if (!isblank(ctx->s[ctx->i + len])) {
+                break;
+            }
+        }
+        ctx->hi = HI_NORMAL;
+        return len;
+
     case '\"':
-        ctx->state = C_STATE_STRING;
+        ctx->state = ctx->state == STATE_START ? C_STATE_STRING :
+            C_STATE_PREPROC_STRING;
         ctx->hi = HI_STRING;
         return 1;
 
     case '/':
-        if (ctx->i + 1 == ctx->n) {
-            break;
+        if (ctx->i + 1 < ctx->n) {
+            if (ctx->s[ctx->i + 1] == '/') {
+                ctx->state = ctx->state == STATE_START ?
+                    C_STATE_COMMENT : C_STATE_PREPROC_COMMENT;
+                return 0;
+            }
+            if (ctx->s[ctx->i + 1] == '*') {
+                ctx->state = ctx->state == STATE_START ?
+                    C_STATE_MULTI_COMMENT : C_STATE_PREPROC_MULTI_COMMENT;
+                return 0;
+            }
         }
-        if (ctx->s[ctx->i + 1] == '/') {
-            ctx->state = C_STATE_COMMENT;
-            return 0;
-        }
-        if (ctx->s[ctx->i + 1] == '*') {
-            ctx->state = C_STATE_MULTI_COMMENT;
-            return 0;
-        }
-        break;
+        /* fall through */
+    case '!':
+    case '%':
+    case '&':
+    case '*':
+    case '+':
+    case '-':
+    case '.':
+    case ':':
+    case '<':
+    case '=':
+    case '>':
+    case '?':
+    case '|':
+    case '~':
+        ctx->hi = HI_OPERATOR;
+        return 1;
     }
-    ctx->hi = HI_NORMAL;
     return 1;
 }
 
-size_t c_state_comment(struct state_ctx *ctx)
+unsigned c_state_preproc(struct state_ctx *ctx)
+{
+    if (ctx->i + 1 == ctx->n && ctx->s[ctx->i] == '\\') {
+        ctx->multi = true;
+        ctx->hi = HI_PREPROC;
+        return 1;
+    }
+    ctx->hi = HI_PREPROC;
+    return c_state_common(ctx);
+}
+
+unsigned c_state_start(struct state_ctx *ctx)
+{
+    size_t i;
+    size_t w_i;
+
+    if (ctx->s[ctx->i] == '#') {
+        /* skip all space after '#' */
+        for (i = ctx->i + 1; i < ctx->n; i++) {
+            if (!isblank(ctx->s[i])) {
+                break;
+            }
+        }
+
+        /* read word after '#' */
+        for (w_i = i; i < ctx->n; i++) {
+            if (!isalpha(ctx->s[i])) {
+                break;
+            }
+        }
+
+        ctx->hi = HI_PREPROC;
+        /* check if it is valid */
+        if (bin_search(c_preproc, ARRAY_SIZE(c_preproc),
+                    &ctx->s[w_i], i - w_i) != NULL) {
+            /* special handling for include */
+            if (ctx->s[w_i] == 'i' && ctx->s[w_i + 1] == 'n') {
+                ctx->state = C_STATE_INCLUDE;
+            } else {
+                ctx->state = C_STATE_PREPROC;
+            }
+        } else if (w_i != i) {
+            ctx->hi = HI_NORMAL;
+        }
+        return i - ctx->i;
+    }
+    ctx->hi = HI_NORMAL;
+    return c_state_common(ctx);
+}
+
+unsigned c_state_comment(struct state_ctx *ctx)
 {
     if (ctx->s[ctx->n - 1] == '\\') {
         ctx->multi = true;
@@ -270,13 +463,14 @@ size_t c_state_comment(struct state_ctx *ctx)
     return ctx->n - ctx->i;
 }
 
-size_t c_state_multi_comment(struct state_ctx *ctx)
+unsigned c_state_multi_comment(struct state_ctx *ctx)
 {
     size_t i;
 
-    if (ctx->i + 1 != ctx->n && ctx->s[ctx->i] == '*' &&
+    if (ctx->i + 1 < ctx->n && ctx->s[ctx->i] == '*' &&
             ctx->s[ctx->i + 1] == '/') {
-        ctx->state = STATE_START;
+        ctx->state = ctx->state == C_STATE_COMMENT ? STATE_START :
+            C_STATE_PREPROC;
         return 2;
     }
     if (ctx->s[ctx->i] == '@') {
@@ -290,3 +484,18 @@ size_t c_state_multi_comment(struct state_ctx *ctx)
     ctx->hi = HI_COMMENT;
     return 1;
 }
+
+struct lang_state c_lang_states[] = {
+    [STATE_START] = { 0, c_state_start },
+    [C_STATE_COMMENT] = { 0, c_state_comment },
+    [C_STATE_MULTI_COMMENT] = { STATE_MULTI_LINE, c_state_multi_comment },
+    [C_STATE_STRING] = { 0, c_state_string },
+    [C_STATE_PREPROC] = { 0, c_state_preproc },
+    [C_STATE_INCLUDE] = { 0, c_state_include },
+    [C_STATE_INCLUDE_STRING] = { 0, c_state_include_string },
+    [C_STATE_INCLUDE_CORNER] = { 0, c_state_include_corner },
+    [C_STATE_PREPROC_STRING] = { 0, c_state_string },
+    [C_STATE_PREPROC_COMMENT] = { 0, c_state_comment },
+    [C_STATE_PREPROC_MULTI_COMMENT] = { 0, c_state_multi_comment },
+    [C_STATE_PREPROC_TRAIL] = { 0, c_state_preproc_trail },
+};
