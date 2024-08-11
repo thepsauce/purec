@@ -1,6 +1,8 @@
 #include "buf.h"
 #include "xalloc.h"
 
+#include <string.h>
+
 void free_event(struct undo_event *ev)
 {
     for (size_t i = 0; i < ev->num_lines; i++) {
@@ -10,21 +12,21 @@ void free_event(struct undo_event *ev)
     free(ev);
 }
 
-bool should_join(struct undo_event *ev1, struct undo_event *ev2)
+void get_end_pos(const struct undo_event *ev, struct pos *pos)
+{
+    pos->line = ev->pos.line + ev->num_lines - 1;
+    pos->col = ev->lines[ev->num_lines - 1].n;
+    if (pos->line == ev->pos.line) {
+        pos->col += ev->pos.col;
+    }
+}
+
+bool should_join(const struct undo_event *ev1, const struct undo_event *ev2)
 {
     struct pos to1, to2;
 
-    to1.line = ev1->pos.line + ev1->num_lines - 1;
-    to1.col = ev1->lines[ev1->num_lines - 1].n;
-    if (to1.line == ev1->pos.line) {
-        to1.col += ev1->pos.col;
-    }
-
-    to2.line = ev2->pos.line + ev2->num_lines - 1;
-    to2.col = ev2->lines[ev2->num_lines - 1].n;
-    if (to2.line == ev2->pos.line) {
-        to2.col += ev2->pos.col;
-    }
+    get_end_pos(ev1, &to1);
+    get_end_pos(ev2, &to2);
 
     if (((ev1->flags | ev2->flags) & IS_REPLACE)) {
         return false;
@@ -63,7 +65,7 @@ struct undo_event *add_event(struct buf *buf, const struct undo_event *copy_ev)
     return ev;
 }
 
-static void do_event(struct buf *buf, struct undo_event *ev, int flags)
+static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
 {
     struct line *line;
     struct pos to;
@@ -129,3 +131,50 @@ struct undo_event *redo_event(struct buf *buf)
     return first_ev;
 }
 
+struct undo_event *perform_event(struct buf *buf, const struct undo_event *p_ev)
+{
+    struct pos to;
+    struct undo_event ev;
+
+    ev.pos = p_ev->pos;
+    if ((p_ev->flags & IS_DELETION)) {
+        if (p_ev->pos.line + p_ev->num_lines > buf->num_lines) {
+            return NULL;
+        }
+
+        /* check if the deletion counts match up */
+        if (p_ev->num_lines == 1) {
+            if (p_ev->pos.col + p_ev->lines[0].n > buf->lines[p_ev->pos.line].n) {
+                return NULL;
+            }
+        } else {
+            if (p_ev->pos.col + p_ev->lines[0].n != buf->lines[p_ev->pos.line].n) {
+                return NULL;
+            }
+            if (p_ev->lines[p_ev->num_lines - 1].n >
+                    buf->lines[p_ev->pos.line + p_ev->num_lines - 1].n) {
+                return NULL;
+            }
+            for (size_t i = 1; i < p_ev->num_lines - 1; i++) {
+                if (p_ev->lines[i].n != buf->lines[i].n) {
+                    return NULL;
+                }
+            }
+        }
+
+        /* get deleted text */
+        get_end_pos(p_ev, &to);
+        ev.flags = IS_DELETION;
+        ev.lines = get_lines(buf, &p_ev->pos, &to, &ev.num_lines);
+    } else {
+        /* duplicate lines */
+        ev.flags = IS_INSERTION;
+        ev.num_lines = p_ev->num_lines;
+        ev.lines = xreallocarray(NULL, ev.num_lines, sizeof(*ev.lines));
+        for (size_t i = 0; i < ev.num_lines; i++) {
+            init_raw_line(&ev.lines[i], p_ev->lines[i].s, p_ev->lines[i].n);
+        }
+    }
+    do_event(buf, p_ev, p_ev->flags);
+    return add_event(buf, &ev);
+}

@@ -81,7 +81,7 @@ struct selection {
 void shift_add_counter(int d);
 
 /**
- * Get user input like normal but handle digits in a special way.
+ * Gets user input like normal but handle digits in a special way.
  *
  * If the input is '0' and the counter is 0, then '0' is returned but when the
  * counter is non zero, then the counter is multiplied by 10 and the next
@@ -125,7 +125,7 @@ size_t correct_counter(size_t counter);
 void set_mode(int mode);
 
 /**
- * Get the selection of the current frame.
+ * Gets the selection of the current frame.
  *
  * This simply gets the cursor position within the current frame and `Mode.pos`
  * and sorts them, there is additional correction when the visual line mode is

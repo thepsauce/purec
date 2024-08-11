@@ -365,13 +365,42 @@ struct undo_event *indent_line(struct buf *buf, size_t line_i)
     return delete_range(buf, &pos, &to);
 }
 
+struct raw_line *get_lines(struct buf *buf, const struct pos *from,
+        const struct pos *to, size_t *p_num_lines)
+{
+    struct raw_line *lines;
+    size_t num_lines;
+
+    if (from->line != to->line) {
+        num_lines = to->line - from->line + 1;
+        lines = xreallocarray(NULL, num_lines, sizeof(*lines));
+        init_raw_line(&lines[0], &buf->lines[from->line].s[from->col],
+                buf->lines[from->line].n - from->col);
+
+        for (size_t i = from->line + 1; i < to->line; i++) {
+            init_raw_line(&lines[i - from->line], &buf->lines[i].s[0],
+                    buf->lines[i].n);
+        }
+        if (to->line != buf->num_lines) {
+            init_raw_line(&lines[num_lines - 1], buf->lines[to->line].s, to->col);
+        } else {
+            init_raw_line(&lines[num_lines - 1], NULL, 0);
+        }
+    } else {
+        num_lines = 1;
+        lines = xmalloc(sizeof(*lines));
+        init_raw_line(&lines[0], &buf->lines[from->line].s[from->col],
+                to->col - from->col);
+    }
+    *p_num_lines = num_lines;
+    return lines;
+}
+
 struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
         const struct pos *pto)
 {
     struct pos from, to;
-    struct undo_event ev, *pev;
-    struct raw_line *lines;
-    size_t num_lines;
+    struct undo_event ev, *p_ev;
 
     from = *pfrom;
     to = *pto;
@@ -405,33 +434,11 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
     /* get the deleted text for undo */
     ev.flags = IS_DELETION;
     ev.pos = from;
-    if (from.line != to.line) {
-        num_lines = to.line - from.line + 1;
-        lines = xreallocarray(NULL, num_lines, sizeof(*lines));
-        init_raw_line(&lines[0], &buf->lines[from.line].s[from.col],
-                buf->lines[from.line].n - from.col);
-
-        for (size_t i = from.line + 1; i < to.line; i++) {
-            init_raw_line(&lines[i - from.line], &buf->lines[i].s[0],
-                    buf->lines[i].n);
-        }
-        if (to.line != buf->num_lines) {
-            init_raw_line(&lines[num_lines - 1], buf->lines[to.line].s, to.col);
-        } else {
-            init_raw_line(&lines[num_lines - 1], NULL, 0);
-        }
-    } else {
-        num_lines = 1;
-        lines = xmalloc(sizeof(*lines));
-        init_raw_line(&lines[0], &buf->lines[from.line].s[from.col],
-                to.col - from.col);
-    }
-    ev.lines = lines;
-    ev.num_lines = num_lines;
-    pev = add_event(buf, &ev);
+    ev.lines = get_lines(buf, &from, &to, &ev.num_lines);
+    p_ev = add_event(buf, &ev);
 
     _delete_range(buf, &from, &to);
-    return pev;
+    return p_ev;
 }
 
 void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto)
@@ -485,7 +492,7 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
     struct pos from, to;
     struct line *line;
     size_t to_col;
-    struct undo_event ev, *first_ev = NULL, *pev;
+    struct undo_event ev, *first_ev = NULL, *p_ev;
 
     from = *pfrom;
     to = *pto;
@@ -514,9 +521,9 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
         ev.num_lines = 1;
         ev.lines = xmalloc(sizeof(*ev.lines));
         init_raw_line(&ev.lines[0], &line->s[from.col], to_col - from.col);
-        pev = add_event(buf, &ev);
+        p_ev = add_event(buf, &ev);
         if (first_ev == NULL) {
-            first_ev = pev;
+            first_ev = p_ev;
         }
 
         line->n -= to_col;
@@ -532,7 +539,7 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
 
     update_dirty_lines(buf, from.line, to.line);
 
-    pev->flags ^= IS_TRANSIENT;
+    p_ev->flags ^= IS_TRANSIENT;
     return first_ev;
 }
 
@@ -542,7 +549,7 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
     struct pos from, to;
     struct line *line;
     size_t to_col;
-    struct undo_event ev, *first_ev = NULL, *pev;
+    struct undo_event ev, *first_ev = NULL, *p_ev;
     char ch;
 
     from = *pfrom;
@@ -579,9 +586,9 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
             ev.lines[0].s[i - from.col] ^= ch;
             line->s[i] = ch;
         }
-        pev = add_event(buf, &ev);
+        p_ev = add_event(buf, &ev);
         if (first_ev == NULL) {
-            first_ev = pev;
+            first_ev = p_ev;
         }
 
         mark_dirty(line);
@@ -591,7 +598,7 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
         return NULL;
     }
 
-    pev->flags ^= IS_TRANSIENT;
+    p_ev->flags ^= IS_TRANSIENT;
     return first_ev;
 }
 

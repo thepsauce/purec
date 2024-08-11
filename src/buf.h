@@ -239,6 +239,18 @@ struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines);
 struct undo_event *indent_line(struct buf *buf, size_t line_i);
 
 /**
+ * Gets the lines within the buffer inside given range.
+ *
+ * @param buf   Buffer to get lines from.
+ * @param from  Start of the range.
+ * @param to    End of the range.
+ *
+ * @return Allocated lines, `p_num_lines` has the number of lines.
+ */
+struct raw_line *get_lines(struct buf *buf, const struct pos *from,
+        const struct pos *to, size_t *p_num_lines);
+
+/**
  * Deletes a range from a buffer.
  *
  * This function does clipping and swapping so that `from` comes before `to`.
@@ -350,6 +362,14 @@ struct undo_event *change_range(struct buf *buf, const struct pos *from,
 void free_event(struct undo_event *ev);
 
 /**
+ * Gets the end of the range of an event.
+ *
+ * @param ev    The event to get the end from.
+ * @param pos   The resulting end position.
+ */
+void get_end_pos(const struct undo_event *ev, struct pos *pos);
+
+/**
  * Checks whether it makes sense to join the two given events.
  *
  * Note that `ev1` must be an event that happened right before `ev2`.
@@ -359,7 +379,7 @@ void free_event(struct undo_event *ev);
  *
  * @return Whether it makes sense to join the events.
  */
-bool should_join(struct undo_event *ev1, struct undo_event *ev2);
+bool should_join(const struct undo_event *ev1, const struct undo_event *ev2);
 
 /**
  * Adds an event to the buffer event list.
@@ -374,7 +394,7 @@ bool should_join(struct undo_event *ev1, struct undo_event *ev2);
 struct undo_event *add_event(struct buf *buf, const struct undo_event *ev);
 
 /**
- * Undo an event.
+ * Undoes an event.
  *
  * @param buf   Buffer to undo in.
  *
@@ -383,12 +403,28 @@ struct undo_event *add_event(struct buf *buf, const struct undo_event *ev);
 struct undo_event *undo_event(struct buf *buf);
 
 /**
- * Redo an undone event.
+ * Redoes an undone event.
  *
  * @param buf   Buffer to redo in.
  *
  * @return The event redone or `NULL` if there was none.
  */
 struct undo_event *redo_event(struct buf *buf);
+
+/**
+ * Performs the action given event defines.
+ *
+ * This function may return `NULL` when the action cannot be performed because
+ * or an out of bounds deletion.
+ *
+ * This function does NOT check if the position given in the event is in bound.
+ * It also does not support replace events.
+ *
+ * @param buf   The buffer to perform the action in.
+ * @param ev    The action to perform.
+ *
+ * @return The event generated from performing the action.
+ */
+struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev);
 
 #endif

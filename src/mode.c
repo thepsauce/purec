@@ -103,8 +103,11 @@ void set_mode(int mode)
 
     if (mode == NORMAL_MODE) {
         clip_column(SelFrame);
+        Mode.repeat_count = 0;
+        Mode.num_dup = 0;
     } else if (mode == INSERT_MODE) {
         Mode.ev_from_ins = SelFrame->buf->event_i;
+        Mode.repeat_count = correct_counter(Mode.counter);
     }
 }
 

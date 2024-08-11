@@ -90,8 +90,9 @@ int visual_handle_input(int c)
                 sel.end.col = SIZE_MAX;
             }
             ev = delete_block(buf, &sel.beg, &sel.end);
-            sel.beg.line = SelFrame->cur.line;
-            sel.beg.col = MIN(sel.beg.col, buf->lines[sel.beg.line].n);
+            if (c == 'C' || c == 'c') {
+                Mode.num_dup = sel.end.line - sel.beg.line + 1;
+            }
         } else {
             if (Mode.type == VISUAL_MODE && isupper(c)) {
                 /* upgrade to line deletion */
@@ -195,9 +196,8 @@ int visual_handle_input(int c)
     case 'I':
         get_selection(&sel);
         set_mode(INSERT_MODE);
-        Mode.repeat_count = correct_counter(Mode.counter);
         if (sel.is_block) {
-            Mode.pos = sel.beg;
+            set_cursor(SelFrame, &sel.beg);
             Mode.num_dup = sel.end.line - sel.beg.line + 1;
             if (c == 'A') {
                 move_horz(SelFrame, 1, 1);
@@ -209,6 +209,7 @@ int visual_handle_input(int c)
             } else {
                 set_cursor(SelFrame, &sel.beg);
             }
+            Mode.num_dup = 1;
         }
         return 1;
     }

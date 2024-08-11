@@ -173,6 +173,7 @@ int normal_handle_input(int c)
             r = 1;
         }
         if (c == 's') {
+            Mode.counter = 0;
             set_mode(INSERT_MODE);
             r = 1;
         }
@@ -212,28 +213,28 @@ int normal_handle_input(int c)
     case 'O':
         cur = SelFrame->cur;
         set_mode(INSERT_MODE);
-        do_motion(SelFrame, MOTION_HOME);
+        (void) move_horz(SelFrame, SIZE_MAX, -1);
         lines[0].n = 0;
         lines[1].n = 0;
         ev = insert_lines(buf, &SelFrame->cur, lines, 2, 1);
         ev->undo_cur = cur;
         ev->flags |= IS_TRANSIENT;
         indent_line(buf, SelFrame->cur.line);
-        do_motion(SelFrame, MOTION_END);
+        (void) move_horz(SelFrame, SIZE_MAX, 1);
         ev->redo_cur = SelFrame->cur;
         return 1;
 
     case 'o':
         cur = SelFrame->cur;
         set_mode(INSERT_MODE);
-        do_motion(SelFrame, MOTION_END);
+        (void) move_horz(SelFrame, SIZE_MAX, 1);
         lines[0].n = 0;
         lines[1].n = 0;
         ev = insert_lines(buf, &SelFrame->cur, lines, 2, 1);
         ev->undo_cur = cur;
         ev->flags |= IS_TRANSIENT;
         indent_line(buf, SelFrame->cur.line + 1);
-        do_motion(SelFrame, MOTION_DOWN);
+        (void) move_vert(SelFrame, 1, 1);
         ev->redo_cur = SelFrame->cur;
         return 1;
 
@@ -328,10 +329,11 @@ int normal_handle_input(int c)
     case 'a':
     case 'I':
     case 'i':
-        Mode.repeat_count = correct_counter(Mode.counter);
         set_mode(INSERT_MODE);
-        r = 1;
-        break;
+        if (c == 'a') {
+            move_horz(SelFrame, 1, 1);
+        }
+        return 1;
 
     case 'Z':
         init_file_list(&file_list, ".");
