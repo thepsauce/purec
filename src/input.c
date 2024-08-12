@@ -176,12 +176,11 @@ char *send_to_input(int c)
 
 void render_input(void)
 {
-    attr_set(0, 0, NULL);
     move(Input.y, Input.x);
     addnstr(&Input.buf[Input.scroll],
             MIN((size_t) Input.max_w, Input.len - Input.scroll));
     /* erase to end of line */
-    while (getcurx(stdscr) < Input.x + Input.max_w - 1) {
+    for (int x = getcurx(stdscr); x < Input.x + Input.max_w; x++) {
         addch(' ');
     }
     move(Input.y, Input.x + Input.index - Input.scroll);

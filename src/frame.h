@@ -77,6 +77,15 @@ void destroy_frame(struct frame *frame);
 void render_frame(struct frame *frame);
 
 /**
+ * Gets the visible cursor position of the frame.
+ *
+ * @param frame The frame to get the cursor from.
+ * @param p_x   The resulting x position.
+ * @param p_y   The resulting y position.
+ */
+void get_visual_cursor(const struct frame *frame, int *p_x, int *p_y);
+
+/**
  * Gets the frame at given position.
  *
  * @param x The x position to check.

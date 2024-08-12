@@ -51,8 +51,8 @@ struct line {
     unsigned state;
     /// state before the line was marked dirty
     unsigned prev_state;
-    /// rendering attributes
-    struct attr *attribs;
+    /// rendering highlights
+    int *attribs;
 };
 
 /**

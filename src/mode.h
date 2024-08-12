@@ -8,18 +8,21 @@
 #include "line.h"
 #include "util.h"
 
-/**
- * Message that is rendered at the bottom of the screen.
- */
-extern char *Message;
+#include <ncurses.h>
 
 /**
- * Formats the message like `printf()` and puts it into `Message`.
+ * Message that is rendered at the bottom of the screen.
  *
- * @param fmt   Format string.
- * @param ...   Format arguments.
+ * The size of the window is 128x1.
  */
-void format_message(const char *fmt, ...);
+extern WINDOW *Message;
+
+/**
+ * Off screen window that can be used for measuring.
+ *
+ * Its size is 512x1.
+ */
+extern WINDOW *OffScreen;
 
 /// Whether the editor should continue.
 extern bool IsRunning;
@@ -38,6 +41,7 @@ extern int ExitCode;
 /**
  * The mode struct contains information about all modes.
  */
+/* TODO: rename to editor or similar */
 extern struct mode {
     /// type of the mode (`*_MODE`)
     int type;

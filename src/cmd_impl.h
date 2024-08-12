@@ -17,19 +17,22 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
 
     if (file[0] == '\0') {
         if (buf->path == NULL) {
-            format_message("no file name");
+            werase(Message);
+            waddstr(Message, "no file name");
             return -1;
         }
 
         if ((cd->has_range || cd->has_number) && !cd->force) {
-            format_message("use ! to write partial buffer");
+            werase(Message);
+            waddstr(Message, "use ! to write partial buffer");
             return -1;
         }
 
         file = buf->path;
         if (!cd->force && stat(file, &st) == 0) {
             if (st.st_mtime != buf->st.st_mtime) {
-                format_message("file changed, use  :w!  to overwrite");
+                werase(Message);
+                waddstr(Message, "file changed, use  :w!  to overwrite");
                 return -1;
             }
         }
@@ -45,7 +48,8 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
 
     fp = fopen(file, "w");
     if (fp == NULL) {
-        format_message("could not open '%s': %s", file, strerror(errno));
+        werase(Message);
+        wprintw(Message, "could not open '%s': %s", file, strerror(errno));
         return -1;
     }
     num_bytes = write_file(buf, cd->from, cd->to, fp);
@@ -57,9 +61,11 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
     }
 
     if (num_bytes == 0) {
-        format_message("nothing to write");
+        werase(Message);
+        waddstr(Message, "nothing to write");
     } else {
-        format_message("%s %zuL, %zuB written", file,
+        werase(Message);
+        wprintw(Message, "%s %zuL, %zuB written", file,
                 MIN(buf->num_lines, cd->to) - MIN(buf->num_lines, cd->from) + 1,
                 num_bytes);
     }
@@ -123,7 +129,8 @@ int cmd_exit_all(struct cmd_data *cd)
 int cmd_quit(struct cmd_data *cd)
 {
     if (!cd->force && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
-        format_message("buffer has changed, use  :q!  to quit");
+        werase(Message);
+        waddstr(Message, "buffer has changed, use  :q!  to quit");
         return 1;
     }
     destroy_frame(SelFrame);
@@ -138,7 +145,8 @@ int cmd_quit_all(struct cmd_data *cd)
     }
     for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
         if (!cd->force && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
-            format_message("buffer has changed, use  :qa!  to quit");
+            werase(Message);
+            waddstr(Message, "buffer has changed, use  :qa!  to quit");
             return 1;
         }
     }
@@ -154,7 +162,8 @@ int cmd_read(struct cmd_data *cd)
     if (cd->arg[0] == '\0') {
         file = SelFrame->buf->path;
         if (file == NULL) {
-            format_message("no file name");
+            werase(Message);
+            waddstr(Message, "no file name");
             return -1;
         }
     } else {
@@ -162,7 +171,8 @@ int cmd_read(struct cmd_data *cd)
     }
     fp = fopen(cd->arg, "r");
     if (fp == NULL) {
-        format_message("failed opening '%s': %s\n", file, strerror(errno));
+        werase(Message);
+        wprintw(Message, "failed opening '%s': %s\n", file, strerror(errno));
         return -1;
     }
     read_file(SelFrame->buf, &SelFrame->cur, fp);

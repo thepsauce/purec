@@ -10,17 +10,9 @@ bool IsRunning;
 
 int ExitCode;
 
-char *Message;
+WINDOW *Message;
 
-void format_message(const char *fmt, ...)
-{
-    va_list l;
-
-    free(Message);
-    va_start(l, fmt);
-    vasprintf(&Message, fmt, l);
-    va_end(l);
-}
+WINDOW *OffScreen;
 
 struct mode Mode;
 
@@ -97,7 +89,8 @@ void set_mode(int mode)
         Mode.pos = SelFrame->cur;
     }
 
-    format_message(format_messages[mode]);
+    werase(Message);
+    waddstr(Message, format_messages[mode]);
 
     Mode.type = mode;
 

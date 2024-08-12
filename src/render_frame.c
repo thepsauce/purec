@@ -1,4 +1,5 @@
 #include "buf.h"
+#include "color.h"
 #include "frame.h"
 #include "util.h"
 #include "xalloc.h"
@@ -43,19 +44,6 @@ struct state_ctx {
     size_t n;
 };
 
-#define HI_NORMAL       0
-#define HI_COMMENT      1
-#define HI_JAVADOC      2
-#define HI_TYPE         3
-#define HI_TYPE_MOD     4
-#define HI_IDENTIFIER   5
-#define HI_NUMBER       6
-#define HI_STRING       7
-#define HI_CHAR         8
-#define HI_PREPROC      9
-#define HI_OPERATOR     10
-#define HI_ERROR        11
-
 #define STATE_NULL      0
 #define STATE_START     1
 
@@ -96,26 +84,6 @@ struct lang_state {
 
 #include "highlight_c.h"
 
-static const struct {
-    /// the color pair
-    int cp;
-    /// the attributes
-    int a;
-} hi_styles[] = {
-    [HI_NORMAL] = { 0, A_NORMAL },
-    [HI_COMMENT] = { 0, A_BOLD },
-    [HI_JAVADOC] = { 0, A_BOLD | A_ITALIC },
-    [HI_TYPE] = { 0, A_BOLD },
-    [HI_TYPE_MOD] = { 0, A_ITALIC },
-    [HI_IDENTIFIER] = { 0, A_BOLD },
-    [HI_NUMBER] = { 0, A_ITALIC },
-    [HI_STRING] = { 0, A_BOLD },
-    [HI_CHAR] = { 0, A_ITALIC },
-    [HI_PREPROC] = { 0, A_UNDERLINE },
-    [HI_OPERATOR] = { 0, A_BOLD },
-    [HI_ERROR] = { 0, A_REVERSE },
-};
-
 struct lang {
     struct lang_state *states;
     const char *file_ext;
@@ -152,8 +120,7 @@ static void highlight_line(struct render_info *ri, size_t state)
     for (ctx.i = 0; ctx.i < ctx.n; ) {
         n = (*langs[ctx.lang].states[ctx.state].proc)(&ctx);
         for (; n > 0; n--) {
-            line->attribs[ctx.i].cp = hi_styles[ctx.hi].cp;
-            line->attribs[ctx.i].a = hi_styles[ctx.hi].a;
+            line->attribs[ctx.i] = ctx.hi;
             ctx.i++;
         }
     }
@@ -174,21 +141,32 @@ static void highlight_line(struct render_info *ri, size_t state)
 static void render_line(struct render_info *ri)
 {
     int w = 0;
-    struct attr *a;
+    char ch;
+    int hi;
     struct pos p;
 
     p.line = ri->line_i;
     for (p.col = 0; p.col < ri->line->n && w != ri->w;) {
-        a = &ri->line->attribs[p.col];
-        if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
-            attr_set(a->a ^ A_REVERSE, 0, NULL);
+        hi = ri->line->attribs[p.col];
+        ch = ri->line->s[p.col];
+        if (ch < 32) {
+            if (w + 1 == ri->w) {
+                break;
+            }
+            attr_set(A_REVERSE, 0, NULL);
+            addch('?');
         } else {
-            attr_set(a->a, a->cp, NULL);
+            if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
+                attr_set(HiAttribs[hi] ^ A_REVERSE, 0, NULL);
+            } else {
+                set_highlight(stdscr, hi);
+            }
+            addch(ch);
         }
-        addch(ri->line->s[p.col]);
         p.col++;
         w++;
     }
+
     if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
         attr_set(A_REVERSE, 0, NULL);
         addch(' ');
@@ -201,12 +179,15 @@ void render_frame(struct frame *frame)
     int perc;
     struct render_info ri;
     int x;
+    int orig_x;
+    size_t line;
     size_t last_line;
     size_t prev_state;
+    int w;
 
     buf = frame->buf;
 
-    /* correcting for the vertical separator */
+    /* correcting for the vertical separator and line numbers */
     if (frame->x == 0) {
         x = 0;
         ri.w = frame->w;
@@ -214,6 +195,20 @@ void render_frame(struct frame *frame)
         x = frame->x + 1;
         ri.w = frame->w - 1;
     }
+    orig_x = x;
+
+    /* only show the line numbers when there is sufficient space */
+    if (ri.w >= 8) {
+        set_highlight(stdscr, HI_LINE_NO);
+        line = 1;
+        for (int y = frame->y; y < frame->y + frame->h; y++) {
+            mvprintw(y, x, " %3zu ", line);
+            line++;
+        }
+        x += 5;
+        ri.w -= 5;
+    }
+
     ri.cur_line = &buf->lines[frame->cur.line];
     if (SelFrame != frame) {
         ri.sel_exists = false;
@@ -257,14 +252,56 @@ void render_frame(struct frame *frame)
         render_line(&ri);
     }
 
-    attr_set(0, 0, NULL);
     if (frame->x > 0) {
+        set_highlight(stdscr, HI_VERT_SPLIT);
         mvvline(frame->y, frame->x, ACS_VLINE, frame->h);
     }
     perc = 100 * (frame->cur.line + 1) / buf->num_lines;
-    mvprintw(frame->y + frame->h - 1, x, "%s%s %d%% ¶%zu/%zu☰℅%zu",
+
+    set_highlight(stdscr, HI_STATUS);
+    for (int i = x; i < frame->x + frame->w; i++) {
+        mvaddch(frame->y + frame->h - 1, i, ' ');
+    }
+
+    set_highlight(OffScreen, HI_STATUS);
+
+    mvwprintw(OffScreen, 0, 0, " %s%s",
             buf->path == NULL ? "[No name]" : buf->path,
-            buf->path == NULL || buf->event_i == buf->save_event_i ?
-                "" : "[+]",
+            buf->event_i == buf->save_event_i ?  "" : "[+]");
+    w = getcurx(OffScreen);
+    if (w > frame->w) {
+        w = frame->w;
+    }
+    copywin(OffScreen, stdscr, 0, 0,
+            frame->y + frame->h - 1, orig_x,
+            frame->y + frame->h - 1, orig_x + w - 1, 0);
+
+    mvwprintw(OffScreen, 0, 0, "%d%% ¶%zu/%zu☰℅%zu",
             perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1);
+    w = getcurx(OffScreen);
+    if (w > frame->w) {
+        w = frame->w;
+    }
+    copywin(OffScreen, stdscr, 0, 0,
+            frame->y + frame->h - 1, frame->x + frame->w - w,
+            frame->y + frame->h - 1, frame->x + frame->w - 1, 0);
+
+    wattr_set(OffScreen, 0, 0, NULL);
+}
+
+void get_visual_cursor(const struct frame *frame, int *p_x, int *p_y)
+{
+    int x;
+
+    x = frame->x;
+    if (x > 0) {
+        x++;
+    }
+
+    if (frame->w > 8) {
+        x += 5;
+    }
+
+    *p_x = x + frame->cur.col - frame->scroll.col;
+    *p_y = frame->y + frame->cur.line - frame->scroll.line;
 }

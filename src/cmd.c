@@ -1,4 +1,5 @@
 #include "buf.h"
+#include "color.h"
 #include "cmd.h"
 #include "frame.h"
 #include "fuzzy.h"
@@ -9,7 +10,6 @@
 
 #include <ctype.h>
 #include <errno.h>
-#include <ncurses.h>
 #include <string.h>
 
 #define ACCEPTS_RANGE   0x1
@@ -99,7 +99,8 @@ static const struct cmd *get_command(const char *s, size_t s_len)
         }
     }
 
-    format_message("command '%.*s' does not exist, did you mean '%s'?",
+    werase(Message);
+    wprintw(Message, "command '%.*s' does not exist, did you mean '%s'?",
             (int) s_len, s, Commands[l].name);
     return NULL;
 }
@@ -157,7 +158,8 @@ static int run_command(char *s_cmd)
         len++;
     }
     if (len == 0) {
-        format_message("expected word but got: '%.*s'", 8, s_cmd);
+        werase(Message);
+        wprintw(Message, "expected word but got: '%.*s'", 8, s_cmd);
         return -1;
     }
 
@@ -166,7 +168,8 @@ static int run_command(char *s_cmd)
         return -1;
     }
     if (cmd->callback == NULL) {
-        format_message("'%s' is not implemented", cmd->name);
+        werase(Message);
+        wprintw(Message, "'%s' is not implemented", cmd->name);
         return -1;
     }
 
@@ -181,11 +184,13 @@ static int run_command(char *s_cmd)
         }
     } else {
         if (data.has_range) {
-            format_message("'%s' does not expect a range", cmd->name);
+            werase(Message);
+            wprintw(Message, "'%s' does not expect a range", cmd->name);
             return -1;
         }
         if (data.has_number && !(cmd->flags & ACCEPTS_NUMBER)) {
-            format_message("'%s' does not expect a number", cmd->name);
+            werase(Message);
+            wprintw(Message, "'%s' does not expect a number", cmd->name);
             return -1;
         }
     }
@@ -212,11 +217,11 @@ void read_command_line(const char *beg)
 
     char *s;
 
-    free(Message);
-    Message = NULL;
+    werase(Message);
 
     set_input(0, LINES - 1, COLS, beg, 1, history, num_history);
 
+    set_highlight(stdscr, HI_CMD);
     while (render_input(), s = send_to_input(getch()), s == NULL) {
         (void) 0;
     }

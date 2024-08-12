@@ -242,7 +242,7 @@ int insert_handle_input(int c)
         }
         return r;
     }
-    if (c < 0x100 && ch >= ' ' && motions[c] == 0) {
+    if (c < 0x100 && (ch >= ' ' || ch < 0) && motions[c] == 0) {
         lines[0].s = &ch;
         lines[0].n = 1;
         ev = insert_lines(buf, &SelFrame->cur, lines, 1, 1);

@@ -92,7 +92,6 @@ struct frame *create_frame(struct frame *split, int dir, struct buf *buf)
 void destroy_frame(struct frame *frame)
 {
     struct frame *f;
-    struct frame *prev_focus;
 
     /* remove from focus chain if the frame is part of one */
     if (frame->next_focus != NULL) {
@@ -100,16 +99,8 @@ void destroy_frame(struct frame *frame)
             f = f->next_focus;
         }
         if (f != frame) {
-            prev_focus = f;
-            if (frame->next_focus == NULL) {
-                format_message("NOOOOOOOOO");
-            }
             f->next_focus = frame->next_focus;
-        } else {
-            prev_focus = NULL;
         }
-    } else {
-        prev_focus = NULL;
     }
 
     /* remove from linked list */
@@ -125,14 +116,6 @@ void destroy_frame(struct frame *frame)
     if (FirstFrame == NULL) {
         IsRunning = false;
     } else {
-        /* focus last frame if the focused frame is destroyed */
-        if (frame == SelFrame) {
-            SelFrame = prev_focus == NULL ? FirstFrame : prev_focus;
-            if (SelFrame->next_focus == NULL) {
-                SelFrame->next_focus = SelFrame;
-            }
-        }
-
         /* find frames that can expand into this frame */
         for (f = FirstFrame; f != NULL; f = f->next) {
             if (f->y >= frame->y && f->y + f->h <= frame->y + frame->h) {
@@ -152,6 +135,11 @@ void destroy_frame(struct frame *frame)
                     f->h += frame->h;
                 }
             }
+        }
+
+        if (frame == SelFrame) {
+            /* focus frame that is now at the same position */
+            SelFrame = frame_at(SelFrame->x, SelFrame->y);
         }
     }
 

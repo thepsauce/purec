@@ -84,7 +84,9 @@ static int reload_file(struct buf *buf)
 
     fp = fopen(buf->path, "r");
     if (fp == NULL) {
-        format_message("failed opening '%s': %s\n", buf->path, strerror(errno));
+        werase(Message);
+        wprintw(Message, "failed opening '%s': %s\n",
+                buf->path, strerror(errno));
         return -1;
     }
 

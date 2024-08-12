@@ -243,7 +243,8 @@ int normal_handle_input(int c)
         return 1;
 
     case CONTROL('C'):
-        format_message("Type  :qa!<ENTER>  to quit and abandon all changes");
+        werase(Message);
+        waddstr(Message, "Type  :qa!<ENTER>  to quit and abandon all changes");
         return 1;
 
     case 'v':
@@ -339,9 +340,7 @@ int normal_handle_input(int c)
         init_file_list(&file_list, ".");
         if (get_deep_files(&file_list) == 0) {
             entry = choose_fuzzy((const char**) file_list.paths, file_list.num);
-            if (entry == SIZE_MAX) {
-                format_message("[Nothing]");
-            } else {
+            if (entry != SIZE_MAX) {
                 buf = create_buffer(file_list.paths[entry]);
                 set_frame_buffer(SelFrame, buf);
             }

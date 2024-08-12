@@ -1,3 +1,4 @@
+#include "color.h"
 #include "input.h"
 #include "frame.h"
 #include "util.h"
@@ -24,6 +25,7 @@ int main(void)
 
     struct buf *buf;
     const struct input_handler *ih;
+    int cur_x, cur_y;
 
     setlocale(LC_ALL, "");
 
@@ -33,10 +35,17 @@ int main(void)
     noecho();
 
     set_tabsize(4);
-    /* keep the cursor hidden so it does not jump around */
-    curs_set(0);
 
     set_escdelay(0);
+
+    init_colors();
+
+    Message = newpad(1, 128);
+    OffScreen = newpad(1, 512);
+
+    wbkgdset(stdscr, ' ' | COLOR_PAIR(HI_NORMAL));
+    wbkgdset(Message, ' ' | COLOR_PAIR(HI_NORMAL));
+    wbkgdset(OffScreen, ' ' | COLOR_PAIR(HI_NORMAL));
 
     //buf = create_buffer("../VM_jsm/cases.h");
     buf = create_buffer("src/main.c");
@@ -49,23 +58,21 @@ int main(void)
 
     IsRunning = true;
     while (IsRunning) {
+        curs_set(0);
         erase();
         for (struct frame *f = FirstFrame; f != NULL; f = f->next) {
             render_frame(f);
         }
-        if (Message != NULL) {
-            move(LINES - 1, 0);
-            addstr(Message);
-        }
-        move(SelFrame->y + SelFrame->cur.line - SelFrame->scroll.line,
-                (SelFrame->x == 0 ? 0 : SelFrame->x + 1) + SelFrame->cur.col -
-                SelFrame->scroll.col);
+
+        copywin(Message, stdscr, 0, 0, LINES - 1, 0, LINES - 1, COLS - 1, 0);
+
+        get_visual_cursor(SelFrame, &cur_x, &cur_y);
+        move(cur_y, cur_x);
         curs_set(1);
         while (Mode.counter = 0, ih = &input_handlers[Mode.type],
                 ih->handler(ih->getter_ch()) == 0) {
             (void) 0;
         }
-        curs_set(0);
     }
 
     /* restore terminal state */

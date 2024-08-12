@@ -11,9 +11,10 @@
 #define C_STATE_PREPROC_TRAIL           12
 
 const char *c_types[] = {
+    "FILE",
+    "bool",
     "char",
     "double",
-    "FILE",
     "float",
     "int",
     "long",
@@ -396,6 +397,7 @@ unsigned c_state_common(struct state_ctx *ctx)
     case '=':
     case '>':
     case '?':
+    case '^':
     case '|':
     case '~':
         ctx->hi = HI_OPERATOR;
@@ -467,6 +469,7 @@ unsigned c_state_multi_comment(struct state_ctx *ctx)
 {
     size_t i;
 
+    ctx->hi = HI_COMMENT;
     if (ctx->i + 1 < ctx->n && ctx->s[ctx->i] == '*' &&
             ctx->s[ctx->i + 1] == '/') {
         ctx->state = ctx->state == C_STATE_COMMENT ? STATE_START :
@@ -481,7 +484,6 @@ unsigned c_state_multi_comment(struct state_ctx *ctx)
         ctx->hi = HI_JAVADOC;
         return i - ctx->i;
     }
-    ctx->hi = HI_COMMENT;
     return 1;
 }
 

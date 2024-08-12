@@ -1,3 +1,4 @@
+#include "color.h"
 #include "fuzzy.h"
 #include "mode.h"
 #include "input.h"
@@ -6,7 +7,6 @@
 
 #include <ctype.h>
 #include <errno.h>
-#include <ncurses.h>
 #include <string.h>
 
 #include <dirent.h>
@@ -55,6 +55,8 @@ static void render_entries(void)
     int x;
     size_t s_i;
     size_t pat_i;
+
+    set_highlight(stdscr, HI_FUZZY);
 
     e = MIN(Fuzzy.num_entries, (size_t) (Fuzzy.scroll.line + Fuzzy.h - 2));
     for (i = Fuzzy.scroll.line; i < e; i++) {
