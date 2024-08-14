@@ -33,13 +33,6 @@ struct raw_line {
 /// if the line has a gdb breakpoint
 #define LINE_BREAKPOINT 0x1
 
-struct attr {
-    /// color pair
-    int cp;
-    /// render attributes
-    attr_t a;
-};
-
 struct line {
     /// data of the line
     char *s;

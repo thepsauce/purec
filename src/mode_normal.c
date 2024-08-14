@@ -10,6 +10,11 @@
 int normal_handle_input(int c)
 {
     static int motions[KEY_MAX] = {
+        [KEY_LEFT] = MOTION_LEFT,
+        [KEY_RIGHT] = MOTION_RIGHT,
+        [KEY_UP] = MOTION_UP,
+        [KEY_DOWN] = MOTION_DOWN,
+
         ['h'] = MOTION_LEFT,
         ['l'] = MOTION_RIGHT,
         ['k'] = MOTION_UP,
@@ -24,10 +29,8 @@ int normal_handle_input(int c)
         ['I'] = MOTION_HOME_SP,
         ['A'] = MOTION_END,
 
-        ['a'] = MOTION_RIGHT,
-
-        ['G'] = MOTION_FILE_END,
         ['g'] = MOTION_FILE_BEG,
+        ['G'] = MOTION_FILE_END,
 
         [0x7f] = MOTION_PREV,
         [KEY_BACKSPACE] = MOTION_PREV,
