@@ -1,11 +1,10 @@
 #include "buf.h"
-#include "color.h"
 #include "cmd.h"
+#include "color.h"
 #include "frame.h"
 #include "fuzzy.h"
 #include "input.h"
-#include "mode.h"
-#include "util.h"
+#include "purec.h"
 #include "xalloc.h"
 
 #include <ctype.h>
@@ -222,7 +221,7 @@ void read_command_line(const char *beg)
     set_input(0, LINES - 1, COLS, beg, 1, history, num_history);
 
     set_highlight(stdscr, HI_CMD);
-    while (render_input(), s = send_to_input(getch()), s == NULL) {
+    while (render_input(), s = send_to_input(get_ch()), s == NULL) {
         (void) 0;
     }
 

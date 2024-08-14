@@ -1,9 +1,8 @@
-#include "cmd.h"
-#include "fuzzy.h"
-#include "frame.h"
 #include "buf.h"
-#include "mode.h"
-#include "util.h"
+#include "cmd.h"
+#include "frame.h"
+#include "fuzzy.h"
+#include "purec.h"
 
 #include <ctype.h>
 #include <ncurses.h>
@@ -54,16 +53,13 @@ int normal_handle_input(int c)
     buf = SelFrame->buf;
     switch (c) {
     case 'g':
-        Mode.extra_counter = Mode.counter;
-        Mode.counter = 0;
-        e_c = getch_digit();
-        Mode.counter = safe_mul(correct_counter(Mode.counter),
-                correct_counter(Mode.extra_counter));
+        e_c = get_extra_char();
         switch (e_c) {
         case 'G':
         case 'g':
             c = e_c;
             break;
+
         default:
             e_c = 0;
         }
@@ -77,11 +73,9 @@ int normal_handle_input(int c)
         set_mode(INSERT_MODE);
         /* fall through */
     case 'd':
-        Mode.extra_counter = Mode.counter;
-        Mode.counter = 0;
-        e_c = getch_digit();
-        Mode.counter = safe_mul(correct_counter(Mode.counter),
-                correct_counter(Mode.extra_counter));
+        if (c != 'D') {
+            e_c = get_extra_char();
+        }
 
         /* fall through */
     case 'D':
@@ -102,10 +96,9 @@ int normal_handle_input(int c)
             }
             from.line = cur.line;
             from.col = 0;
-            to.line = safe_add(from.line, correct_counter(Mode.counter) - 1);
+            to.line = safe_add(from.line, Core.counter);
             to.col = SIZE_MAX;
             ev = delete_range(buf, &from, &to);
-            ev->flags |= IS_TRANSIENT;
             indent_line(buf, from.line);
             from.col = buf->lines[from.line].n;
             set_cursor(SelFrame, &from);
@@ -116,7 +109,7 @@ int normal_handle_input(int c)
                 break;
             }
 
-            to.line = safe_add(cur.line, correct_counter(Mode.counter));
+            to.line = safe_add(cur.line, Core.counter);
             if (to.line > buf->num_lines) {
                 to.line = buf->num_lines;
             }
@@ -134,18 +127,16 @@ int normal_handle_input(int c)
 
             ev = delete_range(buf, &from, &to);
             if (SelFrame->cur.line == buf->num_lines) {
-                /* just go up once */
-                Mode.counter = 0;
-                do_motion(SelFrame, MOTION_UP);
+                move_vert(SelFrame, 1, -1);
             } else {
                 clip_column(SelFrame);
             }
             break;
 
         default:
-            Mode.type = INSERT_MODE;
+            Core.mode = INSERT_MODE;
             do_motion(SelFrame, motions[e_c]);
-            Mode.type = NORMAL_MODE;
+            Core.mode = NORMAL_MODE;
             ev = delete_range(buf, &cur, &SelFrame->cur);
             if (cur.line < SelFrame->cur.line ||
                     (cur.line == SelFrame->cur.line &&
@@ -158,57 +149,59 @@ int normal_handle_input(int c)
         if (ev != NULL) {
             ev->undo_cur = cur;
             ev->redo_cur = SelFrame->cur;
-            r = 1;
+            r = UPDATE_UI;
         }
+        r |= DO_RECORD;
         break;
 
     case 'x':
     case 's':
         cur = SelFrame->cur;
-        cur.col = safe_add(cur.col, correct_counter(Mode.counter));
+        cur.col = safe_add(cur.col, Core.counter);
         ev = delete_range(buf, &SelFrame->cur, &cur);
         if (ev != NULL) {
             ev->undo_cur = SelFrame->cur;
             ev->redo_cur = SelFrame->cur;
-            r = 1;
+            r = UPDATE_UI;
         }
         if (c == 's') {
-            Mode.counter = 0;
+            Core.counter = 0;
             set_mode(INSERT_MODE);
-            r = 1;
+            r = UPDATE_UI;
         }
+        r |= DO_RECORD;
         break;
 
     case 'X':
         cur = SelFrame->cur;
-        move_horz(SelFrame, correct_counter(Mode.counter), -1);
+        move_horz(SelFrame, Core.counter, -1);
         ev = delete_range(buf, &cur, &SelFrame->cur);
         if (ev != NULL) {
             ev->undo_cur = cur;
             ev->redo_cur = SelFrame->cur;
-            r = 1;
+            r = UPDATE_UI | DO_RECORD;
         }
         break;
 
     case 'u':
-        for (size_t i = 0; i < correct_counter(Mode.counter); i++) {
+        for (size_t i = 0; i < Core.counter; i++) {
             ev = undo_event(buf);
             if (ev == NULL) {
                 return 0;
             }
         }
         set_cursor(SelFrame, &ev->undo_cur);
-        return 1;
+        return UPDATE_UI;
 
     case CONTROL('R'):
-        for (size_t i = 0; i < correct_counter(Mode.counter); i++) {
+        for (size_t i = 0; i < Core.counter; i++) {
             ev = redo_event(buf);
             if (ev == NULL) {
                 return 0;
             }
         }
         set_cursor(SelFrame, &ev->redo_cur);
-        return 1;
+        return UPDATE_UI;
 
     case 'O':
         cur = SelFrame->cur;
@@ -218,11 +211,10 @@ int normal_handle_input(int c)
         lines[1].n = 0;
         ev = insert_lines(buf, &SelFrame->cur, lines, 2, 1);
         ev->undo_cur = cur;
-        ev->flags |= IS_TRANSIENT;
         indent_line(buf, SelFrame->cur.line);
         (void) move_horz(SelFrame, SIZE_MAX, 1);
         ev->redo_cur = SelFrame->cur;
-        return 1;
+        return UPDATE_UI | DO_RECORD;
 
     case 'o':
         cur = SelFrame->cur;
@@ -232,35 +224,30 @@ int normal_handle_input(int c)
         lines[1].n = 0;
         ev = insert_lines(buf, &SelFrame->cur, lines, 2, 1);
         ev->undo_cur = cur;
-        ev->flags |= IS_TRANSIENT;
         indent_line(buf, SelFrame->cur.line + 1);
         (void) move_vert(SelFrame, 1, 1);
         ev->redo_cur = SelFrame->cur;
-        return 1;
+        return UPDATE_UI | DO_RECORD;
 
     case ':':
         read_command_line(":");
-        return 1;
+        return UPDATE_UI;
 
     case CONTROL('C'):
         werase(Message);
         waddstr(Message, "Type  :qa!<ENTER>  to quit and abandon all changes");
-        return 1;
+        return UPDATE_UI;
 
     case 'v':
         set_mode(VISUAL_MODE);
-        return 1;
+        return UPDATE_UI | DO_RECORD;
 
     case 'V':
         set_mode(VISUAL_LINE_MODE);
-        return 1;
+        return UPDATE_UI | DO_RECORD;
 
     case CONTROL('W'):
-        Mode.extra_counter = Mode.counter;
-        Mode.counter = 0;
-        e_c = getch_digit();
-        Mode.counter = safe_mul(correct_counter(Mode.counter),
-                correct_counter(Mode.extra_counter));
+        e_c = get_extra_char();
 
         frame = SelFrame;
         switch (e_c) {
@@ -320,11 +307,15 @@ int normal_handle_input(int c)
         if (frame != NULL && frame != SelFrame) {
             (void) focus_frame(frame);
         }
-        return 1;
+        return UPDATE_UI;
 
     case CONTROL('V'):
         set_mode(VISUAL_BLOCK_MODE);
-        return 1;
+        return UPDATE_UI | DO_RECORD;
+
+    case '.':
+        Core.repeat_count = Core.counter;
+        return UPDATE_UI;
 
     case 'A':
     case 'a':
@@ -334,7 +325,7 @@ int normal_handle_input(int c)
         if (c == 'a') {
             move_horz(SelFrame, 1, 1);
         }
-        return 1;
+        return UPDATE_UI | DO_RECORD;
 
     case 'Z':
         init_file_list(&file_list, ".");
@@ -346,7 +337,7 @@ int normal_handle_input(int c)
             }
         }
         clear_file_list(&file_list);
-        return 1;
+        return UPDATE_UI;
     }
     return r | do_motion(SelFrame, motions[c]);
 }

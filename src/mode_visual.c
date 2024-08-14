@@ -1,7 +1,7 @@
+#include "buf.h"
 #include "cmd.h"
 #include "frame.h"
-#include "buf.h"
-#include "mode.h"
+#include "purec.h"
 #include "util.h"
 
 #include <ctype.h>
@@ -54,11 +54,7 @@ int visual_handle_input(int c)
         return 1;
 
     case 'g':
-        Mode.extra_counter = Mode.counter;
-        Mode.counter = 0;
-        e_c = getch_digit();
-        Mode.counter = safe_mul(correct_counter(Mode.counter),
-                correct_counter(Mode.extra_counter));
+        e_c = get_extra_char();
         switch (e_c) {
         case 'G':
         case 'g':
@@ -91,16 +87,16 @@ int visual_handle_input(int c)
             }
             ev = delete_block(buf, &sel.beg, &sel.end);
             if (c == 'C' || c == 'c') {
-                Mode.num_dup = sel.end.line - sel.beg.line + 1;
+                Core.move_down_count = sel.end.line - sel.beg.line + 1;
             }
         } else {
-            if (Mode.type == VISUAL_MODE && isupper(c)) {
+            if (Core.mode == VISUAL_MODE && isupper(c)) {
                 /* upgrade to line deletion */
                 sel.beg.col = 0;
                 sel.end.col = 0;
                 sel.end.line++;
                 line_based = true;
-            } else if (Mode.type == VISUAL_LINE_MODE) {
+            } else if (Core.mode == VISUAL_LINE_MODE) {
                 line_based = true;
             } else {
                 line_based = false;
@@ -130,7 +126,7 @@ int visual_handle_input(int c)
 
         set_mode(next_mode);
         if (ev != NULL) {
-            ev->undo_cur = Mode.pos;
+            ev->undo_cur = Core.pos;
             if (ev_o != NULL) {
                 ev_o->redo_cur = sel.beg;
             } else {
@@ -157,21 +153,21 @@ int visual_handle_input(int c)
             return 0;
         }
         ev->undo_cur = SelFrame->cur;
-        ev->redo_cur = Mode.pos;
+        ev->redo_cur = Core.pos;
         return 1;
 
     case 'O':
     case 'o':
-        if (Mode.type == VISUAL_BLOCK_MODE && c == 'O') {
+        if (Core.mode == VISUAL_BLOCK_MODE && c == 'O') {
             cur.col = SelFrame->cur.col;
-            SelFrame->cur.col = Mode.pos.col;
-            Mode.pos.col = cur.col;
+            SelFrame->cur.col = Core.pos.col;
+            Core.pos.col = cur.col;
             return 1;
         }
         /* swap the cursor */
         cur = SelFrame->cur;
-        SelFrame->cur = Mode.pos;
-        Mode.pos = cur;
+        SelFrame->cur = Core.pos;
+        Core.pos = cur;
         return 1;
 
     case ':':
@@ -179,16 +175,16 @@ int visual_handle_input(int c)
         return 1;
 
     case 'v':
-        set_mode(Mode.type == VISUAL_MODE ? NORMAL_MODE : VISUAL_MODE);
+        set_mode(Core.mode == VISUAL_MODE ? NORMAL_MODE : VISUAL_MODE);
         return 1;
 
     case 'V':
-        set_mode(Mode.type == VISUAL_LINE_MODE ? NORMAL_MODE :
+        set_mode(Core.mode == VISUAL_LINE_MODE ? NORMAL_MODE :
                 VISUAL_LINE_MODE);
         return 1;
 
     case CONTROL('V'):
-        set_mode(Mode.type == VISUAL_BLOCK_MODE ? NORMAL_MODE :
+        set_mode(Core.mode == VISUAL_BLOCK_MODE ? NORMAL_MODE :
                 VISUAL_BLOCK_MODE);
         return 1;
 
@@ -198,7 +194,12 @@ int visual_handle_input(int c)
         set_mode(INSERT_MODE);
         if (sel.is_block) {
             set_cursor(SelFrame, &sel.beg);
-            Mode.num_dup = sel.end.line - sel.beg.line + 1;
+            if (Core.play_i == SIZE_MAX) {
+                Core.move_down_count = sel.end.line - sel.beg.line;
+                Core.st_repeat_count = Core.counter - 1;
+                Core.repeat_count = Core.st_repeat_count;
+                Core.play_i = Core.dot_i;
+            }
             if (c == 'A') {
                 move_horz(SelFrame, 1, 1);
             }
@@ -209,7 +210,7 @@ int visual_handle_input(int c)
             } else {
                 set_cursor(SelFrame, &sel.beg);
             }
-            Mode.num_dup = 1;
+            Core.repeat_count = Core.counter - 1;
         }
         return 1;
     }

@@ -1,7 +1,7 @@
 #include "frame.h"
-#include "xalloc.h"
-#include "mode.h"
+#include "purec.h"
 #include "util.h"
+#include "xalloc.h"
 
 #include <ctype.h>
 #include <stdint.h>
@@ -255,16 +255,16 @@ int do_motion(struct frame *frame, int motion)
 
     switch (motion) {
     case MOTION_LEFT:
-        return move_horz(frame, correct_counter(Mode.counter), -1);
+        return move_horz(frame, Core.counter, -1);
 
     case MOTION_RIGHT:
-        return move_horz(frame, correct_counter(Mode.counter), 1);
+        return move_horz(frame, Core.counter, 1);
 
     case MOTION_DOWN:
-        return move_vert(frame, correct_counter(Mode.counter), 1);
+        return move_vert(frame, Core.counter, 1);
 
     case MOTION_UP:
-        return move_vert(frame, correct_counter(Mode.counter), -1);
+        return move_vert(frame, Core.counter, -1);
 
     case MOTION_HOME:
         return move_horz(frame, SIZE_MAX, -1);
@@ -273,20 +273,20 @@ int do_motion(struct frame *frame, int motion)
         return move_horz(frame, SIZE_MAX, 1);
 
     case MOTION_PREV:
-        return move_dir(frame, correct_counter(Mode.counter), -1);
+        return move_dir(frame, Core.counter, -1);
 
     case MOTION_NEXT:
-        return move_dir(frame, correct_counter(Mode.counter), 1);
+        return move_dir(frame, Core.counter, 1);
 
     case MOTION_HOME_SP:
         return move_horz(frame, frame->cur.col -
                 get_line_indent(frame->buf, frame->cur.line), -1);
 
     case MOTION_FILE_BEG:
-        return set_vert(frame, correct_counter(Mode.counter) - 1);
+        return set_vert(frame, Core.counter - 1);
 
     case MOTION_FILE_END:
-        new_line = correct_counter(Mode.counter);
+        new_line = Core.counter;
         if (new_line >= frame->buf->num_lines) {
             return move_vert(frame, SIZE_MAX, 1);
         }
@@ -303,8 +303,8 @@ int do_motion(struct frame *frame, int motion)
         for (size_t i = frame->cur.line; i > 0; ) {
             i--;
             if (frame->buf->lines[i].n == 0) {
-                if (Mode.counter > 1) {
-                    Mode.counter--;
+                if (Core.counter > 1) {
+                    Core.counter--;
                     continue;
                 }
                 return move_vert(frame, frame->cur.line - i, -1);
@@ -316,8 +316,8 @@ int do_motion(struct frame *frame, int motion)
         for (size_t i = frame->cur.line + 1; i < frame->buf->num_lines;
                 i++) {
             if (frame->buf->lines[i].n == 0) {
-                if (Mode.counter > 1) {
-                    Mode.counter--;
+                if (Core.counter > 1) {
+                    Core.counter--;
                     continue;
                 }
                 return move_vert(frame, i - frame->cur.line, 1);

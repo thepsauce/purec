@@ -5,7 +5,7 @@
  *    Buffer    * * * * *
  * * * * * * * */
 
-#include "mode.h"
+#include "purec.h"
 
 #include <stdbool.h>
 #include <stdlib.h>

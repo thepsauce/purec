@@ -1,5 +1,4 @@
 #include "buf.h"
-#include "util.h"
 #include "xalloc.h"
 
 #include <ctype.h>
@@ -7,8 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
-
-#include <ncurses.h>
 
 struct buf *FirstBuffer;
 

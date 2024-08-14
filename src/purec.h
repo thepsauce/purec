@@ -1,9 +1,17 @@
-#ifndef MODE_H
-#define MODE_H
+#ifndef PUREC_H
+#define PUREC_H
 
-/* ** *** **** *** ** *
- *        Mode        *
- * ** *** **** *** ** */
+/********************************************************
+ * PPPPPPP    U      U   RRRRRRR    EEEEEEEE     CCCCC  *
+ *  P     P   U      U    R     R    E     E    C     C *
+ *  P     P   U      U    R     R    E         C        *
+ *  PPPPPP    U      U    RRRRRR     E   E     C        *
+ *  P         U      U    R  R       EEEEE     C        *
+ *  P         U      U    R   R      E   E     C        *
+ *  P         U      U    R    R     E         C        *
+ *  P         U      U    R    R     E     E    C     C *
+ * PPP         UUUUUU    RR    R    EEEEEEEE     CCCCC  *
+ ********************************************************/
 
 #include "line.h"
 #include "util.h"
@@ -39,17 +47,15 @@ extern int ExitCode;
 #define VISUAL_BLOCK_MODE (2|4) /* 6 */
 
 /**
- * The mode struct contains information about all modes.
+ * The core struct contains information about all modes and the state of the
+ * editor.
  */
-/* TODO: rename to editor or similar */
-extern struct mode {
+extern struct core {
     /// type of the mode (`*_MODE`)
-    int type;
-    /// additional counter
-    size_t extra_counter;
+    int mode;
     /// counter
     size_t counter;
-    /// saved cursor positon (for visual mode and multi line insertion)
+    /// saved cursor positon (for visual mode)
     struct pos pos;
     /// normal mode
     struct normal_mode {
@@ -58,13 +64,38 @@ extern struct mode {
         size_t num_jumps;
         size_t jump_i;
     } normal;
-    /// how many times the last insertion should be repeated
-    size_t repeat_count;
+
     /// event from which the last insert mode started
     size_t ev_from_ins;
-    /// number of lines to add text to
-    size_t num_dup;
-} Mode;
+
+    /* All variables below here shall NOT be modified while a recording is
+     * playing. To check if a recording is playing, do
+     * `if (is_playback())`.
+     */
+
+    /**
+     * Series of key presses. Keys larger than 0xff, for example `KEY_LEFT` are
+     * encoded with (in binary) 1111111X XXXXXXXX, so this encodes the range from
+     * 256 to 511 (0777 is the maximum ncurses key value) (inclusive).
+     * This works because even in UTF-8 because 11111110 or 11111111 mean
+     * nothing.
+     */
+    char *rec;
+    /// the amount of inputted characters
+    size_t rec_len;
+    /// number of allocated bytes for `rec`
+    size_t a_rec;
+    /// needed in combination with `move_down_count` to reset the `repeat_count`
+    size_t st_repeat_count;
+    /// how many times to play the recording from `dot_i`
+    size_t repeat_count;
+    /// how many times to move down
+    size_t move_down_count;
+    /// the action to repeat on '.'
+    size_t dot_i;
+    /// the index within the current playback
+    size_t play_i;
+} Core;
 
 struct selection {
     /// if it is a block selection
@@ -76,16 +107,24 @@ struct selection {
 };
 
 /**
- * Multiplies the counter by 10 and adds given number to it.
+ * Checks if a recording is currently being played. If yes, then the next call
+ * to `get_ch()` will NOT be interactive user input but a playback.
  *
- * When it would overflow, the counter is set to `SIZE_MAX` instead.
- *
- * @param d Number to add (best between 0 and 9 (inclusive))
+ * @return If a recording is played.
  */
-void shift_add_counter(int d);
+bool is_playback(void);
+
+/**
+ * Get input from the user or the playback record.
+ *
+ * @return Next input character.
+ */
+int get_ch(void);
 
 /**
  * Gets user input like normal but handle digits in a special way.
+ *
+ * This function uses `get_ch()`.
  *
  * If the input is '0' and the counter is 0, then '0' is returned but when the
  * counter is non zero, then the counter is multiplied by 10 and the next
@@ -94,7 +133,7 @@ void shift_add_counter(int d);
  *
  * @return Next input character.
  */
-int getch_digit(void);
+int get_extra_char(void);
 
 /**
  * Gets the end of a line which is different in insert and normal mode.
@@ -109,18 +148,9 @@ int getch_digit(void);
 size_t get_mode_line_end(struct line *line);
 
 /**
- * Gets the corrected counter.
- *
- * @param counter   Counter value.
- *
- * @return 1 if the counter 0, otherwise the counter.
- */
-size_t correct_counter(size_t counter);
-
-/**
  * Sets the new mode and does any transition needed like changing cursor shape.
  *
- * If the current mode is not a visual mode but the new mode is, `Mode.pos` is
+ * If the current mode is not a visual mode but the new mode is, `Core.pos` is
  * set to the cursor position within the current frame (`SelFrame`). This is
  * used to render the selection and do actions upon it.
  *
@@ -131,7 +161,7 @@ void set_mode(int mode);
 /**
  * Gets the selection of the current frame.
  *
- * This simply gets the cursor position within the current frame and `Mode.pos`
+ * This simply gets the cursor position within the current frame and `Core.pos`
  * and sorts them, there is additional correction when the visual line mode is
  * active. When the visual block mode is active, this is a block selection and
  * `is_block` is set to true.
@@ -152,24 +182,28 @@ bool get_selection(struct selection *sel);
  */
 bool is_in_selection(const struct selection *sel, const struct pos *pos);
 
+#define UPDATE_UI 0x1
+#define DO_RECORD 0x2
+
 /**
  * Handles a key input for the normal mode.
  *
- * @return Whether the ui needs to be updated.
+ * @return Bit wise OR of the above flags.
  */
 int normal_handle_input(int c);
 
 /**
  * Handles a key input for the insert mode.
  *
- * @return Whether the ui needs to be updated.
+ * @return Bit wise OR of the above flags.
  */
 int insert_handle_input(int c);
 
 /**
- * Handles a key input for the visual mode.
+ * Handles a key input for the visual mode, this also includes the visual line
+ * mode and visual block mode.
  *
- * @return Whether the ui needs to be updated.
+ * @return Bit wise OR of the above flags.
  */
 int visual_handle_input(int c);
 

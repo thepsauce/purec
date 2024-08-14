@@ -1,6 +1,5 @@
 #include "color.h"
 #include "fuzzy.h"
-#include "mode.h"
 #include "input.h"
 #include "util.h"
 #include "xalloc.h"
