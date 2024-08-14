@@ -167,7 +167,7 @@ static void render_line(struct render_info *ri)
         w++;
     }
 
-    if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
+    if (w != ri->w && ri->sel_exists && is_in_selection(&ri->sel, &p)) {
         attr_set(A_REVERSE, 0, NULL);
         addch(' ');
     }
@@ -200,9 +200,14 @@ void render_frame(struct frame *frame)
     /* only show the line numbers when there is sufficient space */
     if (ri.w >= 8) {
         set_highlight(stdscr, HI_LINE_NO);
-        line = 1;
+        line = frame->scroll.line + 1;
         for (int y = frame->y; y < frame->y + frame->h; y++) {
-            mvprintw(y, x, " %3zu ", line);
+            if (line > buf->num_lines) {
+                set_highlight(stdscr, HI_NORMAL);
+                mvprintw(y, x, " ~   ");
+            } else {
+                mvprintw(y, x, " %3zu ", line);
+            }
             line++;
         }
         x += 5;
