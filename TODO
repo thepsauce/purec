@@ -2,8 +2,12 @@
     [ ] Add session restore
     [ ] Add session saving
 
-[ ] Add motions
-    [ ] Add word movement motions
+[-] Add motions
+    [-] Add word movement motions
+        [X] Add w
+        [X] Add e
+        [X] Add b
+        [ ] Add ge
 
 [ ] Add modes
     [ ] Add replace mode

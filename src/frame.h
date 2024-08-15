@@ -180,6 +180,12 @@ void set_cursor(struct frame *frame, const struct pos *pos);
 #define MOTION_PARA_UP      14
 /// move down a paragraph
 #define MOTION_PARA_DOWN    15
+/// move to next word
+#define MOTION_NEXT_WORD    16
+/// move to the end of the next word
+#define MOTION_END_WORD     17
+/// move to previous word
+#define MOTION_PREV_WORD    18
 
 /**
  * Does a special cursor motion.

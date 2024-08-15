@@ -250,9 +250,23 @@ void set_cursor(struct frame *frame, const struct pos *pos)
     (void) adjust_scroll(frame);
 }
 
+int get_char_state(char ch)
+{
+    if (isblank(ch)) {
+        return 2;
+    }
+    if (isalnum(ch) || ch == '_') {
+        return 1;
+    }
+    return 0;
+}
+
 int do_motion(struct frame *frame, int motion)
 {
     size_t new_line;
+    struct line *line;
+    struct pos pos;
+    int s, o_s;
 
     switch (motion) {
     case MOTION_LEFT:
@@ -326,6 +340,146 @@ int do_motion(struct frame *frame, int motion)
         }
         return move_vert(frame,
                 frame->buf->num_lines - 1 - frame->cur.line, 1);
+
+    case MOTION_NEXT_WORD:
+        pos = SelFrame->cur;
+        line = &SelFrame->buf->lines[pos.line];
+
+    again_next:
+        s = -1;
+        while (pos.col < line->n) {
+            o_s = get_char_state(line->s[pos.col]);
+            if (s >= 0 && s != o_s) {
+                break;
+            }
+            pos.col++;
+            s = o_s;
+        }
+
+        if (pos.col == line->n) {
+            if (pos.line + 1 < SelFrame->buf->num_lines) {
+                pos.line++;
+                pos.col = 0;
+                line++;
+            }
+        }
+
+        for (; pos.col < line->n; pos.col++) {
+            if (!isblank(line->s[pos.col])) {
+                break;
+            }
+        }
+
+        if (is_point_equal(&SelFrame->cur, &pos)) {
+            return 0;
+        }
+
+        if (Core.counter > 1) {
+            Core.counter--;
+            goto again_next;
+        }
+
+        set_cursor(SelFrame, &pos);
+        return 1;
+
+    case MOTION_END_WORD:
+        pos = SelFrame->cur;
+        line = &SelFrame->buf->lines[pos.line];
+
+    again_end:
+        pos.col++;
+        s = -1;
+        while (1) {
+            for (; pos.col < line->n; pos.col++) {
+                if (!isblank(line->s[pos.col])) {
+                    break;
+                }
+            }
+
+            if (pos.col < line->n) {
+                break;
+            }
+
+            if (pos.line + 1 >= SelFrame->buf->num_lines) {
+                break;
+            }
+
+            pos.line++;
+            pos.col = 0;
+            line++;
+        }
+
+        while (pos.col < line->n) {
+            o_s = get_char_state(line->s[pos.col]);
+            if (s >= 0 && s != o_s) {
+                break;
+            }
+            s = o_s;
+            pos.col++;
+        }
+
+        if (pos.col > 0) {
+            pos.col--;
+        }
+
+        if (is_point_equal(&SelFrame->cur, &pos)) {
+            return 0;
+        }
+
+        if (Core.counter > 1) {
+            Core.counter--;
+            goto again_end;
+        }
+
+        set_cursor(SelFrame, &pos);
+        return 1;
+
+    case MOTION_PREV_WORD:
+        pos = SelFrame->cur;
+        line = &SelFrame->buf->lines[pos.line];
+
+    again_prev:
+        for (; pos.col > 0; pos.col--) {
+            if (!isblank(line->s[pos.col - 1])) {
+                break;
+            }
+        }
+
+        if (pos.col == 0) {
+            if (pos.line > 0) {
+                pos.line--;
+                pos.col = SelFrame->buf->lines[pos.line].n;
+                line--;
+            }
+        }
+
+        for (; pos.col > 0; pos.col--) {
+            if (!isblank(line->s[pos.col - 1])) {
+                break;
+            }
+        }
+
+        s = -1;
+        while (pos.col > 0) {
+            o_s = get_char_state(line->s[pos.col - 1]);
+            if (s >= 0 && s != o_s) {
+                break;
+            }
+            pos.col--;
+            s = o_s;
+        }
+
+        if (is_point_equal(&SelFrame->cur, &pos)) {
+            return 0;
+        }
+
+        if (Core.counter > 1) {
+            Core.counter--;
+            goto again_prev;
+        }
+
+        set_cursor(SelFrame, &pos);
+        return 1;
     }
     return 0;
 }

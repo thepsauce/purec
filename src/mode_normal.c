@@ -31,6 +31,15 @@ int normal_handle_input(int c)
         ['0'] = MOTION_HOME,
         ['$'] = MOTION_END,
 
+        ['W'] = MOTION_NEXT_WORD,
+        ['w'] = MOTION_NEXT_WORD,
+
+        ['E'] = MOTION_END_WORD,
+        ['e'] = MOTION_END_WORD,
+
+        ['B'] = MOTION_PREV_WORD,
+        ['b'] = MOTION_PREV_WORD,
+
         [KEY_HOME] = MOTION_HOME,
         [KEY_END] = MOTION_END,
 
@@ -143,6 +152,10 @@ int normal_handle_input(int c)
         default:
             Core.mode = INSERT_MODE;
             do_motion(SelFrame, motions[e_c]);
+            if (e_c == 'e') {
+                /* TODO: how can this delete bind be improved.. */
+                SelFrame->cur.col++;
+            }
             Core.mode = NORMAL_MODE;
             ev = delete_range(buf, &cur, &SelFrame->cur);
             if (cur.line < SelFrame->cur.line ||
