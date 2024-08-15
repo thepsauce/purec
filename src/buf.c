@@ -219,7 +219,6 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
 {
     struct undo_event ev;
     struct raw_line *lines, *line;
-    const struct raw_line *c_last;
     size_t num_lines;
 
     if (c_num_lines == 0 || repeat == 0) {
@@ -230,16 +229,17 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
     num_lines = 1 + (c_num_lines - 1) * repeat;
     lines = xreallocarray(NULL, num_lines, sizeof(*lines));
     line = &lines[0];
-    c_last = &c_lines[c_num_lines - 1];
     if (c_num_lines == 1) {
-        line->n = c_last->n * repeat;
-        line->s = xmalloc(c_last->n * repeat);
+        line->n = c_lines->n * repeat;
+        line->s = xmalloc(c_lines->n * repeat);
         for (size_t r = 0; r < repeat; r++) {
-            memcpy(&line->s[r * c_last->n], &c_last->s[0], c_last->n);
+            memcpy(&line->s[r * c_lines->n], &c_lines->s[0], c_lines->n);
         }
     } else {
+        init_raw_line(line, &c_lines[0].s[0], c_lines[0].n);
+        line++;
         for (size_t r = 0;;) {
-            for (size_t i = 0; i < c_num_lines; i++) {
+            for (size_t i = 1; i < c_num_lines; i++) {
                 init_raw_line(line, &c_lines[i].s[0], c_lines[i].n);
                 line++;
             }
@@ -247,9 +247,11 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
             if (r >= repeat) {
                 break;
             }
-            line[-1].s = xrealloc(line[-1].s, line[-1].n + c_last->n);
-            memcpy(&line[-1].s[line[-1].n], &c_last->s[0], c_last->n);
-            lines[-1].n += c_last->n;
+            if (lines[0].n > 0) {
+                line[-1].s = xrealloc(line[-1].s, line[-1].n + lines[0].n);
+                memcpy(&line[-1].s[line[-1].n], &lines[0].s[0], lines[0].n);
+                line[-1].n += lines[0].n;
+            }
         }
     }
 
