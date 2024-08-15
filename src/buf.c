@@ -322,6 +322,31 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
     mark_dirty(at_line);
 }
 
+struct undo_event *break_line(struct buf *buf, const struct pos *pos)
+{
+    struct line *line, *at_line;
+    struct undo_event ev;
+
+    update_dirty_lines(buf, pos->line, pos->line + 1);
+
+    line = grow_lines(buf, pos->line + 1, 1);
+    at_line = &buf->lines[pos->line];
+    line->flags = 0;
+    line->state = 0;
+    line->attribs = NULL;
+    line->n = at_line->n - pos->col;
+    line->s = xmemdup(&at_line->s[pos->col], line->n);
+    at_line->n = pos->col;
+
+    mark_dirty(at_line);
+
+    ev.flags = IS_INSERTION;
+    ev.pos = *pos;
+    ev.lines = xcalloc(2, sizeof(*ev.lines));
+    ev.num_lines = 2;
+    return add_event(buf, &ev);
+}
+
 struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines)
 {
     if (buf->num_lines + num_lines > buf->a_lines) {

@@ -8,6 +8,165 @@
 #include <string.h>
 #include <ncurses.h>
 
+/**
+ * Checks if any events between the event at `Core.ev_from_ins` and the last
+ * event can be combined and combines them by setting the `IS_TRANSIENT` flag.
+ */
+static void attempt_join(void)
+{
+    struct undo_event *prev_ev, *ev;
+
+    for (size_t i = Core.ev_from_ins + 1; i < SelFrame->buf->event_i; i++) {
+        prev_ev = SelFrame->buf->events[i - 1];
+        ev = SelFrame->buf->events[i];
+        if (should_join(prev_ev, ev)) {
+            prev_ev->flags |= IS_TRANSIENT;
+        }
+    }
+}
+
+static void repeat_last_insertion(void)
+{
+    struct buf *buf;
+    struct pos cur;
+    struct undo_event *ev;
+    struct raw_line *lines = NULL, *line;
+    size_t num_lines = 0;
+    size_t orig_col;
+    size_t repeat;
+
+    buf = SelFrame->buf;
+
+    if ((Core.counter <= 1 && Core.move_down_count == 0) ||
+            Core.ev_from_ins == buf->event_i) {
+        return;
+    }
+
+    /* check if there is only a SINGLE transient chain */
+    for (size_t i = Core.ev_from_ins + 1; i < buf->event_i; i++) {
+        ev = buf->events[i - 1];
+        if (!(ev->flags & IS_TRANSIENT)) {
+            return;
+        }
+    }
+
+    /* combine the events (we only expect insertion and deletion events) */
+    cur = buf->events[Core.ev_from_ins]->pos;
+    for (size_t i = Core.ev_from_ins; i < buf->event_i; i++) {
+        ev = buf->events[i];
+        if ((ev->flags & IS_INSERTION)) {
+            /* join the current and the event text */
+            if (num_lines == 0) {
+                lines = xreallocarray(NULL, ev->num_lines, sizeof(*lines));
+                num_lines = ev->num_lines;
+                for (size_t i = 0; i < num_lines; i++) {
+                    init_raw_line(&lines[i], ev->lines[i].s,
+                            ev->lines[i].n);
+                }
+                continue;
+            }
+            lines = xreallocarray(lines, num_lines + ev->num_lines - 1,
+                    sizeof(*lines));
+            if (is_point_equal(&cur, &ev->pos)) {
+                line = &lines[0];
+                line->s = xrealloc(line->s, line->n + ev->lines[0].n);
+                memmove(&line->s[ev->lines[ev->num_lines - 1].n],
+                        &line->s[0], line->n);
+                memcpy(&line->s[0], &ev->lines[ev->num_lines - 1].s[0],
+                        ev->lines[ev->num_lines - 1].n);
+                line->n += ev->lines[ev->num_lines - 1].n;
+
+                memmove(&lines[ev->num_lines - 1], &lines[0],
+                        sizeof(*lines) * num_lines);
+                for (size_t i = 1; i < ev->num_lines; i++) {
+                    init_raw_line(&lines[i - 1], ev->lines[i].s,
+                            ev->lines[i].n);
+                }
+            } else {
+                line = &lines[num_lines - 1];
+
+                line->s = xrealloc(line->s, line->n + ev->lines[0].n);
+                memcpy(&line->s[line->n], &ev->lines[0].s[0],
+                        ev->lines[0].n);
+                line->n += ev->lines[0].n;
+
+                for (size_t i = 0; i < ev->num_lines - 1; i++) {
+                    line++;
+                    init_raw_line(line, ev->lines[i].s, ev->lines[i].n);
+                }
+            }
+            num_lines += ev->num_lines - 1;
+        } else {
+            line = &lines[ev->pos.line - cur.line];
+            line->n -= ev->lines[0].n;
+            if (ev->num_lines == 1) {
+                memmove(&line->s[ev->pos.col],
+                        &line->s[ev->pos.col + ev->lines[0].n],
+                        line->n - ev->pos.col);
+            } else {
+                line->s = xrealloc(line->s, line->n + line[ev->num_lines - 1].n);
+                memcpy(&lines->s[line->n], &line[ev->num_lines - 1].s[0],
+                        line[ev->num_lines - 1].n);
+                line->n += line[ev->num_lines - 1].n -
+                    ev->lines[ev->num_lines - 1].n;
+                num_lines -= ev->num_lines - 1;
+                memmove(&line[1], &line[ev->num_lines], sizeof(*line) *
+                        (num_lines - 1 - (lines - line)));
+            }
+        }
+    }
+
+    orig_col = cur.col;
+
+    if (num_lines == 1) {
+        cur.col += lines[0].n;
+    } else {
+        cur.line += num_lines - 1;
+        cur.col = lines[num_lines - 1].n;
+    }
+    if (!is_point_equal(&SelFrame->cur, &cur) ||
+            (num_lines == 1 && lines[0].n == 0)) {
+        goto end;
+    }
+
+    buf->events[buf->event_i - 1]->flags |= IS_TRANSIENT;
+    repeat = Core.counter - 1;
+    for (size_t i = 0; i <= Core.move_down_count; i++, cur.line++) {
+        if (cur.line >= SelFrame->buf->num_lines) {
+            break;
+        }
+        if (orig_col > SelFrame->buf->lines[cur.line].n) {
+            continue;
+        }
+
+        cur.col = orig_col;
+        ev = insert_lines(SelFrame->buf, &cur, lines, num_lines, repeat);
+        if (ev != NULL) {
+            ev->flags |= IS_TRANSIENT;
+        }
+
+        if (num_lines == 1) {
+            cur.col += lines[0].n;
+        } else {
+            cur.line += repeat * (num_lines - 1);
+            cur.col = lines[num_lines - 1].n;
+        }
+        repeat = Core.counter;
+    }
+    cur.line--;
+
+    set_cursor(SelFrame, &cur);
+
+    ev->redo_cur = SelFrame->cur;
+    ev->flags |= IS_TRANSIENT;
+
+end:
+    for (size_t i = 0; i < num_lines; i++) {
+        free(lines[i].s);
+    }
+    free(lines);
+}
+
 int insert_handle_input(int c)
 {
     static int motions[KEY_MAX] = {
@@ -35,20 +194,24 @@ int insert_handle_input(int c)
     ch = c;
     switch (c) {
     case '\x1b':
+        attempt_join();
+        repeat_last_insertion();
         move_horz(SelFrame, 1, -1);
         set_mode(NORMAL_MODE);
-        return 1;
+        return UPDATE_UI;
+
+    case CONTROL('C'):
+        attempt_join();
+        move_horz(SelFrame, 1, -1);
+        set_mode(NORMAL_MODE);
+        return UPDATE_UI;
 
     case '\n':
-        /* TODO: make line break function */
-        lines[0].n = 0;
-        lines[1].n = 0;
-        ev = insert_lines(buf, &SelFrame->cur, lines, 2, 1);
+        ev = break_line(buf, &SelFrame->cur);
         ev->undo_cur = SelFrame->cur;
-        SelFrame->cur.line++;
-        SelFrame->cur.col = 0;
-        set_cursor(SelFrame, &SelFrame->cur);
-        return 1;
+        (void) move_dir(SelFrame, 1 + ev->lines[1].n, 1);
+        ev->redo_cur = SelFrame->cur;
+        return UPDATE_UI;
 
     case '\t':
         ch = ' ';
@@ -59,7 +222,7 @@ int insert_handle_input(int c)
         ev->undo_cur = SelFrame->cur;
         (void) move_dir(SelFrame, n, 1);
         ev->redo_cur = SelFrame->cur;
-        return 1;
+        return UPDATE_UI;
 
     case KEY_DC:
         old_cur = SelFrame->cur;
@@ -91,7 +254,7 @@ int insert_handle_input(int c)
         ev->undo_cur = SelFrame->cur;
         (void) move_dir(SelFrame, 1, 1);
         ev->redo_cur = SelFrame->cur;
-        return 1;
+        return UPDATE_UI;
     }
     return do_motion(SelFrame, motions[c]);
 }

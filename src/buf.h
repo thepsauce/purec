@@ -28,9 +28,9 @@
  * replace event, it is a XOR of the changed text.
  *
  * Note: The `undo_cur` and `redo_cur` of each event transient chain is only
- * valid for the first event in a transient chain. A transient chain start with
- * an event that has the transient flag on and ends with the first event without
- * the transient flag.
+ * valid for the first and last event respectively in a transient chain.
+ * A transient chain start with an event that has the transient flag on and
+ * ends at the first event without the transient flag.
  */
 struct undo_event {
     /// flags of this event
@@ -136,6 +136,10 @@ void destroy_buffer(struct buf *buf);
  */
 size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp);
 
+/**
+ * NOTE: The below functions that return a `struct undo_event *` do not set the
+ * `cur_undo` and `cur_redo` values, they must be set by the caller.
+ */
 
 /**
  * Reads a file into the buffer.
@@ -161,7 +165,7 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp);
 size_t get_line_indent(struct buf *buf, size_t line_i);
 
 /**
- * Sets the `min_dirt_i` and `max_dirty_i` values within a buffer.
+ * Sets the `min_dirty_i` and `max_dirty_i` values within a buffer.
  *
  * Implementation:
  * ```C
@@ -207,6 +211,21 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
         const struct raw_line *lines, size_t num_lines);
 
 /**
+ * Breaks the line at given position by inserting '\n' and indents the line
+ * according to the current indentation rules.
+ *
+ * TODO: implement this
+ *
+ * WARNING: This function does NO clipping on `pos`.
+ *
+ * @param buf   Buffer to break a line within.
+ * @param pos   Position to break a line at.
+ *
+ * @return The event generated from breaking the line.
+ */
+struct undo_event *break_line(struct buf *buf, const struct pos *pos);
+
+/**
  * Insert given number of lines starting from given index.
  *
  * This simply inserts uninitialized lines after given index. NO clipping and NO
@@ -219,11 +238,6 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
  * @return First line that was inserted.
  */
 struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines);
-
-/**
- * NOTE: The below functions that return a `struct undo_event *` do not set the
- * `cur_undo` and `cur_redo` values, they must be set by the caller.
- */
 
 /**
  * Indents the line at `line_i`.
@@ -425,6 +439,7 @@ struct undo_event *redo_event(struct buf *buf);
  *
  * @return The event generated from performing the action.
  */
-struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev);
+struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev)
+    __attribute__((deprecated));
 
 #endif

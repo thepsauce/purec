@@ -50,8 +50,9 @@ int visual_handle_input(int c)
     buf = SelFrame->buf;
     switch (c) {
     case '\x1b':
+    case CONTROL('C'):
         set_mode(NORMAL_MODE);
-        return 1;
+        return UPDATE_UI;
 
     case 'g':
         e_c = get_extra_char();
@@ -87,7 +88,7 @@ int visual_handle_input(int c)
             }
             ev = delete_block(buf, &sel.beg, &sel.end);
             if (c == 'C' || c == 'c') {
-                Core.move_down_count = sel.end.line - sel.beg.line + 1;
+                Core.move_down_count = sel.end.line - sel.beg.line;
             }
         } else {
             if (Core.mode == VISUAL_MODE && isupper(c)) {
@@ -133,7 +134,7 @@ int visual_handle_input(int c)
                 ev->redo_cur = sel.beg;
             }
             set_cursor(SelFrame, &sel.beg);
-            return 1;
+            return UPDATE_UI;
         }
         break;
 
@@ -154,7 +155,7 @@ int visual_handle_input(int c)
         }
         ev->undo_cur = SelFrame->cur;
         ev->redo_cur = Core.pos;
-        return 1;
+        return UPDATE_UI;
 
     case 'O':
     case 'o':
@@ -162,31 +163,31 @@ int visual_handle_input(int c)
             cur.col = SelFrame->cur.col;
             SelFrame->cur.col = Core.pos.col;
             Core.pos.col = cur.col;
-            return 1;
+            return UPDATE_UI;
         }
         /* swap the cursor */
         cur = SelFrame->cur;
         SelFrame->cur = Core.pos;
         Core.pos = cur;
-        return 1;
+        return UPDATE_UI;
 
     case ':':
         read_command_line(":'<,'>");
-        return 1;
+        return UPDATE_UI;
 
     case 'v':
         set_mode(Core.mode == VISUAL_MODE ? NORMAL_MODE : VISUAL_MODE);
-        return 1;
+        return UPDATE_UI;
 
     case 'V':
         set_mode(Core.mode == VISUAL_LINE_MODE ? NORMAL_MODE :
                 VISUAL_LINE_MODE);
-        return 1;
+        return UPDATE_UI;
 
     case CONTROL('V'):
         set_mode(Core.mode == VISUAL_BLOCK_MODE ? NORMAL_MODE :
                 VISUAL_BLOCK_MODE);
-        return 1;
+        return UPDATE_UI;
 
     case 'A':
     case 'I':
@@ -194,12 +195,7 @@ int visual_handle_input(int c)
         set_mode(INSERT_MODE);
         if (sel.is_block) {
             set_cursor(SelFrame, &sel.beg);
-            if (Core.play_i == SIZE_MAX) {
-                Core.move_down_count = sel.end.line - sel.beg.line;
-                Core.st_repeat_count = Core.counter - 1;
-                Core.repeat_count = Core.st_repeat_count;
-                Core.play_i = Core.dot_i;
-            }
+            Core.move_down_count = sel.end.line - sel.beg.line;
             if (c == 'A') {
                 move_horz(SelFrame, 1, 1);
             }
@@ -210,9 +206,8 @@ int visual_handle_input(int c)
             } else {
                 set_cursor(SelFrame, &sel.beg);
             }
-            Core.repeat_count = Core.counter - 1;
         }
-        return 1;
+        return UPDATE_UI;
     }
     if (r == 0) {
         return do_motion(SelFrame, motions[c]);

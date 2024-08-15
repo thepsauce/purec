@@ -52,6 +52,7 @@ int normal_handle_input(int c)
     struct frame *frame;
     struct file_list file_list;
     size_t entry;
+    int next_mode = NORMAL_MODE;
 
     buf = SelFrame->buf;
     switch (c) {
@@ -69,21 +70,16 @@ int normal_handle_input(int c)
         break;
 
     /* change or delete */
-    case 'C':
-        c = 'D';
-        /* fall through */
     case 'c':
-        set_mode(INSERT_MODE);
+        next_mode = INSERT_MODE;
         /* fall through */
     case 'd':
-        if (c != 'D') {
-            e_c = get_extra_char();
-        }
-
+        e_c = get_extra_char();
         /* fall through */
+    case 'C':
     case 'D':
     case 'S':
-        if (c == 'D') {
+        if (c == 'D' || c == 'C') {
             c = 'd';
             e_c = '$';
         } else if (c == 'S') {
@@ -155,6 +151,7 @@ int normal_handle_input(int c)
             r = UPDATE_UI;
         }
         r |= DO_RECORD;
+        set_mode(next_mode);
         break;
 
     case 'x':
@@ -207,29 +204,34 @@ int normal_handle_input(int c)
         return UPDATE_UI;
 
     case 'O':
-        cur = SelFrame->cur;
         set_mode(INSERT_MODE);
-        (void) move_horz(SelFrame, SIZE_MAX, -1);
-        lines[0].n = 0;
-        lines[1].n = 0;
-        ev = insert_lines(buf, &SelFrame->cur, lines, 2, 1);
-        ev->undo_cur = cur;
-        indent_line(buf, SelFrame->cur.line);
-        (void) move_horz(SelFrame, SIZE_MAX, 1);
-        ev->redo_cur = SelFrame->cur;
+        cur = SelFrame->cur;
+        if (cur.line == 0) {
+            lines[0].n = 0;
+            lines[1].n = 0;
+            ev = insert_lines(buf, &cur, lines, 2, 1);
+            ev->undo_cur = cur;
+            clip_column(SelFrame);
+            ev->redo_cur = SelFrame->cur;
+        } else {
+            cur.line--;
+            cur.col = buf->lines[cur.line].n;
+            ev = break_line(buf, &cur);
+            ev->undo_cur = SelFrame->cur;
+            set_cursor(SelFrame, &SelFrame->cur);
+            ev->redo_cur = SelFrame->cur;
+        }
         return UPDATE_UI | DO_RECORD;
 
     case 'o':
-        cur = SelFrame->cur;
         set_mode(INSERT_MODE);
-        (void) move_horz(SelFrame, SIZE_MAX, 1);
-        lines[0].n = 0;
-        lines[1].n = 0;
-        ev = insert_lines(buf, &SelFrame->cur, lines, 2, 1);
-        ev->undo_cur = cur;
-        indent_line(buf, SelFrame->cur.line + 1);
-        (void) move_vert(SelFrame, 1, 1);
-        ev->redo_cur = SelFrame->cur;
+        cur.line = SelFrame->cur.line;
+        cur.col = buf->lines[cur.line].n;
+        ev = break_line(buf, &cur);
+        ev->undo_cur = SelFrame->cur;
+        get_end_pos(ev, &cur);
+        set_cursor(SelFrame, &cur);
+        ev->redo_cur = cur;
         return UPDATE_UI | DO_RECORD;
 
     case ':':

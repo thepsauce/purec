@@ -67,6 +67,8 @@ extern struct core {
 
     /// event from which the last insert mode started
     size_t ev_from_ins;
+    /// how many times to move down
+    size_t move_down_count;
 
     /* All variables below here shall NOT be modified while a recording is
      * playing. To check if a recording is playing, do
@@ -85,12 +87,8 @@ extern struct core {
     size_t rec_len;
     /// number of allocated bytes for `rec`
     size_t a_rec;
-    /// needed in combination with `move_down_count` to reset the `repeat_count`
-    size_t st_repeat_count;
     /// how many times to play the recording from `dot_i`
     size_t repeat_count;
-    /// how many times to move down
-    size_t move_down_count;
     /// the action to repeat on '.'
     size_t dot_i;
     /// the index within the current playback

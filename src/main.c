@@ -23,8 +23,7 @@ struct core Core;
 
 bool is_playback(void)
 {
-    return Core.play_i < Core.rec_len || Core.repeat_count > 0 ||
-        Core.move_down_count > 0;
+    return Core.play_i < Core.rec_len || Core.repeat_count > 0;
 }
 
 int get_ch(void)
@@ -35,11 +34,6 @@ int get_ch(void)
         if (Core.repeat_count > 0) {
             Core.repeat_count--;
             Core.play_i = Core.dot_i;
-        } else if (Core.move_down_count > 0) {
-            Core.repeat_count--;
-            Core.play_i = Core.dot_i;
-            Core.repeat_count = Core.st_repeat_count;
-            move_vert(SelFrame, 1, 1);
         } else {
             Core.play_i = SIZE_MAX;
         }
@@ -144,7 +138,6 @@ void set_mode(int mode)
     werase(Message);
     wattr_on(Message, A_BOLD, NULL);
     waddstr(Message, format_messages[mode]);
-    wattr_off(Message, A_BOLD, NULL);
 
     Core.mode = mode;
 
@@ -152,7 +145,12 @@ void set_mode(int mode)
         clip_column(SelFrame);
     } else if (mode == INSERT_MODE) {
         Core.ev_from_ins = SelFrame->buf->event_i;
+        if (Core.counter > 1) {
+            wprintw(Message, " REPEAT * %zu", Core.counter);
+        }
     }
+
+    wattr_off(Message, A_BOLD, NULL);
 }
 
 bool get_selection(struct selection *sel)
@@ -183,23 +181,6 @@ bool is_in_selection(const struct selection *sel, const struct pos *pos)
         return is_in_block(pos, &sel->beg, &sel->end);
     }
     return is_in_range(pos, &sel->beg, &sel->end);
-}
-
-/**
- * Checks if any events between the event at `Core.ev_from_ins` and the last
- * event can be combined and combines them by setting the `IS_TRANSIENT` flag.
- */
-static void attempt_join(void)
-{
-    struct undo_event *prev_ev, *ev;
-
-    for (size_t i = Core.ev_from_ins + 1; i < SelFrame->buf->event_i; i++) {
-        prev_ev = SelFrame->buf->events[i - 1];
-        ev = SelFrame->buf->events[i];
-        if (should_join(prev_ev, ev)) {
-            prev_ev->flags |= IS_TRANSIENT;
-        }
-    }
 }
 
 int main(void)
@@ -270,23 +251,20 @@ int main(void)
         first_event = SelFrame->buf->event_i;
 
         do {
-            Core.counter = 1;
             next_dot_i = Core.rec_len;
             if (Core.mode == INSERT_MODE) {
                 c = get_ch();
             } else {
+                Core.counter = 1;
+                Core.move_down_count = 0;
                 c = get_extra_char();
             }
 
             old_mode = Core.mode;
             r = input_handlers[Core.mode](c);
-            if (old_mode == INSERT_MODE && Core.mode != INSERT_MODE) {
-                /* attempt to combine as many events as possible from the
-                 * previous insert mode
-                 */
-                attempt_join();
-            } else if (old_mode == NORMAL_MODE) {
-                if ((r & DO_RECORD) && Core.play_i == SIZE_MAX) {
+            if (old_mode == NORMAL_MODE) {
+                if ((r & DO_RECORD) && Core.play_i == SIZE_MAX &&
+                        !is_playback()) {
                     Core.dot_i = next_dot_i;
                 } else {
                     Core.rec_len = next_dot_i;
