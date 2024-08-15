@@ -168,6 +168,8 @@ int normal_handle_input(int c)
             Core.counter = 0;
             set_mode(INSERT_MODE);
             r = UPDATE_UI;
+        } else {
+            clip_column(SelFrame);
         }
         r |= DO_RECORD;
         break;
@@ -331,6 +333,34 @@ int normal_handle_input(int c)
             move_horz(SelFrame, 1, 1);
         }
         return UPDATE_UI | DO_RECORD;
+
+    case 'q':
+        /* note that using 'q' to start AND end the recording prevents recursive
+         * recordings which we really don't want
+         */
+        if (Core.user_rec_ch != '\0') {
+            /* minus 1 to exclude the 'q' */
+            Core.user_recs[Core.user_rec_ch - 'a'].to = Core.rec_len - 1;
+            Core.user_rec_ch = '\0';
+            return UPDATE_UI;
+        }
+        c = get_ch();
+        if (c < 'a' || c > 'z') {
+            break;
+        }
+        Core.user_rec_ch = c;
+        Core.user_recs[Core.user_rec_ch - 'a'].from = Core.rec_len;
+        return UPDATE_UI;
+
+    case '@':
+        c = get_ch();
+        if (c < 'a' || c > 'z') {
+            break;
+        }
+        Core.dot_i = Core.user_recs[c - 'a'].from;
+        Core.dot_e = Core.user_recs[c - 'a'].to;
+        Core.repeat_count = Core.counter;
+        return UPDATE_UI;
 
     case 'Z':
         init_file_list(&file_list, ".");

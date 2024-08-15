@@ -23,14 +23,14 @@ struct core Core;
 
 bool is_playback(void)
 {
-    return Core.play_i < Core.rec_len || Core.repeat_count > 0;
+    return Core.play_i < Core.dot_e || Core.repeat_count > 0;
 }
 
 int get_ch(void)
 {
     int c;
 
-    if (Core.play_i >= Core.rec_len) {
+    if (Core.play_i >= Core.dot_e) {
         if (Core.repeat_count > 0) {
             Core.repeat_count--;
             Core.play_i = Core.dot_i;
@@ -102,42 +102,9 @@ size_t get_mode_line_end(struct line *line)
 
 void set_mode(int mode)
 {
-    const char *format_messages[] = {
-        [NORMAL_MODE] = "",
-
-        [INSERT_MODE] = "-- INSERT --",
-
-        [VISUAL_MODE] = "-- VISUAL --",
-        [VISUAL_LINE_MODE] = "-- VISUAL LINE --",
-        [VISUAL_BLOCK_MODE] = "-- VISUAL BLOCK --",
-    };
-
-    const char cursors[] = {
-        [NORMAL_MODE] = '\x30',
-
-        [INSERT_MODE] = '\x35',
-
-        [VISUAL_MODE] = '\x30',
-        [VISUAL_LINE_MODE] = '\x30',
-        [VISUAL_BLOCK_MODE] = '\x30',
-    };
-
-    if (format_messages[mode] == NULL) {
-        endwin();
-        fprintf(stderr, "set_mode - invalid mode: %d", mode);
-        abort();
-    }
-
-    printf("\x1b[%c q", cursors[mode]);
-    fflush(stdout);
-
     if (IS_VISUAL(mode) && !IS_VISUAL(Core.mode)) {
         Core.pos = SelFrame->cur;
     }
-
-    werase(Message);
-    wattr_on(Message, A_BOLD, NULL);
-    waddstr(Message, format_messages[mode]);
 
     Core.mode = mode;
 
@@ -145,12 +112,7 @@ void set_mode(int mode)
         clip_column(SelFrame);
     } else if (mode == INSERT_MODE) {
         Core.ev_from_ins = SelFrame->buf->event_i;
-        if (Core.counter > 1) {
-            wprintw(Message, " REPEAT * %zu", Core.counter);
-        }
     }
-
-    wattr_off(Message, A_BOLD, NULL);
 }
 
 bool get_selection(struct selection *sel)
@@ -185,7 +147,27 @@ bool is_in_selection(const struct selection *sel, const struct pos *pos)
 
 int main(void)
 {
-    int (*input_handlers[])(int c) = {
+    static const char cursors[] = {
+        [NORMAL_MODE] = '\x30',
+
+        [INSERT_MODE] = '\x35',
+
+        [VISUAL_MODE] = '\x30',
+        [VISUAL_LINE_MODE] = '\x30',
+        [VISUAL_BLOCK_MODE] = '\x30',
+    };
+
+    static const char *mode_strings[] = {
+        [NORMAL_MODE] = "",
+
+        [INSERT_MODE] = "-- INSERT --",
+
+        [VISUAL_MODE] = "-- VISUAL --",
+        [VISUAL_LINE_MODE] = "-- VISUAL LINE --",
+        [VISUAL_BLOCK_MODE] = "-- VISUAL BLOCK --",
+    };
+
+    static int (*const input_handlers[])(int c) = {
         [NORMAL_MODE] = normal_handle_input,
         [INSERT_MODE] = insert_handle_input,
         [VISUAL_MODE] = visual_handle_input,
@@ -200,6 +182,7 @@ int main(void)
     int r;
     size_t next_dot_i;
     int old_mode;
+    struct frame *old_frame;
 
     setlocale(LC_ALL, "");
 
@@ -240,14 +223,31 @@ int main(void)
             render_frame(f);
         }
 
+        wmove(Message, 0, 0);
+        wattr_on(Message, A_BOLD, NULL);
+        waddstr(Message, mode_strings[Core.mode]);
+        if (Core.mode == INSERT_MODE && Core.counter > 1) {
+            wprintw(Message, " REPEAT * %zu", Core.counter);
+        }
+        wattr_off(Message, A_BOLD, NULL);
+
+        if (Core.user_rec_ch != '\0') {
+            waddstr(Message, " recording @");
+            waddch(Message, Core.user_rec_ch);
+        }
+        wclrtoeol(Message);
+
         copywin(Message, stdscr, 0, 0, LINES - 1, 0, LINES - 1,
                 MIN(COLS - 1, getmaxx(Message)), 0);
 
         get_visual_cursor(SelFrame, &cur_x, &cur_y);
         move(cur_y, cur_x);
 
+        printf("\x1b[%c q", cursors[Core.mode]);
+        fflush(stdout);
         curs_set(1);
 
+        old_frame = SelFrame;
         first_event = SelFrame->buf->event_i;
 
         do {
@@ -262,12 +262,14 @@ int main(void)
 
             old_mode = Core.mode;
             r = input_handlers[Core.mode](c);
-            if (old_mode == NORMAL_MODE) {
-                if ((r & DO_RECORD) && Core.play_i == SIZE_MAX &&
-                        !is_playback()) {
-                    Core.dot_i = next_dot_i;
+            if (!is_playback()) {
+                if (old_mode == NORMAL_MODE) {
+                    if ((r & DO_RECORD) && Core.play_i == SIZE_MAX) {
+                        Core.dot_i = next_dot_i;
+                        Core.dot_e = Core.rec_len;
+                    }
                 } else {
-                    Core.rec_len = next_dot_i;
+                    Core.dot_e = Core.rec_len;
                 }
             }
         /* does not render the UI if nothing changed or when a recording is
@@ -280,10 +282,12 @@ int main(void)
         }
 
         /* this combines events originating from a single keybind or an entire
-         * recording playback
+         * recording playback if the selected frame has not changed
          */
-        for (size_t i = first_event + 1; i < SelFrame->buf->event_i; i++) {
-            SelFrame->buf->events[i - 1]->flags |= IS_TRANSIENT;
+        if (old_frame == SelFrame) {
+            for (size_t i = first_event + 1; i < SelFrame->buf->event_i; i++) {
+                SelFrame->buf->events[i - 1]->flags |= IS_TRANSIENT;
+            }
         }
     }
 

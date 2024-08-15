@@ -117,6 +117,7 @@ void destroy_frame(struct frame *frame)
         IsRunning = false;
     } else {
         /* find frames that can expand into this frame */
+        /* TODO: complete this */
         for (f = FirstFrame; f != NULL; f = f->next) {
             if (f->y >= frame->y && f->y + f->h <= frame->y + frame->h) {
                 if (f->x + f->w == frame->x) {

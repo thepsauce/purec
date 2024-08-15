@@ -89,10 +89,19 @@ extern struct core {
     size_t a_rec;
     /// how many times to play the recording from `dot_i`
     size_t repeat_count;
-    /// the action to repeat on '.'
+    /// the start of the dot recording segment
     size_t dot_i;
+    /// the end of the dot recording segment
+    size_t dot_e;
     /// the index within the current playback
     size_t play_i;
+    /// user created recordings 'A' to 'Z'
+    struct {
+        size_t from;
+        size_t to;
+    } user_recs['Z' - 'A' + 1];
+    /// current user recording (lower case), '\0' signals nothing being recorded
+    char user_rec_ch;
 } Core;
 
 struct selection {
