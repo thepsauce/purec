@@ -262,9 +262,9 @@ int main(void)
 
             old_mode = Core.mode;
             r = input_handlers[Core.mode](c);
-            if (!is_playback()) {
+            if (!is_playback() && Core.play_i == SIZE_MAX) {
                 if (old_mode == NORMAL_MODE) {
-                    if ((r & DO_RECORD) && Core.play_i == SIZE_MAX) {
+                    if ((r & DO_RECORD)) {
                         Core.dot_i = next_dot_i;
                         Core.dot_e = Core.rec_len;
                     }

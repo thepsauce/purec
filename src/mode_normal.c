@@ -321,8 +321,12 @@ int normal_handle_input(int c)
         return UPDATE_UI | DO_RECORD;
 
     case '.':
+        if (Core.dot_e == Core.rec_len) {
+            /* exclude the '.' itself */
+            Core.dot_e--;
+        }
         Core.repeat_count = Core.counter;
-        return UPDATE_UI;
+        return 0;
 
     case 'A':
     case 'a':
@@ -335,9 +339,6 @@ int normal_handle_input(int c)
         return UPDATE_UI | DO_RECORD;
 
     case 'q':
-        /* note that using 'q' to start AND end the recording prevents recursive
-         * recordings which we really don't want
-         */
         if (Core.user_rec_ch != '\0') {
             /* minus 1 to exclude the 'q' */
             Core.user_recs[Core.user_rec_ch - 'a'].to = Core.rec_len - 1;
