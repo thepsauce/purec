@@ -7,6 +7,14 @@
 #include <ctype.h>
 #include <ncurses.h>
 
+int ConvChar;
+
+int conv_to_char(int c)
+{
+    (void) c;
+    return ConvChar;
+}
+
 int normal_handle_input(int c)
 {
     static int motions[KEY_MAX] = {
@@ -176,7 +184,7 @@ int normal_handle_input(int c)
 
     case 'X':
         cur = SelFrame->cur;
-        move_horz(SelFrame, Core.counter, -1);
+        (void) move_horz(SelFrame, Core.counter, -1);
         ev = delete_range(buf, &cur, &SelFrame->cur);
         if (ev != NULL) {
             ev->undo_cur = cur;
@@ -184,6 +192,61 @@ int normal_handle_input(int c)
             r = UPDATE_UI | DO_RECORD;
         }
         break;
+
+    case 'F':
+        c = get_ch();
+        cur = SelFrame->cur;
+        while (cur.col > 0) {
+            if (buf->lines[cur.line].s[--cur.col] == c) {
+                if (Core.counter > 1) {
+                    Core.counter--;
+                    continue;
+                }
+                r = UPDATE_UI;
+                (void) move_horz(SelFrame, SelFrame->cur.col - cur.col, -1);
+                break;
+            }
+        }
+        break;
+
+    case 'f':
+        c = get_ch();
+        cur = SelFrame->cur;
+        while (cur.col++, cur.col < buf->lines[cur.line].n) {
+            if (buf->lines[cur.line].s[cur.col] == c) {
+                if (Core.counter > 1) {
+                    Core.counter--;
+                    continue;
+                }
+                r = UPDATE_UI;
+                (void) move_horz(SelFrame, cur.col - SelFrame->cur.col, 1);
+                break;
+            }
+        }
+        break;
+
+    case 'r':
+        c = get_ch();
+        if (!isprint(c) && c != '\n') {
+            break;
+        }
+        cur = SelFrame->cur;
+        cur.col = safe_add(cur.col, Core.counter);
+        if (c == '\n') {
+            ev = delete_range(buf, &SelFrame->cur, &cur);
+            if (ev != NULL) {
+                ev->undo_cur = SelFrame->cur;
+            }
+            ev = break_line(buf, &SelFrame->cur);
+        } else {
+            ConvChar = c;
+            ev = change_range(buf, &SelFrame->cur, &cur, conv_to_char);
+            ev->undo_cur = SelFrame->cur;
+        }
+        get_end_pos(ev, &cur);
+        ev->redo_cur = cur;
+        set_cursor(SelFrame, &cur);
+        return UPDATE_UI | DO_RECORD;
 
     case 'u':
         for (size_t i = 0; i < Core.counter; i++) {

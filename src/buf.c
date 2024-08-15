@@ -643,7 +643,7 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
     if (from.line >= buf->num_lines) {
         from.line = buf->num_lines - 1;
     }
-    /* to is allowed to go out of bounds */
+    /* to is allowed to go out of bounds here */
     if (to.line > buf->num_lines) {
         to.line = buf->num_lines;
     }

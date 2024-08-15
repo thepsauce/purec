@@ -8,19 +8,20 @@
 [ ] Add modes
     [ ] Add replace mode
 
-[ ] Add keybins
-    [ ] r for replacing current character
+[-] Add keybins
+    [X] r for replacing current character
     [ ] R for replace mode
-    [ ] f find character
-    [ ] F find character backward
-    [ ] Add macro recording
-        [ ] q for recording
-        [ ] @ for playback
+    [X] f find character
+    [X] F find character backward
+    [X] Add macro recording
+        [X] q for recording
+        [X] @ for playback
     [ ] ... (comes from other todos)
 
-[ ] Finish insert mode
-    [ ] Finish repeat insertion
-    [ ] Finish multi line insertion
+[-] Finish insert mode
+    [X] Finish repeat insertion
+    [X] Finish multi line insertion
+    [ ] Check if all is done
 
 [-] Add multiple frames
     [ ] Change message area
@@ -29,6 +30,7 @@
     [X] Add frame system
     [X] Add split view
     [X] Add keybinds
+    [ ] Improve tiling
 
 [ ] Add command line options
     [ ] Add option to open files
