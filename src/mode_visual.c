@@ -18,6 +18,10 @@ int visual_handle_input(int c)
         ['0'] = MOTION_HOME,
         ['$'] = MOTION_END,
 
+        ['H'] = MOTION_BEG_FRAME,
+        ['M'] = MOTION_MIDDLE_FRAME,
+        ['L'] = MOTION_END_FRAME,
+
         ['W'] = MOTION_NEXT_WORD,
         ['w'] = MOTION_NEXT_WORD,
 

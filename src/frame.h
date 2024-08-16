@@ -75,13 +75,28 @@ void destroy_frame(struct frame *frame);
 void render_frame(struct frame *frame);
 
 /**
- * Gets the visible cursor position of the frame.
+ * Get the text rect relative to the frame origion.
+ *
+ * This includes the status bar, vertical separator and line numbers.
+ *
+ * @param frame The frame to get the text region from.
+ * @param p_x   The result of the x coordinate.
+ * @param p_y   The result of the y coordinate.
+ * @param p_w   The result of the width.
+ * @param p_h   The result of the height.
+ */
+void get_text_rect(const struct frame *frame,
+        int *p_x, int *p_y, int *p_w, int *p_h);
+
+/**
+ * Gets the visible relative cursor position of the frame.
+ *
+ * This cursor is independent of the scrolling values;
  *
  * @param frame The frame to get the cursor from.
- * @param p_x   The resulting x position.
- * @param p_y   The resulting y position.
+ * @param pos   The resulting position.
  */
-void get_visual_cursor(const struct frame *frame, int *p_x, int *p_y);
+void get_visual_cursor(const struct frame *frame, struct pos *pos);
 
 /**
  * Gets the frame at given position.
@@ -92,6 +107,11 @@ void get_visual_cursor(const struct frame *frame, int *p_x, int *p_y);
  * @return The frame at given position.
  */
 struct frame *frame_at(int x, int y);
+
+/**
+ * Resizes all frames according to the new screen size in `COLS`, `LINES`.
+ */
+void update_screen_size(void);
 
 /**
  * Changes the buffer of a frame.
@@ -157,34 +177,40 @@ void set_cursor(struct frame *frame, const struct pos *pos);
 #define MOTION_NEXT             7
 /// move to the previous character
 #define MOTION_PREV             8
+/// move to the start of the frame
+#define MOTION_BEG_FRAME        9
+/// move to he middle of the frame
+#define MOTION_MIDDLE_FRAME     10
+/// move to he end of the frame
+#define MOTION_END_FRAME        11
 /// move to the beginning of the line but skip white space
-#define MOTION_HOME_SP          9
+#define MOTION_HOME_SP          12
 /// move to the beginning of the file
-#define MOTION_FILE_BEG         10
+#define MOTION_FILE_BEG         13
 /// move to the end of the file
-#define MOTION_FILE_END         11
+#define MOTION_FILE_END         14
 /// move a page up
-#define MOTION_PAGE_UP          12
+#define MOTION_PAGE_UP          15
 /// move a page down
-#define MOTION_PAGE_DOWN        13
+#define MOTION_PAGE_DOWN        16
 /// move up a paragraph
-#define MOTION_PARA_UP          14
+#define MOTION_PARA_UP          17
 /// move down a paragraph
-#define MOTION_PARA_DOWN        15
+#define MOTION_PARA_DOWN        18
 /// finds a next character, it uses `get_ch()`
-#define MOTION_FIND_NEXT        16
+#define MOTION_FIND_NEXT        19
 /// finds a previous character, it uses `get_ch()`
-#define MOTION_FIND_PREV        17
+#define MOTION_FIND_PREV        20
 /// same as `MOTION_FIND_NEXT` but jump before match
-#define MOTION_FIND_EXCL_NEXT   18
+#define MOTION_FIND_EXCL_NEXT   21
 /// same as `MOTION_FIND_PREV` but jump after match
-#define MOTION_FIND_EXCL_PREV   19
+#define MOTION_FIND_EXCL_PREV   22
 /// move to next word
-#define MOTION_NEXT_WORD        20
+#define MOTION_NEXT_WORD        23
 /// move to the end of the next word
-#define MOTION_END_WORD         21
+#define MOTION_END_WORD         24
 /// move to previous word
-#define MOTION_PREV_WORD        22
+#define MOTION_PREV_WORD        25
 
 /**
  * Does a special cursor motion.

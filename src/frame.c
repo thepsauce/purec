@@ -104,7 +104,7 @@ void destroy_frame(struct frame *frame)
     }
 
     if (FirstFrame == NULL) {
-        IsRunning = false;
+        Core.is_stopped = true;
     } else {
         /* find frames that can expand into this frame */
         l_f = NULL;
@@ -195,6 +195,37 @@ struct frame *frame_at(int x, int y)
     return NULL;
 }
 
+void update_screen_size(void)
+{
+    int x, y;
+    int cols, lines;
+    struct frame *frame;
+
+    getmaxyx(stdscr, lines, cols);
+    if (cols > Core.prev_cols) {
+        x = Core.prev_cols - 1;
+        y = 0;
+        while (y < Core.prev_lines - 1) {
+            frame = frame_at(x, y);
+            frame->w += cols - Core.prev_cols;
+            y += frame->h;
+        }
+    }
+    if (lines > Core.prev_lines) {
+        x = 0;
+        y = Core.prev_lines - 2;
+        while (x < Core.prev_cols) {
+            frame = frame_at(x, y);
+            frame->h += lines - Core.prev_lines;
+            x += frame->w;
+        }
+    } else if (lines < Core.prev_lines) {
+
+    }
+    Core.prev_cols = cols;
+    Core.prev_lines = lines;
+}
+
 void set_frame_buffer(struct frame *frame, struct buf *buf)
 {
     frame->buf->save_cur = frame->cur;
@@ -222,20 +253,36 @@ void adjust_cursor(struct frame *frame)
 
 int adjust_scroll(struct frame *frame)
 {
+    int r = 0;
+    int x, y, w, h;
+
+    get_text_rect(frame, &x, &y, &w, &h);
+
+    if (frame->cur.col < frame->scroll.col) {
+        frame->scroll.col = frame->cur.col;
+        if ((size_t) MIN(w / 3, 25) >= frame->scroll.col) {
+            frame->scroll.col = 0;
+        } else {
+            frame->scroll.col -= MIN(w / 3, 25);
+        }
+        r |= 1;
+    } else if (frame->cur.col >= frame->scroll.col + w) {
+        frame->scroll.col = frame->cur.col - w + MIN(w / 3, 25);
+        r |= 1;
+    }
+
     if (frame->cur.line < frame->scroll.line) {
         frame->scroll.line = frame->cur.line;
-        if ((size_t) (frame->h / 2) >= frame->scroll.line) {
+        if ((size_t) (h / 2) >= frame->scroll.line) {
             frame->scroll.line = 0;
         } else {
-            frame->scroll.line -= frame->h / 2;
+            frame->scroll.line -= h / 2;
         }
-        return 1;
-    }
-    /* note: minus status bar */
-    if (frame->cur.line >= frame->scroll.line + frame->h - 1) {
-        frame->scroll.line = frame->cur.line - frame->h / 2 + 2;
-        frame->scroll.line = MIN(frame->scroll.line, frame->buf->num_lines - frame->h + 1);
-        return 1;
+        r |= 1;
+    } else if (frame->cur.line >= frame->scroll.line + h) {
+        frame->scroll.line = frame->cur.line - h / 2;
+        frame->scroll.line = MIN(frame->scroll.line, frame->buf->num_lines - h);
+        r |= 1;
     }
     return 0;
 }
@@ -315,6 +362,21 @@ int do_motion(struct frame *frame, int motion)
     case MOTION_NEXT:
         return move_dir(frame, Core.counter, 1);
 
+    case MOTION_BEG_FRAME:
+        if (frame->cur.line == frame->scroll.line) {
+            return move_vert(frame, 1, -1);
+        }
+        return set_vert(frame, frame->scroll.line);
+
+    case MOTION_MIDDLE_FRAME:
+        return set_vert(frame, frame->scroll.line + frame->h / 2);
+
+    case MOTION_END_FRAME:
+        if (frame->cur.line == frame->scroll.line + frame->h - 2) {
+            return move_vert(frame, 1, 1);
+        }
+        return set_vert(frame, frame->scroll.line + frame->h - 2);
+
     case MOTION_HOME_SP:
         return move_horz(frame, frame->cur.col -
                 get_line_indent(frame->buf, frame->cur.line), -1);
@@ -366,8 +428,8 @@ int do_motion(struct frame *frame, int motion)
     case MOTION_FIND_NEXT:
     case MOTION_FIND_EXCL_NEXT:
         c = get_ch();
-        pos = SelFrame->cur;
-        line = &SelFrame->buf->lines[pos.line];
+        pos = frame->cur;
+        line = &frame->buf->lines[pos.line];
         while (pos.col++, pos.col < line->n) {
             if (line->s[pos.col] == c) {
                 if (Core.counter > 1) {
@@ -377,7 +439,7 @@ int do_motion(struct frame *frame, int motion)
                 if (motion == MOTION_FIND_EXCL_NEXT) {
                     pos.col--;
                 }
-                return move_horz(SelFrame, pos.col - SelFrame->cur.col, 1);
+                return move_horz(frame, pos.col - frame->cur.col, 1);
             }
         }
         break;
@@ -385,8 +447,8 @@ int do_motion(struct frame *frame, int motion)
     case MOTION_FIND_PREV:
     case MOTION_FIND_EXCL_PREV:
         c = get_ch();
-        pos = SelFrame->cur;
-        line = &SelFrame->buf->lines[pos.line];
+        pos = frame->cur;
+        line = &frame->buf->lines[pos.line];
         while (pos.col > 0) {
             if (line->s[--pos.col] == c) {
                 if (Core.counter > 1) {
@@ -396,14 +458,14 @@ int do_motion(struct frame *frame, int motion)
                 if (motion == MOTION_FIND_EXCL_PREV) {
                     pos.col++;
                 }
-                return move_horz(SelFrame, SelFrame->cur.col - pos.col, -1);
+                return move_horz(frame, frame->cur.col - pos.col, -1);
             }
         }
         break;
 
     case MOTION_NEXT_WORD:
-        pos = SelFrame->cur;
-        line = &SelFrame->buf->lines[pos.line];
+        pos = frame->cur;
+        line = &frame->buf->lines[pos.line];
 
     again_next:
         s = -1;
@@ -417,7 +479,7 @@ int do_motion(struct frame *frame, int motion)
         }
 
         if (pos.col == line->n) {
-            if (pos.line + 1 < SelFrame->buf->num_lines) {
+            if (pos.line + 1 < frame->buf->num_lines) {
                 pos.line++;
                 pos.col = 0;
                 line++;
@@ -430,7 +492,7 @@ int do_motion(struct frame *frame, int motion)
             }
         }
 
-        if (is_point_equal(&SelFrame->cur, &pos)) {
+        if (is_point_equal(&frame->cur, &pos)) {
             return 0;
         }
 
@@ -439,12 +501,12 @@ int do_motion(struct frame *frame, int motion)
             goto again_next;
         }
 
-        set_cursor(SelFrame, &pos);
+        set_cursor(frame, &pos);
         return 1;
 
     case MOTION_END_WORD:
-        pos = SelFrame->cur;
-        line = &SelFrame->buf->lines[pos.line];
+        pos = frame->cur;
+        line = &frame->buf->lines[pos.line];
 
     again_end:
         pos.col++;
@@ -460,7 +522,7 @@ int do_motion(struct frame *frame, int motion)
                 break;
             }
 
-            if (pos.line + 1 >= SelFrame->buf->num_lines) {
+            if (pos.line + 1 >= frame->buf->num_lines) {
                 break;
             }
 
@@ -482,7 +544,7 @@ int do_motion(struct frame *frame, int motion)
             pos.col--;
         }
 
-        if (is_point_equal(&SelFrame->cur, &pos)) {
+        if (is_point_equal(&frame->cur, &pos)) {
             return 0;
         }
 
@@ -491,12 +553,12 @@ int do_motion(struct frame *frame, int motion)
             goto again_end;
         }
 
-        set_cursor(SelFrame, &pos);
+        set_cursor(frame, &pos);
         return 1;
 
     case MOTION_PREV_WORD:
-        pos = SelFrame->cur;
-        line = &SelFrame->buf->lines[pos.line];
+        pos = frame->cur;
+        line = &frame->buf->lines[pos.line];
 
     again_prev:
         for (; pos.col > 0; pos.col--) {
@@ -508,7 +570,7 @@ int do_motion(struct frame *frame, int motion)
         if (pos.col == 0) {
             if (pos.line > 0) {
                 pos.line--;
-                pos.col = SelFrame->buf->lines[pos.line].n;
+                pos.col = frame->buf->lines[pos.line].n;
                 line--;
             }
         }
@@ -529,7 +591,7 @@ int do_motion(struct frame *frame, int motion)
             s = o_s;
         }
 
-        if (is_point_equal(&SelFrame->cur, &pos)) {
+        if (is_point_equal(&frame->cur, &pos)) {
             return 0;
         }
 
@@ -538,7 +600,7 @@ int do_motion(struct frame *frame, int motion)
             goto again_prev;
         }
 
-        set_cursor(SelFrame, &pos);
+        set_cursor(frame, &pos);
         return 1;
     }
     return 0;
@@ -671,10 +733,7 @@ int move_horz(struct frame *frame, size_t dist, int dir)
     } else {
         frame->vct = frame->cur.col;
     }
-    if (old_col != frame->cur.col) {
-        return 1;
-    }
-    return 0;
+    return ((old_col != frame->cur.col) | adjust_scroll(frame));
 }
 
 int set_horz(struct frame *frame, size_t col)

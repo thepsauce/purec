@@ -46,7 +46,12 @@ int get_ch(void)
             c |= Core.rec[Core.play_i++];
         }
     } else {
-        c = getch();
+        do {
+            c = getch();
+            if (c == KEY_RESIZE) {
+                update_screen_size();
+            }
+        } while (c == KEY_RESIZE);
         if (c > 0xff) {
             if (Core.rec_len + 2 > Core.a_rec) {
                 Core.a_rec *= 2;
@@ -176,7 +181,7 @@ int main(void)
     };
 
     struct buf *buf;
-    int cur_x, cur_y;
+    struct pos cur;
     size_t first_event;
     int c;
     int r;
@@ -204,6 +209,8 @@ int main(void)
     wbkgdset(Message, ' ' | COLOR_PAIR(HI_NORMAL));
     wbkgdset(OffScreen, ' ' | COLOR_PAIR(HI_NORMAL));
 
+    getmaxyx(stdscr, Core.prev_lines, Core.prev_cols);
+
     //buf = create_buffer("../VM_jsm/cases.h");
     buf = create_buffer("src/main.c");
     //buf = create_buffer(NULL);
@@ -213,7 +220,6 @@ int main(void)
 
     set_mode(NORMAL_MODE);
 
-    IsRunning = true;
     while (1) {
         curs_set(0);
 
@@ -240,12 +246,21 @@ int main(void)
         copywin(Message, stdscr, 0, 0, LINES - 1, 0, LINES - 1,
                 MIN(COLS - 1, getmaxx(Message)), 0);
 
-        get_visual_cursor(SelFrame, &cur_x, &cur_y);
-        move(cur_y, cur_x);
-
-        printf("\x1b[%c q", cursors[Core.mode]);
-        fflush(stdout);
-        curs_set(1);
+        get_visual_cursor(SelFrame, &cur);
+        if (cur.col >= SelFrame->scroll.col &&
+                cur.line >= SelFrame->scroll.line) {
+            cur.col -= SelFrame->scroll.col;
+            cur.line -= SelFrame->scroll.line;
+            if (cur.col < (size_t) SelFrame->w &&
+                    cur.line < (size_t) SelFrame->h) {
+                cur.col += SelFrame->x;
+                cur.line += SelFrame->y;
+                move(cur.line, cur.col);
+                printf("\x1b[%c q", cursors[Core.mode]);
+                fflush(stdout);
+                curs_set(1);
+            }
+        }
 
         old_frame = SelFrame;
         first_event = SelFrame->buf->event_i;
@@ -277,7 +292,7 @@ int main(void)
          */
         } while ((r & UPDATE_UI) == 0 || is_playback());
 
-        if (!IsRunning) {
+        if (Core.is_stopped) {
             break;
         }
 
@@ -306,5 +321,5 @@ int main(void)
 
     free(Input.buf);
     free(Input.remember);
-    return 0;
+    return Core.exit_code;
 }

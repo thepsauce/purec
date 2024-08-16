@@ -11,8 +11,10 @@ struct render_info {
     /// the language to use
     size_t lang;
 
-    /// the width of the rendering
-    int w;
+    /// the origin of the line rendering
+    size_t x;
+    /// the maximum width of the line rendering
+    size_t w;
     /// the line the cursor is on
     struct line *cur_line;
 
@@ -140,34 +142,37 @@ static void highlight_line(struct render_info *ri, size_t state)
  */
 static void render_line(struct render_info *ri)
 {
-    int w = 0;
+    size_t x;
     char ch;
     int hi;
     struct pos p;
 
     p.line = ri->line_i;
-    for (p.col = 0; p.col < ri->line->n && w != ri->w;) {
-        hi = ri->line->attribs[p.col];
+    for (p.col = 0, x = 0; p.col < ri->line->n && x < ri->w;) {
         ch = ri->line->s[p.col];
-        if (ch < 32) {
-            if (w + 1 == ri->w) {
-                break;
-            }
-            attr_set(A_REVERSE, 0, NULL);
-            addch('?');
-        } else {
-            if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
-                attr_set(HiAttribs[hi] ^ A_REVERSE, 0, NULL);
+        if (x >= ri->x) {
+            hi = ri->line->attribs[p.col];
+            if (ch < 32) {
+                if (x + 1 >= ri->w) {
+                    break;
+                }
+                attr_set(A_REVERSE, 0, NULL);
+                addch('?');
             } else {
-                set_highlight(stdscr, hi);
+                if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
+                    attr_set(HiAttribs[hi] ^ A_REVERSE, 0, NULL);
+                } else {
+                    set_highlight(stdscr, hi);
+                }
+                addch(ch);
             }
-            addch(ch);
         }
         p.col++;
-        w++;
+        x++;
     }
 
-    if (w != ri->w && ri->sel_exists && is_in_selection(&ri->sel, &p)) {
+    if (x >= ri->x && x < ri->w && ri->sel_exists &&
+            is_in_selection(&ri->sel, &p)) {
         attr_set(A_REVERSE, 0, NULL);
         addch(' ');
     }
@@ -178,41 +183,12 @@ void render_frame(struct frame *frame)
     struct buf *buf;
     int perc;
     struct render_info ri;
-    int x;
-    int orig_x;
     size_t line;
     size_t last_line;
     size_t prev_state;
-    int w;
+    int x, y, w, h;
 
     buf = frame->buf;
-
-    /* correcting for the vertical separator and line numbers */
-    if (frame->x == 0) {
-        x = 0;
-        ri.w = frame->w;
-    } else {
-        x = frame->x + 1;
-        ri.w = frame->w - 1;
-    }
-    orig_x = x;
-
-    /* only show the line numbers when there is sufficient space */
-    if (ri.w >= 8) {
-        set_highlight(stdscr, HI_LINE_NO);
-        line = frame->scroll.line + 1;
-        for (int y = frame->y; y < frame->y + frame->h; y++) {
-            if (line > buf->num_lines) {
-                set_highlight(stdscr, HI_NORMAL);
-                mvprintw(y, x, " ~   ");
-            } else {
-                mvprintw(y, x, " %3zu ", line);
-            }
-            line++;
-        }
-        x += 5;
-        ri.w -= 5;
-    }
 
     ri.cur_line = &buf->lines[frame->cur.line];
     if (SelFrame != frame) {
@@ -250,8 +226,26 @@ void render_frame(struct frame *frame)
         buf->min_dirty_i = MAX(buf->min_dirty_i, last_line);
     }
 
+    get_text_rect(frame, &x, &y, &w, &h);
+
+    if (x >= 5) {
+        set_highlight(stdscr, HI_LINE_NO);
+        line = frame->scroll.line + 1;
+        for (; y < h; y++) {
+            if (line > buf->num_lines) {
+                set_highlight(stdscr, HI_NORMAL);
+                mvprintw(frame->y + y, frame->x + x - 5, " ~   ");
+            } else {
+                mvprintw(frame->y + y, frame->x + x - 5, " %3zu ", line);
+            }
+            line++;
+        }
+    }
+
+    ri.x = frame->scroll.col;
+    ri.w = frame->scroll.col + w;
     for (size_t i = frame->scroll.line; i < last_line; i++) {
-        move(frame->y + i - frame->scroll.line, x);
+        move(frame->y + i - frame->scroll.line, frame->x + x);
         ri.line_i = i;
         ri.line = &buf->lines[i];
         render_line(&ri);
@@ -278,8 +272,8 @@ void render_frame(struct frame *frame)
         w = frame->w;
     }
     copywin(OffScreen, stdscr, 0, 0,
-            frame->y + frame->h - 1, orig_x,
-            frame->y + frame->h - 1, orig_x + w - 1, 0);
+            frame->y + frame->h - 1, MIN(frame->x, 1),
+            frame->y + frame->h - 1, MIN(frame->x, 1) + w - 1, 0);
 
     mvwprintw(OffScreen, 0, 0, "%d%% ¶%zu/%zu☰℅%zu",
             perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1);
@@ -294,19 +288,28 @@ void render_frame(struct frame *frame)
     wattr_set(OffScreen, 0, 0, NULL);
 }
 
-void get_visual_cursor(const struct frame *frame, int *p_x, int *p_y)
+void get_text_rect(const struct frame *frame,
+        int *p_x, int *p_y, int *p_w, int *p_h)
 {
     int x;
 
-    x = frame->x;
-    if (x > 0) {
-        x++;
-    }
-
+    x = frame->x > 0;
     if (frame->w > 8) {
         x += 5;
     }
 
-    *p_x = x + frame->cur.col - frame->scroll.col;
-    *p_y = frame->y + frame->cur.line - frame->scroll.line;
+    *p_x = x;
+    *p_y = 0;
+    *p_w = frame->w - x;
+    *p_h = frame->h - 1;
+}
+
+void get_visual_cursor(const struct frame *frame, struct pos *pos)
+{
+    pos->col = frame->x > 0;
+    if (frame->w > 8) {
+        pos->col += 5;
+    }
+    pos->col += frame->cur.col;
+    pos->line = frame->cur.line;
 }

@@ -28,13 +28,15 @@
     [ ] Check if all is done
 
 [-] Add multiple frames
-    [ ] Change message area
+    [-] Change message area
         [ ] Allow it to be multi line without breaking everything
-        [ ] Make it a pad window for colors
+        [X] Make it a pad window for colors
     [X] Add frame system
     [X] Add split view
     [X] Add keybinds
-    [ ] Improve tiling
+    [-] Improve tiling
+        [X] Handle clashes
+        [ ] Handle screen resizing
 
 [ ] Add command line options
     [ ] Add option to open files
@@ -50,7 +52,7 @@
 [ ] Add jump list
     [ ] Add jump list to each frame (or buffer?)
 
-[X] Add syntax highlighting
+[-] Add syntax highlighting
     [X] Add C syntax
     [ ] Add git syntax
 

@@ -31,6 +31,10 @@ int normal_handle_input(int c)
         ['0'] = MOTION_HOME,
         ['$'] = MOTION_END,
 
+        ['H'] = MOTION_BEG_FRAME,
+        ['M'] = MOTION_MIDDLE_FRAME,
+        ['L'] = MOTION_END_FRAME,
+
         ['f'] = MOTION_FIND_NEXT,
         ['F'] = MOTION_FIND_PREV,
 

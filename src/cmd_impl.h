@@ -74,8 +74,8 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
 
 int cmd_cquit(struct cmd_data *cd)
 {
-    ExitCode = cd->has_number ? (int) cd->from : 1;
-    IsRunning = false;
+    Core.exit_code = cd->has_number ? (int) cd->from : 1;
+    Core.is_stopped = true;
     return 0;
 }
 
@@ -83,15 +83,13 @@ int cmd_edit(struct cmd_data *cd)
 {
     struct file_list list;
     size_t entry;
-    struct buf *buf;
+    struct buf *buf = NULL;
 
     if (cd->arg[0] == '\0') {
         init_file_list(&list, ".");
         if (get_deep_files(&list) == 0) {
             entry = choose_fuzzy((const char**) list.paths, list.num);
-            if (entry == SIZE_MAX) {
-                buf = NULL;
-            } else {
+            if (entry != SIZE_MAX) {
                 buf = create_buffer(list.paths[entry]);
             }
         }
@@ -122,7 +120,7 @@ int cmd_exit_all(struct cmd_data *cd)
             return -1;
         }
     }
-    IsRunning = false;
+    Core.is_stopped = true;
     return 0;
 }
 
@@ -140,7 +138,7 @@ int cmd_quit(struct cmd_data *cd)
 int cmd_quit_all(struct cmd_data *cd)
 {
     if (cd->force) {
-        IsRunning = false;
+        Core.is_stopped = true;
         return 0;
     }
     for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
@@ -150,7 +148,7 @@ int cmd_quit_all(struct cmd_data *cd)
             return 1;
         }
     }
-    IsRunning = false;
+    Core.is_stopped = true;
     return 0;
 }
 

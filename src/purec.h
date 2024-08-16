@@ -32,12 +32,6 @@ extern WINDOW *Message;
  */
 extern WINDOW *OffScreen;
 
-/// Whether the editor should continue.
-extern bool IsRunning;
-
-/// The exit code to return in `main()`.
-extern int ExitCode;
-
 #define NORMAL_MODE 0 /* 0 */
 #define INSERT_MODE 1 /* 1 */
 
@@ -51,6 +45,16 @@ extern int ExitCode;
  * editor.
  */
 extern struct core {
+    /// whether the editor should quit
+    bool is_stopped;
+    /// the exit code to return in `main()`
+    int exit_code;
+
+    /// the previous column count
+    int prev_cols;
+    /// the previous line count
+    int prev_lines;
+
     /// type of the mode (`*_MODE`)
     int mode;
     /// counter
