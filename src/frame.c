@@ -285,8 +285,9 @@ int get_char_state(char ch)
 int do_motion(struct frame *frame, int motion)
 {
     size_t new_line;
-    struct line *line;
     struct pos pos;
+    struct line *line;
+    int c;
     int s, o_s;
 
     switch (motion) {
@@ -361,6 +362,44 @@ int do_motion(struct frame *frame, int motion)
         }
         return move_vert(frame,
                 frame->buf->num_lines - 1 - frame->cur.line, 1);
+
+    case MOTION_FIND_NEXT:
+    case MOTION_FIND_EXCL_NEXT:
+        c = get_ch();
+        pos = SelFrame->cur;
+        line = &SelFrame->buf->lines[pos.line];
+        while (pos.col++, pos.col < line->n) {
+            if (line->s[pos.col] == c) {
+                if (Core.counter > 1) {
+                    Core.counter--;
+                    continue;
+                }
+                if (motion == MOTION_FIND_EXCL_NEXT) {
+                    pos.col--;
+                }
+                return move_horz(SelFrame, pos.col - SelFrame->cur.col, 1);
+            }
+        }
+        break;
+
+    case MOTION_FIND_PREV:
+    case MOTION_FIND_EXCL_PREV:
+        c = get_ch();
+        pos = SelFrame->cur;
+        line = &SelFrame->buf->lines[pos.line];
+        while (pos.col > 0) {
+            if (line->s[--pos.col] == c) {
+                if (Core.counter > 1) {
+                    Core.counter--;
+                    continue;
+                }
+                if (motion == MOTION_FIND_EXCL_PREV) {
+                    pos.col++;
+                }
+                return move_horz(SelFrame, SelFrame->cur.col - pos.col, -1);
+            }
+        }
+        break;
 
     case MOTION_NEXT_WORD:
         pos = SelFrame->cur;

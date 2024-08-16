@@ -27,11 +27,14 @@ int visual_handle_input(int c)
         ['B'] = MOTION_PREV_WORD,
         ['b'] = MOTION_PREV_WORD,
 
+        ['f'] = MOTION_FIND_NEXT,
+        ['F'] = MOTION_FIND_PREV,
+
+        ['t'] = MOTION_FIND_EXCL_NEXT,
+        ['T'] = MOTION_FIND_EXCL_PREV,
+
         [KEY_HOME] = MOTION_HOME,
         [KEY_END] = MOTION_END,
-
-        ['I'] = MOTION_HOME_SP,
-        ['A'] = MOTION_END,
 
         ['g'] = MOTION_FILE_BEG,
         ['G'] = MOTION_FILE_END,

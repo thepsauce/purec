@@ -142,41 +142,49 @@ void set_cursor(struct frame *frame, const struct pos *pos);
  */
 
 /// move to the left
-#define MOTION_LEFT         1
+#define MOTION_LEFT             1
 /// move to the right
-#define MOTION_RIGHT        2
+#define MOTION_RIGHT            2
 /// move up
-#define MOTION_UP           3
+#define MOTION_UP               3
 /// move down
-#define MOTION_DOWN         4
+#define MOTION_DOWN             4
 /// move to the beginning of the line
-#define MOTION_HOME         5
+#define MOTION_HOME             5
 /// move to the end of the line
-#define MOTION_END          6
+#define MOTION_END              6
 /// move to the next character
-#define MOTION_NEXT         7
+#define MOTION_NEXT             7
 /// move to the previous character
-#define MOTION_PREV         8
+#define MOTION_PREV             8
 /// move to the beginning of the line but skip white space
-#define MOTION_HOME_SP      9
+#define MOTION_HOME_SP          9
 /// move to the beginning of the file
-#define MOTION_FILE_BEG     10
+#define MOTION_FILE_BEG         10
 /// move to the end of the file
-#define MOTION_FILE_END     11
+#define MOTION_FILE_END         11
 /// move a page up
-#define MOTION_PAGE_UP      12
+#define MOTION_PAGE_UP          12
 /// move a page down
-#define MOTION_PAGE_DOWN    13
+#define MOTION_PAGE_DOWN        13
 /// move up a paragraph
-#define MOTION_PARA_UP      14
+#define MOTION_PARA_UP          14
 /// move down a paragraph
-#define MOTION_PARA_DOWN    15
+#define MOTION_PARA_DOWN        15
+/// finds a next character, it uses `get_ch()`
+#define MOTION_FIND_NEXT        16
+/// finds a previous character, it uses `get_ch()`
+#define MOTION_FIND_PREV        17
+/// same as `MOTION_FIND_NEXT` but jump before match
+#define MOTION_FIND_EXCL_NEXT   18
+/// same as `MOTION_FIND_PREV` but jump after match
+#define MOTION_FIND_EXCL_PREV   19
 /// move to next word
-#define MOTION_NEXT_WORD    16
+#define MOTION_NEXT_WORD        20
 /// move to the end of the next word
-#define MOTION_END_WORD     17
+#define MOTION_END_WORD         21
 /// move to previous word
-#define MOTION_PREV_WORD    18
+#define MOTION_PREV_WORD        22
 
 /**
  * Does a special cursor motion.

@@ -31,6 +31,12 @@ int normal_handle_input(int c)
         ['0'] = MOTION_HOME,
         ['$'] = MOTION_END,
 
+        ['f'] = MOTION_FIND_NEXT,
+        ['F'] = MOTION_FIND_PREV,
+
+        ['t'] = MOTION_FIND_EXCL_NEXT,
+        ['T'] = MOTION_FIND_EXCL_PREV,
+
         ['W'] = MOTION_NEXT_WORD,
         ['w'] = MOTION_NEXT_WORD,
 
@@ -150,21 +156,31 @@ int normal_handle_input(int c)
             break;
 
         default:
-            Core.mode = INSERT_MODE;
             do_motion(SelFrame, motions[e_c]);
-            if (e_c == 'e') {
-                /* TODO: how can this delete bind be improved.. */
-                SelFrame->cur.col++;
+            from = SelFrame->cur;
+            to = cur;
+            sort_positions(&from, &to);
+            /* some motions do not want increment, this is to make some motions
+             * seem more natural
+             */
+            switch (motions[e_c]) {
+            case MOTION_NEXT_WORD:
+            case MOTION_PREV_WORD:
+            case MOTION_UP:
+            case MOTION_DOWN:
+            case MOTION_LEFT:
+            case MOTION_RIGHT:
+            case MOTION_PREV:
+            case MOTION_NEXT:
+            case MOTION_FILE_BEG:
+            case MOTION_FILE_END:
+                break;
+
+            default:
+                to.col++;
             }
-            Core.mode = NORMAL_MODE;
-            ev = delete_range(buf, &cur, &SelFrame->cur);
-            if (cur.line < SelFrame->cur.line ||
-                    (cur.line == SelFrame->cur.line &&
-                     cur.col < SelFrame->cur.col)) {
-                SelFrame->cur = cur;
-            }
-            /* setting it to itself to clip it */
-            set_cursor(SelFrame, &SelFrame->cur);
+            ev = delete_range(buf, &from, &to);
+            set_cursor(SelFrame, &from);
         }
         if (ev != NULL) {
             ev->undo_cur = cur;
@@ -203,38 +219,6 @@ int normal_handle_input(int c)
             ev->undo_cur = cur;
             ev->redo_cur = SelFrame->cur;
             r = UPDATE_UI | DO_RECORD;
-        }
-        break;
-
-    case 'F':
-        c = get_ch();
-        cur = SelFrame->cur;
-        while (cur.col > 0) {
-            if (buf->lines[cur.line].s[--cur.col] == c) {
-                if (Core.counter > 1) {
-                    Core.counter--;
-                    continue;
-                }
-                r = UPDATE_UI;
-                (void) move_horz(SelFrame, SelFrame->cur.col - cur.col, -1);
-                break;
-            }
-        }
-        break;
-
-    case 'f':
-        c = get_ch();
-        cur = SelFrame->cur;
-        while (cur.col++, cur.col < buf->lines[cur.line].n) {
-            if (buf->lines[cur.line].s[cur.col] == c) {
-                if (Core.counter > 1) {
-                    Core.counter--;
-                    continue;
-                }
-                r = UPDATE_UI;
-                (void) move_horz(SelFrame, cur.col - SelFrame->cur.col, 1);
-                break;
-            }
         }
         break;
 
