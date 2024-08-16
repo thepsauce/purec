@@ -224,11 +224,17 @@ int adjust_scroll(struct frame *frame)
 {
     if (frame->cur.line < frame->scroll.line) {
         frame->scroll.line = frame->cur.line;
+        if ((size_t) (frame->h / 2) >= frame->scroll.line) {
+            frame->scroll.line = 0;
+        } else {
+            frame->scroll.line -= frame->h / 2;
+        }
         return 1;
     }
     /* note: minus status bar */
     if (frame->cur.line >= frame->scroll.line + frame->h - 1) {
-        frame->scroll.line = frame->cur.line - frame->h + 2;
+        frame->scroll.line = frame->cur.line - frame->h / 2 + 2;
+        frame->scroll.line = MIN(frame->scroll.line, frame->buf->num_lines - frame->h + 1);
         return 1;
     }
     return 0;
