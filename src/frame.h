@@ -29,8 +29,6 @@ struct frame {
     size_t vct;
     /// next frame in the linked list
     struct frame *next;
-    /// next frame in the focus linked list
-    struct frame *next_focus;
 };
 
 /**
@@ -94,13 +92,6 @@ void get_visual_cursor(const struct frame *frame, int *p_x, int *p_y);
  * @return The frame at given position.
  */
 struct frame *frame_at(int x, int y);
-
-/**
- * Focuses given frame.
- *
- * @return The last focused frame.
- */
-struct frame *focus_frame(struct frame *frame);
 
 /**
  * Changes the buffer of a frame.

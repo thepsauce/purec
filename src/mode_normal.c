@@ -340,21 +340,18 @@ int normal_handle_input(int c)
             frame = SelFrame;
             break;
 
-        /* moving to next entries or previous entries in the focus chain is safe
-         * but not jumping to frames that have never been focused before
-         */
         case CONTROL('P'):
         case 'p':
-            for (frame = FirstFrame; frame->next_focus != SelFrame; ) {
-                frame = frame->next_focus;
+            for (frame = FirstFrame; frame->next != NULL &&
+                    frame->next != SelFrame; ) {
+                frame = frame->next;
             }
-            SelFrame = frame;
+            frame = frame->next == NULL ? FirstFrame : frame;
             break;
 
         case CONTROL('N'):
         case 'n':
-            SelFrame = SelFrame->next_focus;
-            frame = SelFrame;
+            frame = SelFrame->next;
             break;
 
         case CONTROL('H'):
@@ -387,8 +384,8 @@ int normal_handle_input(int c)
             (void) create_frame(SelFrame, SPLIT_DOWN, SelFrame->buf);
             break;
         }
-        if (frame != NULL && frame != SelFrame) {
-            (void) focus_frame(frame);
+        if (frame != NULL) {
+            SelFrame = frame;
         }
         return UPDATE_UI;
 

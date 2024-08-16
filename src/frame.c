@@ -76,7 +76,6 @@ struct frame *create_frame(struct frame *split, int dir, struct buf *buf)
 
     /* add frame to the linked list */
     if (FirstFrame == NULL) {
-        frame->next_focus = frame;
         FirstFrame = frame;
         SelFrame = frame;
     } else {
@@ -91,17 +90,8 @@ struct frame *create_frame(struct frame *split, int dir, struct buf *buf)
 
 void destroy_frame(struct frame *frame)
 {
-    struct frame *f;
-
-    /* remove from focus chain if the frame is part of one */
-    if (frame->next_focus != NULL) {
-        for (f = FirstFrame; f->next_focus != frame; ) {
-            f = f->next_focus;
-        }
-        if (f != frame) {
-            f->next_focus = frame->next_focus;
-        }
-    }
+    struct frame *f, *l_f, *r_f, *t_f, *b_f;
+    int border, expand;
 
     /* remove from linked list */
     if (frame == FirstFrame) {
@@ -117,30 +107,76 @@ void destroy_frame(struct frame *frame)
         IsRunning = false;
     } else {
         /* find frames that can expand into this frame */
-        /* TODO: complete this */
+        l_f = NULL;
+        r_f = NULL;
+        t_f = NULL;
+        b_f = NULL;
         for (f = FirstFrame; f != NULL; f = f->next) {
             if (f->y >= frame->y && f->y + f->h <= frame->y + frame->h) {
                 if (f->x + f->w == frame->x) {
-                    f->w += frame->w;
+                    l_f = f;
                 } else if (frame->x + frame->w == f->x) {
-                    f->x = frame->x;
-                    f->w += frame->w;
+                    r_f = f;
                 }
             }
 
             if (f->x >= frame->x && f->x + f->w <= frame->x + frame->w) {
                 if (f->y + f->h == frame->y) {
-                    f->h += frame->h;
+                    t_f = f;
                 } else if (frame->y + frame->h == f->y) {
-                    f->y = frame->y;
-                    f->h += frame->h;
+                    b_f = f;
+                }
+            }
+        }
+
+        border = 0;
+        if (t_f != NULL || b_f != NULL) {
+            if (t_f != NULL && b_f != NULL) {
+               border = frame->y + frame->h / 2;
+            } else if (t_f != NULL) {
+               border = frame->y + frame->h;
+            } else {
+               border = frame->y;
+            }
+            expand = 1;
+        } else if (l_f != NULL || r_f != NULL) {
+            if (l_f != NULL && r_f != NULL) {
+               border = frame->x + frame->w / 2;
+            } else if (l_f != NULL) {
+               border = frame->x + frame->w;
+            } else {
+               border = frame->x;
+            }
+            expand = 0;
+        } else {
+            expand = -1;
+        }
+
+        for (f = FirstFrame; f != NULL; f = f->next) {
+            if (expand == 0 && f->y >= frame->y &&
+                    f->y + f->h <= frame->y + frame->h) {
+                if (f->x + f->w == frame->x) {
+                    f->w += border - frame->x;
+                } else if (frame->x + frame->w == f->x) {
+                    f->x = border;
+                    f->w += frame->x + frame->w - border;
+                }
+            }
+
+            if (expand == 1 && f->x >= frame->x &&
+                    f->x + f->w <= frame->x + frame->w) {
+                if (f->y + f->h == frame->y) {
+                    f->h += border - frame->y;
+                } else if (frame->y + frame->h == f->y) {
+                    f->y = border;
+                    f->h += frame->y + frame->h - border;
                 }
             }
         }
 
         if (frame == SelFrame) {
             /* focus frame that is now at the same position */
-            SelFrame = frame_at(SelFrame->x, SelFrame->y);
+            SelFrame = frame_at(frame->x, frame->y);
         }
     }
 
@@ -169,27 +205,6 @@ void set_frame_buffer(struct frame *frame, struct buf *buf)
     frame->cur = buf->save_cur;
     frame->scroll = buf->save_scroll;
     frame->vct = frame->cur.col;
-}
-
-struct frame *focus_frame(struct frame *frame)
-{
-    struct frame *prev;
-    struct frame *old_focus;
-
-    if (frame->next_focus != NULL) {
-        /* unlink it from the focus list */
-        for (prev = FirstFrame; prev->next_focus != frame; ) {
-            prev = prev->next_focus;
-        }
-        prev->next_focus = frame->next_focus;
-    }
-    /* relink it into the focus list */
-    frame->next_focus = SelFrame->next_focus;
-    SelFrame->next_focus = frame;
-
-    old_focus = SelFrame;
-    SelFrame = frame;
-    return old_focus;
 }
 
 void adjust_cursor(struct frame *frame)
