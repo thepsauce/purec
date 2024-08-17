@@ -244,8 +244,7 @@ int normal_handle_input(int c)
             ev = change_range(buf, &SelFrame->cur, &cur, conv_to_char);
             ev->undo_cur = SelFrame->cur;
         }
-        get_end_pos(ev, &cur);
-        ev->redo_cur = cur;
+        ev->redo_cur = ev->end;
         set_cursor(SelFrame, &cur);
         return UPDATE_UI | DO_RECORD;
 
@@ -295,9 +294,8 @@ int normal_handle_input(int c)
         cur.col = buf->lines[cur.line].n;
         ev = break_line(buf, &cur);
         ev->undo_cur = SelFrame->cur;
-        get_end_pos(ev, &cur);
-        set_cursor(SelFrame, &cur);
-        ev->redo_cur = cur;
+        set_cursor(SelFrame, &ev->end);
+        ev->redo_cur = ev->end;
         return UPDATE_UI | DO_RECORD;
 
     case ':':
@@ -344,22 +342,30 @@ int normal_handle_input(int c)
 
         case CONTROL('H'):
         case 'h':
-            frame = frame_at(SelFrame->x - 1, SelFrame->y);
+            for (frame = SelFrame; Core.counter > 0; Core.counter--) {
+                frame = frame_at(SelFrame->x - 1, SelFrame->y);
+            }
             break;
 
         case CONTROL('J'):
         case 'j':
-            frame = frame_at(SelFrame->x, SelFrame->y + SelFrame->h);
+            for (frame = SelFrame; Core.counter > 0; Core.counter--) {
+                frame = frame_at(frame->x, frame->y + frame->h);
+            }
             break;
 
         case CONTROL('K'):
         case 'k':
-            frame = frame_at(SelFrame->x, SelFrame->y - 1);
+            for (frame = SelFrame; Core.counter > 0; Core.counter--) {
+                frame = frame_at(SelFrame->x, SelFrame->y - 1);
+            }
             break;
 
         case CONTROL('L'):
         case 'l':
-            frame = frame_at(SelFrame->x + SelFrame->w, SelFrame->y);
+            for (frame = SelFrame; Core.counter > 0; Core.counter--) {
+                frame = frame_at(SelFrame->x + SelFrame->w, SelFrame->y);
+            }
             break;
 
         case CONTROL('V'):

@@ -13,6 +13,33 @@
 
 #include <sys/stat.h>
 
+/// at which number of lines to start writing to the undo file
+#define HUGE_UNDO_THRESHOLD 8
+
+/**
+ * This undo works by caching small text segments and writing huge text segments
+ * to a file. If the `lines` variable of a segment is `NULL`, then that means
+ * the contents of that segments are within the file and can be located using
+ * `file_pos`. To get these lines, `load_undo_data(i)` should be used and then
+ * after finished, `unload_undo_data(i)`.
+ */
+extern struct undo {
+    /// the off memory file for large text segments
+    FILE *fp;
+    struct undo_seg {
+        /// lines within the segment
+        struct raw_line *lines;
+        /// number of lines
+        size_t num_lines;
+        /// position within the file `fp`
+        fpos_t file_pos;
+    } *segments;
+    /// number of undo segments
+    size_t num_segments;
+    /// number of allocated undo segments
+    size_t a_segments;
+} Undo;
+
 /// whether the next event should be processed together with this one
 #define IS_TRANSIENT    0x1
 /// if this is an insertion event
@@ -39,14 +66,14 @@ struct undo_event {
     time_t time;
     /// position of the event
     struct pos pos;
+    /// the position afther the event
+    struct pos end;
     /// cursor position before the event
     struct pos undo_cur;
     /// cursor position after the event
     struct pos redo_cur;
-    /// changed lines
-    struct raw_line *lines;
-    /// number of changed lines
-    size_t num_lines;
+    /// the data index into the undo segment array
+    size_t data_i;
 };
 
 /**
@@ -186,7 +213,7 @@ void update_dirty_lines(struct buf *buf, size_t from, size_t to);
  *
  * WARNING: This function does NO clipping on `pos`.
  *
- * @param buf       Buffer to delete within.
+ * @param buf       Buffer to insert in.
  * @param pos       Position to append to.
  * @param lines     Lines to insert.
  * @param num_lines Number of lines to insert.
@@ -202,7 +229,7 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
  *
  * WARNING: This function does NO clipping on `pos`.
  *
- * @param buf       Buffer to delete within.
+ * @param buf       Buffer to insert in.
  * @param pos       Position to append to.
  * @param num       Lines to insert.
  * @param num_lines Number of lines to insert.
@@ -211,10 +238,26 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
         const struct raw_line *lines, size_t num_lines);
 
 /**
+ * Insert lines in block mode starting from a given position.
+ *
+ * All added lines are initialized to given lines and an event is added.
+ *
+ * WARNING: This function does NO clipping on `pos`.
+ *
+ * @param buf       Buffer to insert in.
+ * @param pos       Position to append to.
+ * @param lines     Lines to insert.
+ * @param num_lines Number of lines to insert.
+ * @param repeat    How many times to repeat the insertion.
+ *
+ * @return The event generated from this insertion (may be `NULL`).
+ */
+struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
+        const struct raw_line *lines, size_t num_lines, size_t repeat);
+
+/**
  * Breaks the line at given position by inserting '\n' and indents the line
  * according to the current indentation rules.
- *
- * TODO: implement this
  *
  * WARNING: This function does NO clipping on `pos`.
  *
@@ -253,7 +296,7 @@ struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines);
 struct undo_event *indent_line(struct buf *buf, size_t line_i);
 
 /**
- * Gets the lines within the buffer inside given range.
+ * Gets the lines within the buffer inside a given range.
  *
  * @param buf   Buffer to get lines from.
  * @param from  Start of the range.
@@ -262,6 +305,18 @@ struct undo_event *indent_line(struct buf *buf, size_t line_i);
  * @return Allocated lines, `p_num_lines` has the number of lines.
  */
 struct raw_line *get_lines(struct buf *buf, const struct pos *from,
+        const struct pos *to, size_t *p_num_lines);
+
+/**
+ * Gets the lines within the buffer inside a given block.
+ *
+ * @param buf   Buffer to get lines from.
+ * @param from  Upper left corner of the block.
+ * @param to    Lower right corner of the block.
+ *
+ * @return Allocated lines, `p_num_lines` has the number of lines.
+ */
+struct raw_line *get_block(struct buf *buf, const struct pos *from,
         const struct pos *to, size_t *p_num_lines);
 
 /**
@@ -369,21 +424,6 @@ struct undo_event *change_range(struct buf *buf, const struct pos *from,
  */
 
 /**
- * Frees given event and its data.
- *
- * @param ev    The event to free.
- */
-void free_event(struct undo_event *ev);
-
-/**
- * Gets the end of the range of an event.
- *
- * @param ev    The event to get the end from.
- * @param pos   The resulting end position.
- */
-void get_end_pos(const struct undo_event *ev, struct pos *pos);
-
-/**
  * Checks whether it makes sense to join the two given events.
  *
  * Note that `ev1` must be an event that happened right before `ev2`.
@@ -396,16 +436,48 @@ void get_end_pos(const struct undo_event *ev, struct pos *pos);
 bool should_join(const struct undo_event *ev1, const struct undo_event *ev2);
 
 /**
+ * Saves given lines.
+ *
+ * @param lines     The lines to save.
+ * @param num_lines The number of lines to save.
+ *
+ * @return Save data index, needed to load the data.
+ */
+size_t save_lines(struct raw_line *lines, size_t num_lines);
+
+/**
+ * Gets lines at given data index.
+ *
+ * Do NOT free the returned data.
+ *
+ * @param data_i        The data index to get the lines from.
+ * @param p_num_lines   The result of the number of lines.
+ *
+ * @return The lines on this data index.
+ */
+struct raw_line *load_undo_data(size_t data_i, size_t *p_num_lines);
+
+/**
+ * Cleans up after a call to `load_undo_data`.
+ *
+ * @param data_i    The data index.
+ */
+void unload_undo_data(size_t data_i);
+
+/**
  * Adds an event to the buffer event list.
  *
  * This sets the `time` value of the event to the current time in seconds.
  *
- * @param buf   Buffer to add an event to.
- * @param ev    Event to add.
+ * @param buf       Buffer to add an event to.
+ * @param flags     The flags of the event.
+ * @param lines     The lines of the event, must be allocated on the heap.
+ * @param num_lines The number of lines.
  *
  * @return The event that was added.
  */
-struct undo_event *add_event(struct buf *buf, const struct undo_event *ev);
+struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
+        struct raw_line *lines, size_t num_lines);
 
 /**
  * Undoes an event.

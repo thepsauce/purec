@@ -27,23 +27,24 @@
     [X] Finish multi line insertion
     [ ] Check if all is done
 
-[-] Add multiple frames
-    [-] Change message area
-        [ ] Allow it to be multi line without breaking everything
+[?] Add multiple frames
+    [?] Change message area
+        [?] Allow it to be multi line without breaking everything
         [X] Make it a pad window for colors
     [X] Add frame system
     [X] Add split view
     [X] Add keybinds
-    [-] Improve tiling
+    [X] Improve tiling
         [X] Handle clashes
-        [ ] Handle screen resizing
+        [X] Handle screen resizing
 
 [ ] Add command line options
     [ ] Add option to open files
     [ ] -s Session restore
 
-[ ] Add registers
+[-] Add registers
     [ ] Add keybinds for copy paste
+    [ ] Add X11 clipboard support
 
 [ ] Add marks
     [ ] Add keybind for moving to mark
@@ -53,7 +54,9 @@
     [ ] Add jump list to each frame (or buffer?)
 
 [-] Add syntax highlighting
-    [X] Add C syntax
+    [-] Add C syntax
+        [X] Add core syntax
+        [ ] Add paran matching
     [ ] Add git syntax
 
 [X] Add file opener

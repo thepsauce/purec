@@ -32,6 +32,8 @@ static void repeat_last_insertion(void)
     struct undo_event *ev;
     struct raw_line *lines = NULL, *line;
     size_t num_lines = 0;
+    struct raw_line *ev_lines;
+    size_t ev_num_lines;
     size_t orig_col;
     size_t repeat;
 
@@ -54,66 +56,69 @@ static void repeat_last_insertion(void)
     cur = buf->events[Core.ev_from_ins]->pos;
     for (size_t i = Core.ev_from_ins; i < buf->event_i; i++) {
         ev = buf->events[i];
+        ev_lines = load_undo_data(ev->data_i, &ev_num_lines);
         if ((ev->flags & IS_INSERTION)) {
             /* join the current and the event text */
             if (num_lines == 0) {
-                lines = xreallocarray(NULL, ev->num_lines, sizeof(*lines));
-                num_lines = ev->num_lines;
+                lines = xreallocarray(NULL, ev_num_lines, sizeof(*lines));
+                num_lines = ev_num_lines;
                 for (size_t i = 0; i < num_lines; i++) {
-                    init_raw_line(&lines[i], ev->lines[i].s,
-                            ev->lines[i].n);
+                    init_raw_line(&lines[i], ev_lines[i].s,
+                            ev_lines[i].n);
                 }
+                unload_undo_data(ev->data_i);
                 continue;
             }
-            lines = xreallocarray(lines, num_lines + ev->num_lines - 1,
+            lines = xreallocarray(lines, num_lines + ev_num_lines - 1,
                     sizeof(*lines));
             if (is_point_equal(&cur, &ev->pos)) {
                 line = &lines[0];
-                line->s = xrealloc(line->s, line->n + ev->lines[0].n);
-                memmove(&line->s[ev->lines[ev->num_lines - 1].n],
+                line->s = xrealloc(line->s, line->n + ev_lines[0].n);
+                memmove(&line->s[ev_lines[ev_num_lines - 1].n],
                         &line->s[0], line->n);
-                memcpy(&line->s[0], &ev->lines[ev->num_lines - 1].s[0],
-                        ev->lines[ev->num_lines - 1].n);
-                line->n += ev->lines[ev->num_lines - 1].n;
+                memcpy(&line->s[0], &ev_lines[ev_num_lines - 1].s[0],
+                        ev_lines[ev_num_lines - 1].n);
+                line->n += ev_lines[ev_num_lines - 1].n;
 
-                memmove(&lines[ev->num_lines - 1], &lines[0],
+                memmove(&lines[ev_num_lines - 1], &lines[0],
                         sizeof(*lines) * num_lines);
-                for (size_t i = 1; i < ev->num_lines; i++) {
-                    init_raw_line(&lines[i - 1], ev->lines[i].s,
-                            ev->lines[i].n);
+                for (size_t i = 1; i < ev_num_lines; i++) {
+                    init_raw_line(&lines[i - 1], ev_lines[i].s,
+                            ev_lines[i].n);
                 }
             } else {
                 line = &lines[num_lines - 1];
 
-                line->s = xrealloc(line->s, line->n + ev->lines[0].n);
-                memcpy(&line->s[line->n], &ev->lines[0].s[0],
-                        ev->lines[0].n);
-                line->n += ev->lines[0].n;
+                line->s = xrealloc(line->s, line->n + ev_lines[0].n);
+                memcpy(&line->s[line->n], &ev_lines[0].s[0],
+                        ev_lines[0].n);
+                line->n += ev_lines[0].n;
 
-                for (size_t i = 0; i < ev->num_lines - 1; i++) {
+                for (size_t i = 0; i < ev_num_lines - 1; i++) {
                     line++;
-                    init_raw_line(line, ev->lines[i].s, ev->lines[i].n);
+                    init_raw_line(line, ev_lines[i].s, ev_lines[i].n);
                 }
             }
-            num_lines += ev->num_lines - 1;
+            num_lines += ev_num_lines - 1;
         } else {
             line = &lines[ev->pos.line - cur.line];
-            line->n -= ev->lines[0].n;
-            if (ev->num_lines == 1) {
+            line->n -= ev_lines[0].n;
+            if (ev_num_lines == 1) {
                 memmove(&line->s[ev->pos.col],
-                        &line->s[ev->pos.col + ev->lines[0].n],
+                        &line->s[ev->pos.col + ev_lines[0].n],
                         line->n - ev->pos.col);
             } else {
-                line->s = xrealloc(line->s, line->n + line[ev->num_lines - 1].n);
-                memcpy(&lines->s[line->n], &line[ev->num_lines - 1].s[0],
-                        line[ev->num_lines - 1].n);
-                line->n += line[ev->num_lines - 1].n -
-                    ev->lines[ev->num_lines - 1].n;
-                num_lines -= ev->num_lines - 1;
-                memmove(&line[1], &line[ev->num_lines], sizeof(*line) *
+                line->s = xrealloc(line->s, line->n + line[ev_num_lines - 1].n);
+                memcpy(&lines->s[line->n], &line[ev_num_lines - 1].s[0],
+                        line[ev_num_lines - 1].n);
+                line->n += line[ev_num_lines - 1].n -
+                    ev_lines[ev_num_lines - 1].n;
+                num_lines -= ev_num_lines - 1;
+                memmove(&line[1], &line[ev_num_lines], sizeof(*line) *
                         (num_lines - 1 - (lines - line)));
             }
         }
+        unload_undo_data(ev->data_i);
     }
 
     orig_col = cur.col;
@@ -209,7 +214,7 @@ int insert_handle_input(int c)
     case '\n':
         ev = break_line(buf, &SelFrame->cur);
         ev->undo_cur = SelFrame->cur;
-        (void) move_dir(SelFrame, 1 + ev->lines[1].n, 1);
+        set_cursor(SelFrame, &ev->end);
         ev->redo_cur = SelFrame->cur;
         return UPDATE_UI;
 

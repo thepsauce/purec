@@ -3,61 +3,176 @@
 
 #include <string.h>
 
-void free_event(struct undo_event *ev)
-{
-    for (size_t i = 0; i < ev->num_lines; i++) {
-        free(ev->lines[i].s);
-    }
-    free(ev->lines);
-    free(ev);
-}
-
-void get_end_pos(const struct undo_event *ev, struct pos *pos)
-{
-    pos->line = ev->pos.line + ev->num_lines - 1;
-    pos->col = ev->lines[ev->num_lines - 1].n;
-    if (pos->line == ev->pos.line) {
-        pos->col += ev->pos.col;
-    }
-}
+struct undo Undo;
 
 bool should_join(const struct undo_event *ev1, const struct undo_event *ev2)
 {
-    struct pos to1, to2;
-
-    get_end_pos(ev1, &to1);
-    get_end_pos(ev2, &to2);
-
     if (((ev1->flags | ev2->flags) & IS_REPLACE)) {
         return false;
     }
     if ((ev1->flags & IS_INSERTION)) {
         if ((ev2->flags & IS_INSERTION)) {
-            return is_in_range(&ev2->pos, &ev1->pos, &to1);
+            return is_in_range(&ev2->pos, &ev1->pos, &ev1->end);
         }
-        return is_in_range(&ev2->pos, &ev1->pos, &to1) &&
-            is_in_range(&to2, &ev1->pos, &to1);
+        return is_in_range(&ev2->pos, &ev1->pos, &ev1->end) &&
+            is_in_range(&ev2->end, &ev1->pos, &ev1->end);
     }
     if ((ev2->flags & IS_INSERTION)) {
         return is_point_equal(&ev1->pos, &ev2->pos);
     }
     return is_point_equal(&ev1->pos, &ev2->pos) ||
-        is_point_equal(&ev1->pos, &to2);
+        is_point_equal(&ev1->pos, &ev2->end);
 }
 
-struct undo_event *add_event(struct buf *buf, const struct undo_event *copy_ev)
+size_t save_lines(struct raw_line *lines, size_t num_lines)
+{
+    size_t l, m, r;
+    struct undo_seg *seg;
+    int cmp;
+    struct raw_line *seg_lines;
+    size_t seg_num_lines;
+
+    l = 0;
+    r = Undo.num_segments;
+    while (l < r) {
+        m = (l + r) / 2;
+
+        seg = &Undo.segments[m];
+
+        seg_lines = NULL;
+
+        if (num_lines < seg->num_lines) {
+            cmp = -1;
+            goto diff;
+        } if (num_lines > seg->num_lines) {
+            cmp = 1;
+            goto diff;
+        }
+
+        seg_lines = load_undo_data(m, &seg_num_lines);
+
+        for (size_t i = 0; i < num_lines; i++) {
+            if (lines[i].n > seg_lines[i].n) {
+                cmp = -1;
+                goto diff;
+            }
+            if (lines[i].n < seg_lines[i].n) {
+                cmp = 1;
+                goto diff;
+            }
+        }
+
+        for (size_t i = 0; i < num_lines; i++) {
+            cmp = memcmp(lines[i].s, seg_lines[i].s, seg_lines[i].n);
+            if (cmp != 0) {
+                goto diff;
+            }
+        }
+
+        for (size_t i = 0; i < num_lines; i++) {
+            free(lines[i].s);
+        }
+        free(lines);
+        unload_undo_data(m);
+        return m;
+
+    diff:
+        if (cmp < 0) {
+            l = m + 1;
+        } else {
+            r = m;
+        }
+        if (seg_lines != NULL) {
+            unload_undo_data(m);
+        }
+    }
+
+    if (Undo.num_segments + 1 > Undo.a_segments) {
+        Undo.a_segments *= 2;
+        Undo.a_segments++;
+        Undo.segments = xreallocarray(Undo.segments, Undo.a_segments,
+                sizeof(*Undo.segments));
+    }
+    seg = &Undo.segments[Undo.num_segments];
+    if (num_lines > HUGE_UNDO_THRESHOLD) {
+        if (Undo.fp == NULL) {
+            Undo.fp = fopen("undo_data", "w+");
+        }
+        fseek(Undo.fp, 0, SEEK_END);
+        fgetpos(Undo.fp, &seg->file_pos);
+        fwrite(&num_lines, sizeof(num_lines), 1, Undo.fp);
+        for (size_t i = 0; i < num_lines; i++) {
+            fwrite(&lines[i].n, sizeof(lines[i].n), 1, Undo.fp);
+        }
+        for (size_t i = 0; i < num_lines; i++) {
+            fwrite(lines[i].s, 1, lines[i].n, Undo.fp);
+            free(lines[i].s);
+        }
+        free(lines);
+        lines = NULL;
+    }
+    seg->lines = lines;
+    seg->num_lines = num_lines;
+    return Undo.num_segments++;
+}
+
+struct raw_line *load_undo_data(size_t data_i, size_t *p_num_lines)
+{
+    struct undo_seg *seg;
+
+    seg = &Undo.segments[data_i];
+    if (seg->lines == NULL) {
+        seg->lines = xreallocarray(NULL, seg->num_lines,
+                sizeof(*seg->lines));
+        fsetpos(Undo.fp, &seg->file_pos);
+        fseek(Undo.fp, sizeof(seg->num_lines), SEEK_CUR);
+        for (size_t i = 0; i < seg->num_lines; i++) {
+            fread(&seg->lines[i].n, sizeof(seg->lines[i].n), 1, Undo.fp);
+        }
+        for (size_t i = 0; i < seg->num_lines; i++) {
+            seg->lines[i].s = xmalloc(seg->lines[i].n);
+            fread(seg->lines[i].s, 1, seg->lines[i].n, Undo.fp);
+        }
+    }
+    *p_num_lines = seg->num_lines;
+    return seg->lines;
+}
+
+void unload_undo_data(size_t data_i)
+{
+    struct undo_seg *seg;
+
+    seg = &Undo.segments[data_i];
+    if (seg->num_lines > HUGE_UNDO_THRESHOLD) {
+        for (size_t i = 0; i < seg->num_lines; i++) {
+            free(seg->lines[i].s);
+        }
+        free(seg->lines);
+        seg->lines = NULL;
+    }
+}
+
+struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
+        struct raw_line *lines, size_t num_lines)
 {
     struct undo_event *ev;
 
     /* free old events */
     for (size_t i = buf->event_i; i < buf->num_events; i++) {
-        free_event(buf->events[i]);
+        free(buf->events[i]);
     }
 
     buf->events = xreallocarray(buf->events, buf->event_i + 1,
             sizeof(*buf->events));
     ev = xmalloc(sizeof(*ev));
-    *ev = *copy_ev;
+    ev->flags = flags;
+    ev->pos = *pos;
+    ev->end.line = ev->pos.line + num_lines - 1;
+    ev->end.col = lines[num_lines - 1].n;
+    if (ev->end.line == ev->pos.line) {
+        ev->end.col += ev->pos.col;
+    }
+    ev->data_i = save_lines(lines, num_lines);
     ev->time = time(NULL);
 
     buf->events[buf->event_i++] = ev;
@@ -67,38 +182,40 @@ struct undo_event *add_event(struct buf *buf, const struct undo_event *copy_ev)
 
 static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
 {
+    struct raw_line *lines;
+    size_t num_lines;
     struct line *line;
-    struct pos to;
 
-    if (flags & IS_REPLACE) {
-        update_dirty_lines(buf, ev->pos.line, ev->pos.line + ev->num_lines - 1);
+    if ((flags & IS_DELETION)) {
+        _delete_range(buf, &ev->pos, &ev->end);
+        return;
+    }
+
+    lines = load_undo_data(ev->data_i, &num_lines);
+    if ((flags & IS_REPLACE)) {
+        update_dirty_lines(buf, ev->pos.line, ev->pos.line + num_lines - 1);
         line = &buf->lines[ev->pos.line];
-        for (size_t i = 0; i < ev->lines[0].n; i++) {
-            line->s[i + ev->pos.col] ^= ev->lines[0].s[i];
+        for (size_t i = 0; i < lines[0].n; i++) {
+            line->s[i + ev->pos.col] ^= lines[0].s[i];
         }
         mark_dirty(line);
-        for (size_t i = 1; i < ev->num_lines; i++) {
+        for (size_t i = 1; i < num_lines; i++) {
             line = &buf->lines[i + ev->pos.line];
-            for (size_t j = 0; j < ev->lines[i].n; j++) {
-                line->s[j] ^= ev->lines[i].s[j];
+            for (size_t j = 0; j < lines[i].n; j++) {
+                line->s[j] ^= lines[i].s[j];
             }
             mark_dirty(line);
         }
-    } else if (flags & IS_INSERTION) {
-        _insert_lines(buf, &ev->pos, ev->lines, ev->num_lines);
-    } else if (flags & IS_DELETION) {
-        to.line = ev->pos.line + ev->num_lines - 1;
-        to.col = ev->lines[ev->num_lines - 1].n;
-        if (to.line == ev->pos.line) {
-            to.col += ev->pos.col;
-        }
-        _delete_range(buf, &ev->pos, &to);
+    } else {
+        _insert_lines(buf, &ev->pos, lines, num_lines);
     }
+    unload_undo_data(ev->data_i);
 }
 
 struct undo_event *undo_event(struct buf *buf)
 {
     struct undo_event *ev;
+    int flags;
 
     if (buf->event_i == 0) {
         return NULL;
@@ -106,7 +223,12 @@ struct undo_event *undo_event(struct buf *buf)
 
     do {
         ev = buf->events[--buf->event_i];
-        do_event(buf, ev, ev->flags ^ (IS_INSERTION | IS_DELETION));
+        /* reverse the insertion/deletion flags to undo */
+        flags = ev->flags;
+        if ((flags & (IS_INSERTION | IS_DELETION))) {
+            flags ^= (IS_INSERTION | IS_DELETION);
+        }
+        do_event(buf, ev, flags);
     } while (buf->event_i > 0 &&
             (buf->events[buf->event_i - 1]->flags & IS_TRANSIENT));
     return ev;
@@ -125,52 +247,4 @@ struct undo_event *redo_event(struct buf *buf)
         do_event(buf, ev, ev->flags);
     } while ((ev->flags & IS_TRANSIENT) && buf->event_i != buf->num_events);
     return ev;
-}
-
-struct undo_event *perform_event(struct buf *buf, const struct undo_event *p_ev)
-{
-    struct pos to;
-    struct undo_event ev;
-
-    ev.pos = p_ev->pos;
-    if ((p_ev->flags & IS_DELETION)) {
-        if (p_ev->pos.line + p_ev->num_lines > buf->num_lines) {
-            return NULL;
-        }
-
-        /* check if the deletion counts match up */
-        if (p_ev->num_lines == 1) {
-            if (p_ev->pos.col + p_ev->lines[0].n > buf->lines[p_ev->pos.line].n) {
-                return NULL;
-            }
-        } else {
-            if (p_ev->pos.col + p_ev->lines[0].n != buf->lines[p_ev->pos.line].n) {
-                return NULL;
-            }
-            if (p_ev->lines[p_ev->num_lines - 1].n >
-                    buf->lines[p_ev->pos.line + p_ev->num_lines - 1].n) {
-                return NULL;
-            }
-            for (size_t i = 1; i < p_ev->num_lines - 1; i++) {
-                if (p_ev->lines[i].n != buf->lines[i].n) {
-                    return NULL;
-                }
-            }
-        }
-
-        /* get deleted text */
-        get_end_pos(p_ev, &to);
-        ev.flags = IS_DELETION;
-        ev.lines = get_lines(buf, &p_ev->pos, &to, &ev.num_lines);
-    } else {
-        /* duplicate lines */
-        ev.flags = IS_INSERTION;
-        ev.num_lines = p_ev->num_lines;
-        ev.lines = xreallocarray(NULL, ev.num_lines, sizeof(*ev.lines));
-        for (size_t i = 0; i < ev.num_lines; i++) {
-            init_raw_line(&ev.lines[i], p_ev->lines[i].s, p_ev->lines[i].n);
-        }
-    }
-    do_event(buf, p_ev, p_ev->flags);
-    return add_event(buf, &ev);
 }

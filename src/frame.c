@@ -273,14 +273,14 @@ int adjust_scroll(struct frame *frame)
 
     if (frame->cur.line < frame->scroll.line) {
         frame->scroll.line = frame->cur.line;
-        if ((size_t) (h / 2) >= frame->scroll.line) {
+        if ((size_t) (h / 3) >= frame->scroll.line) {
             frame->scroll.line = 0;
         } else {
-            frame->scroll.line -= h / 2;
+            frame->scroll.line -= h / 3;
         }
         r |= 1;
     } else if (frame->cur.line >= frame->scroll.line + h) {
-        frame->scroll.line = frame->cur.line - h / 2;
+        frame->scroll.line = frame->cur.line - 2 * h / 3;
         frame->scroll.line = MIN(frame->scroll.line, frame->buf->num_lines - h);
         r |= 1;
     }
@@ -635,7 +635,6 @@ int move_dir(struct frame *frame, size_t dist, int dir)
             }
         }
     } else {
-
         while (dist > 0) {
             end = get_mode_line_end(&buf->lines[frame->cur.line]);
             right = end - frame->cur.col;
