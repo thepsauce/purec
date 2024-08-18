@@ -162,7 +162,6 @@ static void repeat_last_insertion(void)
 
     set_cursor(SelFrame, &cur);
 
-    ev->redo_cur = SelFrame->cur;
     ev->flags |= IS_TRANSIENT;
 
 end:
@@ -213,9 +212,8 @@ int insert_handle_input(int c)
 
     case '\n':
         ev = break_line(buf, &SelFrame->cur);
-        ev->undo_cur = SelFrame->cur;
+        ev->cur = SelFrame->cur;
         set_cursor(SelFrame, &ev->end);
-        ev->redo_cur = SelFrame->cur;
         return UPDATE_UI;
 
     case '\t':
@@ -224,9 +222,8 @@ int insert_handle_input(int c)
         lines[0].s = &ch;
         lines[0].n = 1;
         ev = insert_lines(buf, &SelFrame->cur, lines, 1, n);
-        ev->undo_cur = SelFrame->cur;
+        ev->cur = SelFrame->cur;
         (void) move_dir(SelFrame, n, 1);
-        ev->redo_cur = SelFrame->cur;
         return UPDATE_UI;
 
     case KEY_DC:
@@ -234,8 +231,7 @@ int insert_handle_input(int c)
         r = move_dir(SelFrame, 1, 1);
         ev = delete_range(buf, &old_cur, &SelFrame->cur);
         if (ev != NULL) {
-            ev->undo_cur = old_cur;
-            ev->redo_cur = old_cur;
+            ev->cur = old_cur;
         }
         SelFrame->cur = old_cur;
         return r;
@@ -247,18 +243,17 @@ int insert_handle_input(int c)
         r = move_dir(SelFrame, 1, -1);
         ev = delete_range(buf, &old_cur, &SelFrame->cur);
         if (ev != NULL) {
-            ev->undo_cur = old_cur;
-            ev->redo_cur = SelFrame->cur;
+            ev->cur = old_cur;
         }
         return r;
     }
+
     if (c < 0x100 && (ch >= ' ' || ch < 0) && motions[c] == 0) {
         lines[0].s = &ch;
         lines[0].n = 1;
         ev = insert_lines(buf, &SelFrame->cur, lines, 1, 1);
-        ev->undo_cur = SelFrame->cur;
+        ev->cur = SelFrame->cur;
         (void) move_dir(SelFrame, 1, 1);
-        ev->redo_cur = SelFrame->cur;
         return UPDATE_UI;
     }
     return do_motion(SelFrame, motions[c]);

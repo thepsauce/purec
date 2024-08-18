@@ -143,11 +143,9 @@ int visual_handle_input(int c)
 
         set_mode(next_mode);
         if (ev != NULL) {
-            ev->undo_cur = Core.pos;
+            ev->cur = Core.pos;
             if (ev_o != NULL) {
-                ev_o->redo_cur = sel.beg;
             } else {
-                ev->redo_cur = sel.beg;
             }
             set_cursor(SelFrame, &sel.beg);
             return UPDATE_UI;
@@ -169,8 +167,7 @@ int visual_handle_input(int c)
         if (ev == NULL) {
             return 0;
         }
-        ev->undo_cur = SelFrame->cur;
-        ev->redo_cur = Core.pos;
+        ev->cur = SelFrame->cur;
         return UPDATE_UI;
 
     case 'O':

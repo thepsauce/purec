@@ -7,7 +7,7 @@ struct undo Undo;
 
 bool should_join(const struct undo_event *ev1, const struct undo_event *ev2)
 {
-    if (((ev1->flags | ev2->flags) & IS_REPLACE)) {
+    if (((ev1->flags | ev2->flags) & (IS_REPLACE | IS_BLOCK))) {
         return false;
     }
     if ((ev1->flags & IS_INSERTION)) {
@@ -120,6 +120,10 @@ struct raw_line *load_undo_data(size_t data_i, size_t *p_num_lines)
 {
     struct undo_seg *seg;
 
+    if (data_i >= Undo.num_segments) {
+        *p_num_lines = 0;
+        return NULL;
+    }
     seg = &Undo.segments[data_i];
     if (seg->lines == NULL) {
         seg->lines = xreallocarray(NULL, seg->num_lines,
@@ -142,6 +146,9 @@ void unload_undo_data(size_t data_i)
 {
     struct undo_seg *seg;
 
+    if (data_i >= Undo.num_segments) {
+        return;
+    }
     seg = &Undo.segments[data_i];
     if (seg->num_lines > HUGE_UNDO_THRESHOLD) {
         for (size_t i = 0; i < seg->num_lines; i++) {
@@ -156,6 +163,7 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
         struct raw_line *lines, size_t num_lines)
 {
     struct undo_event *ev;
+    size_t max_n;
 
     /* free old events */
     for (size_t i = buf->event_i; i < buf->num_events; i++) {
@@ -167,10 +175,19 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
     ev = xmalloc(sizeof(*ev));
     ev->flags = flags;
     ev->pos = *pos;
-    ev->end.line = ev->pos.line + num_lines - 1;
-    ev->end.col = lines[num_lines - 1].n;
-    if (ev->end.line == ev->pos.line) {
-        ev->end.col += ev->pos.col;
+    if ((flags & IS_BLOCK)) {
+        ev->end.line = ev->pos.line + num_lines - 1;
+        max_n = 0;
+        for (size_t i = 0; i < num_lines; i++) {
+            max_n = MAX(max_n, lines[i].n);
+        }
+        ev->end.col = ev->pos.col + max_n - 1;
+    } else {
+        ev->end.line = ev->pos.line + num_lines - 1;
+        ev->end.col = lines[num_lines - 1].n;
+        if (ev->end.line == ev->pos.line) {
+            ev->end.col += ev->pos.col;
+        }
     }
     ev->data_i = save_lines(lines, num_lines);
     ev->time = time(NULL);
@@ -187,7 +204,11 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
     struct line *line;
 
     if ((flags & IS_DELETION)) {
-        _delete_range(buf, &ev->pos, &ev->end);
+        if ((flags & IS_BLOCK)) {
+            _delete_block(buf, &ev->pos, &ev->end);
+        } else {
+            _delete_range(buf, &ev->pos, &ev->end);
+        }
         return;
     }
 
@@ -207,7 +228,11 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
             mark_dirty(line);
         }
     } else {
-        _insert_lines(buf, &ev->pos, lines, num_lines);
+        if ((flags & IS_BLOCK)) {
+            _insert_block(buf, &ev->pos, lines, num_lines);
+        } else {
+            _insert_lines(buf, &ev->pos, lines, num_lines);
+        }
     }
     unload_undo_data(ev->data_i);
 }

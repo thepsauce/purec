@@ -59,6 +59,18 @@ extern struct core {
     int mode;
     /// counter
     size_t counter;
+    /// user register
+    char user_reg;
+
+    /**
+     * saved registers, '.' is the default register, it is used when no other
+     * register was given
+     */
+    struct reg {
+        int flags;
+        size_t data_i;
+    } regs['Z' - '.'];
+
     /// saved cursor positon (for visual mode)
     struct pos pos;
     /// normal mode

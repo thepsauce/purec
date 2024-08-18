@@ -72,6 +72,44 @@ int get_ch(void)
     return c;
 }
 
+static int get_first_char(void)
+{
+    int c;
+    size_t counter = 0, new_counter;
+
+    Core.counter = 1;
+    Core.user_reg = '.';
+    while (c = get_ch(), (c == '0' && counter != 0) || (c >= '1' && c <= '9') ||
+            (c == '\"')) {
+        if (c == '\"') {
+            if (counter != 0) {
+                Core.counter = counter;
+                counter = 0;
+            }
+            c = get_ch();
+            if ((c < '.' || c > 'Z') && c != '+') {
+                return -1;
+            }
+            Core.user_reg = c;
+        } else {
+            /* add a digit to the counter */
+            new_counter = counter * 10 + c - '0';
+            /* check for overflow */
+            if (new_counter < counter) {
+                new_counter = SIZE_MAX;
+            }
+            counter = new_counter;
+        }
+    }
+
+    if (counter == 0) {
+        return c;
+    }
+
+    Core.counter = safe_mul(Core.counter, counter);
+    return c;
+}
+
 int get_extra_char(void)
 {
     int c;
@@ -270,9 +308,10 @@ int main(void)
             if (Core.mode == INSERT_MODE) {
                 c = get_ch();
             } else {
-                Core.counter = 1;
                 Core.move_down_count = 0;
-                c = get_extra_char();
+                do {
+                    c = get_first_char();
+                } while (c == -1);
             }
 
             old_mode = Core.mode;

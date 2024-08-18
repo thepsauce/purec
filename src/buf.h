@@ -41,13 +41,15 @@ extern struct undo {
 } Undo;
 
 /// whether the next event should be processed together with this one
-#define IS_TRANSIENT    0x1
+#define IS_TRANSIENT    0x01
+/// whether the event changes a block rather than a range
+#define IS_BLOCK        0x02
 /// if this is an insertion event
-#define IS_INSERTION    0x2
+#define IS_INSERTION    0x04
 /// if this is a deletion event
-#define IS_DELETION     0x4
+#define IS_DELETION     0x08
 /// if this is a replace event
-#define IS_REPLACE      0x8
+#define IS_REPLACE      0x10
 
 /**
  * The `lines` value depends on the type of event. For a deletion event, it is
@@ -69,9 +71,7 @@ struct undo_event {
     /// the position afther the event
     struct pos end;
     /// cursor position before the event
-    struct pos undo_cur;
-    /// cursor position after the event
-    struct pos redo_cur;
+    struct pos cur;
     /// the data index into the undo segment array
     size_t data_i;
 };
@@ -256,6 +256,19 @@ struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
         const struct raw_line *lines, size_t num_lines, size_t repeat);
 
 /**
+ * Insert lines in block mode starting from a given position.
+ *
+ * WARNING: This function does NO clipping on `pos`.
+ *
+ * @param buf       Buffer to insert in.
+ * @param pos       Position to append to.
+ * @param lines     Lines to insert.
+ * @param num_lines Number of lines to insert.
+ */
+void _insert_block(struct buf *buf, const struct pos *pos,
+        const struct raw_line *lines, size_t num_lines);
+
+/**
  * Breaks the line at given position by inserting '\n' and indents the line
  * according to the current indentation rules.
  *
@@ -391,6 +404,18 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
  * @return The event generated from this deletion (may be `NULL`).
  */
 struct undo_event *delete_block(struct buf *buf, const struct pos *from,
+        const struct pos *to);
+
+/**
+ * Deletes given inclusive block.
+ *
+ * This function does NO clipping.
+ *
+ * @param buf   Buffer to delete within.
+ * @param from  Start of deletion.
+ * @param to    End of deletion.
+ */
+void _delete_block(struct buf *buf, const struct pos *from,
         const struct pos *to);
 
 /**

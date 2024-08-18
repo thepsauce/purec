@@ -80,6 +80,9 @@ int normal_handle_input(int c)
     struct file_list file_list;
     size_t entry;
     int next_mode = NORMAL_MODE;
+    struct raw_line *d_lines;
+    size_t num_lines;
+    struct reg *reg;
 
     buf = SelFrame->buf;
     switch (c) {
@@ -187,8 +190,9 @@ int normal_handle_input(int c)
             set_cursor(SelFrame, &from);
         }
         if (ev != NULL) {
-            ev->undo_cur = cur;
-            ev->redo_cur = SelFrame->cur;
+            Core.regs[Core.user_reg - '.'].flags = ev->flags;
+            Core.regs[Core.user_reg - '.'].data_i = ev->data_i;
+            ev->cur = cur;
             r = UPDATE_UI;
         }
         r |= DO_RECORD;
@@ -201,8 +205,9 @@ int normal_handle_input(int c)
         cur.col = safe_add(cur.col, Core.counter);
         ev = delete_range(buf, &SelFrame->cur, &cur);
         if (ev != NULL) {
-            ev->undo_cur = SelFrame->cur;
-            ev->redo_cur = SelFrame->cur;
+            Core.regs[Core.user_reg - '.'].flags = ev->flags;
+            Core.regs[Core.user_reg - '.'].data_i = ev->data_i;
+            ev->cur = SelFrame->cur;
             r = UPDATE_UI;
         }
         if (c == 's') {
@@ -220,8 +225,9 @@ int normal_handle_input(int c)
         (void) move_horz(SelFrame, Core.counter, -1);
         ev = delete_range(buf, &cur, &SelFrame->cur);
         if (ev != NULL) {
-            ev->undo_cur = cur;
-            ev->redo_cur = SelFrame->cur;
+            Core.regs[Core.user_reg - '.'].flags = ev->flags;
+            Core.regs[Core.user_reg - '.'].data_i = ev->data_i;
+            ev->cur = cur;
             r = UPDATE_UI | DO_RECORD;
         }
         break;
@@ -236,15 +242,16 @@ int normal_handle_input(int c)
         if (c == '\n') {
             ev = delete_range(buf, &SelFrame->cur, &cur);
             if (ev != NULL) {
-                ev->undo_cur = SelFrame->cur;
+                ev->cur = SelFrame->cur;
+                ev->flags |= IS_TRANSIENT;
             }
             ev = break_line(buf, &SelFrame->cur);
+            ev->cur = SelFrame->cur;
         } else {
             ConvChar = c;
             ev = change_range(buf, &SelFrame->cur, &cur, conv_to_char);
-            ev->undo_cur = SelFrame->cur;
+            ev->cur = SelFrame->cur;
         }
-        ev->redo_cur = ev->end;
         set_cursor(SelFrame, &cur);
         return UPDATE_UI | DO_RECORD;
 
@@ -255,7 +262,7 @@ int normal_handle_input(int c)
                 return 0;
             }
         }
-        set_cursor(SelFrame, &ev->undo_cur);
+        set_cursor(SelFrame, &ev->cur);
         return UPDATE_UI;
 
     case CONTROL('R'):
@@ -265,7 +272,11 @@ int normal_handle_input(int c)
                 return 0;
             }
         }
-        set_cursor(SelFrame, &ev->redo_cur);
+        if ((ev->flags & IS_DELETION)) {
+            set_cursor(SelFrame, &ev->cur);
+        } else {
+            set_cursor(SelFrame, &ev->end);
+        }
         return UPDATE_UI;
 
     case 'O':
@@ -275,16 +286,14 @@ int normal_handle_input(int c)
             lines[0].n = 0;
             lines[1].n = 0;
             ev = insert_lines(buf, &cur, lines, 2, 1);
-            ev->undo_cur = cur;
+            ev->cur = cur;
             clip_column(SelFrame);
-            ev->redo_cur = SelFrame->cur;
         } else {
             cur.line--;
             cur.col = buf->lines[cur.line].n;
             ev = break_line(buf, &cur);
-            ev->undo_cur = SelFrame->cur;
+            ev->cur = SelFrame->cur;
             set_cursor(SelFrame, &SelFrame->cur);
-            ev->redo_cur = SelFrame->cur;
         }
         return UPDATE_UI | DO_RECORD;
 
@@ -293,9 +302,8 @@ int normal_handle_input(int c)
         cur.line = SelFrame->cur.line;
         cur.col = buf->lines[cur.line].n;
         ev = break_line(buf, &cur);
-        ev->undo_cur = SelFrame->cur;
+        ev->cur = SelFrame->cur;
         set_cursor(SelFrame, &ev->end);
-        ev->redo_cur = ev->end;
         return UPDATE_UI | DO_RECORD;
 
     case ':':
@@ -428,6 +436,23 @@ int normal_handle_input(int c)
         Core.dot_i = Core.user_recs[c - 'a'].from;
         Core.dot_e = Core.user_recs[c - 'a'].to;
         Core.repeat_count = Core.counter;
+        return UPDATE_UI;
+
+    case 'p':
+        reg = &Core.regs[Core.user_reg - '.'];
+        d_lines = load_undo_data(reg->data_i, &num_lines);
+        if (d_lines == NULL) {
+            return 0;
+        }
+        if ((reg->flags & IS_BLOCK)) {
+            ev = insert_block(buf, &SelFrame->cur, d_lines, num_lines,
+                    Core.counter);
+        } else {
+            ev = insert_lines(buf, &SelFrame->cur, d_lines, num_lines,
+                    Core.counter);
+        }
+        ev->cur = SelFrame->cur;
+        unload_undo_data(reg->data_i);
         return UPDATE_UI;
 
     case 'Z':

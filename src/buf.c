@@ -317,6 +317,61 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
     mark_dirty(at_line);
 }
 
+struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
+        const struct raw_line *c_lines, size_t c_num_lines, size_t repeat)
+{
+    struct raw_line *lines, *line;
+    size_t num_lines;
+    size_t sp;
+
+    /* duplicate and repeat the lines, add padding to the front of some lines */
+    num_lines = 1 + (c_num_lines - 1) * repeat;
+    lines = xreallocarray(NULL, num_lines, sizeof(*lines));
+    line = &lines[0];
+    for (size_t i = 0; i < c_num_lines; i++) {
+        if (pos->col > buf->lines[pos->line + i].n) {
+            sp = pos->col - buf->lines[pos->line + i].n;
+        } else {
+            sp = 0;
+        }
+        line->n = c_lines[i].n * repeat;
+        line->s = xmalloc(sp + line->n);
+        memset(&line->s[0], ' ', sp);
+        for (size_t r = 0; r < repeat; r++) {
+            memcpy(&line->s[sp + r * c_lines->n], &c_lines->s[i],
+                    c_lines[i].n);
+        }
+        line++;
+    }
+
+    _insert_block(buf, pos, lines, num_lines);
+
+    return add_event(buf, IS_BLOCK | IS_INSERTION, pos, lines, num_lines);
+}
+
+void _insert_block(struct buf *buf, const struct pos *pos,
+        const struct raw_line *lines, size_t num_lines)
+{
+    const struct raw_line *rl;
+    struct line *line;
+    size_t col;
+
+    update_dirty_lines(buf, pos->line, pos->line + num_lines - 1);
+
+    for (size_t i = 0; i < num_lines; i++) {
+        line = &buf->lines[pos->line + i];
+        rl = &lines[i];
+        col = MIN(pos->col, line->n);
+
+        line->s = xrealloc(line->s, line->n + rl->n);
+        memmove(&line->s[col + rl->n], &line->s[col], line->n - col);
+        memcpy(&line->s[col], &rl->s[0], rl->n);
+        line->n += rl->n;
+
+        mark_dirty(line);
+    }
+}
+
 struct undo_event *break_line(struct buf *buf, const struct pos *pos)
 {
     struct line *line, *at_line;
@@ -510,9 +565,9 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
     struct pos from, to;
     struct line *line;
     size_t to_col;
-    struct undo_event *first_ev = NULL, *p_ev;
-    struct pos pos;
+    struct undo_event *ev;
     struct raw_line *lines;
+    size_t num_lines;
 
     from = *pfrom;
     to = *pto;
@@ -525,40 +580,54 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
 
     to.line = MIN(to.line, buf->num_lines - 1);
 
+    num_lines = to.line - from.line + 1;
+    lines = xreallocarray(NULL, num_lines, sizeof(*lines));
     for (size_t i = from.line; i <= to.line; i++) {
         line = &buf->lines[i];
         if (from.col >= line->n) {
+            init_raw_line(&lines[i - from.line], NULL, 0);
             continue;
         }
         to_col = MIN(to.col + 1, line->n);
         if (to_col == 0) {
+            init_raw_line(&lines[i - from.line], NULL, 0);
+            continue;
+        }
+        init_raw_line(&lines[i - from.line], &line->s[from.col],
+                to_col - from.col);
+    }
+
+    ev = add_event(buf, IS_BLOCK | IS_DELETION, &from, lines, num_lines);
+
+    _delete_block(buf, &from, &to);
+
+    return ev;
+}
+
+void _delete_block(struct buf *buf, const struct pos *from,
+        const struct pos *to)
+{
+    struct line *line;
+    size_t to_col;
+
+    update_dirty_lines(buf, from->line, to->line);
+
+    for (size_t i = from->line; i <= to->line; i++) {
+        line = &buf->lines[i];
+        if (from->col >= line->n) {
+            continue;
+        }
+        to_col = MIN(to->col + 1, line->n);
+        if (to_col == 0) {
             continue;
         }
 
-        pos.line = i;
-        pos.col = from.col;
-        lines = xmalloc(sizeof(*lines));
-        init_raw_line(&lines[0], &line->s[from.col], to_col - from.col);
-        p_ev = add_event(buf, IS_DELETION | IS_TRANSIENT, &pos, lines, 1);
-        if (first_ev == NULL) {
-            first_ev = p_ev;
-        }
-
         line->n -= to_col;
-        memmove(&line->s[from.col], &line->s[to_col], line->n);
-        line->n += from.col;
+        memmove(&line->s[from->col], &line->s[to_col], line->n);
+        line->n += from->col;
 
         mark_dirty(line);
     }
-
-    if (first_ev == NULL) {
-        return NULL;
-    }
-
-    update_dirty_lines(buf, from.line, to.line);
-
-    p_ev->flags ^= IS_TRANSIENT;
-    return first_ev;
 }
 
 struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
