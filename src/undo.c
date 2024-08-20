@@ -113,6 +113,7 @@ size_t save_lines(struct raw_line *lines, size_t num_lines)
     }
     seg->lines = lines;
     seg->num_lines = num_lines;
+    seg->load_count = 0;
     return Undo.num_segments++;
 }
 
@@ -125,6 +126,7 @@ struct raw_line *load_undo_data(size_t data_i, size_t *p_num_lines)
         return NULL;
     }
     seg = &Undo.segments[data_i];
+    seg->load_count++;
     if (seg->lines == NULL) {
         seg->lines = xreallocarray(NULL, seg->num_lines,
                 sizeof(*seg->lines));
@@ -150,7 +152,8 @@ void unload_undo_data(size_t data_i)
         return;
     }
     seg = &Undo.segments[data_i];
-    if (seg->num_lines > HUGE_UNDO_THRESHOLD) {
+    seg->load_count--;
+    if (seg->num_lines > HUGE_UNDO_THRESHOLD && seg->load_count == 0) {
         for (size_t i = 0; i < seg->num_lines; i++) {
             free(seg->lines[i].s);
         }

@@ -6,6 +6,7 @@
 
 #include <locale.h>
 
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -20,6 +21,37 @@ bool IsRunning;
 int ExitCode;
 
 struct core Core;
+
+void yank_data(size_t data_i, int flags)
+{
+    struct raw_line *lines;
+    size_t num_lines;
+    struct reg *reg;
+
+    if (Core.user_reg == '+') {
+        lines = load_undo_data(data_i, &num_lines);
+        copy_clipboard(lines, num_lines);
+        unload_undo_data(data_i);
+    } else {
+        reg = &Core.regs[Core.user_reg - '.'];
+        reg->flags = flags;
+        reg->data_i = data_i;
+    }
+}
+
+void yank_lines(struct raw_line *lines, size_t num_lines, int flags)
+{
+    struct reg *reg;
+
+    if (Core.user_reg == '+') {
+        copy_clipboard(lines, num_lines);
+        (void) save_lines(lines, num_lines);
+    } else {
+        reg = &Core.regs[Core.user_reg - '.'];
+        reg->flags = flags;
+        reg->data_i = save_lines(lines, num_lines);
+    }
+}
 
 bool is_playback(void)
 {
@@ -86,7 +118,7 @@ static int get_first_char(void)
                 Core.counter = counter;
                 counter = 0;
             }
-            c = get_ch();
+            c = toupper(get_ch());
             if ((c < '.' || c > 'Z') && c != '+') {
                 return -1;
             }
@@ -239,6 +271,7 @@ int main(void)
     set_escdelay(0);
 
     init_colors();
+    init_clipboard();
 
     Message = newpad(1, 128);
     OffScreen = newpad(1, 512);

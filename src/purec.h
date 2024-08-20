@@ -130,6 +130,47 @@ struct selection {
 };
 
 /**
+ * Initializes the internal clipboard data.
+ */
+void init_clipboard(void);
+
+/**
+ * Copies given lines to the clipboard.
+ *
+ * @param lines     The lines to copy to the clipboard.
+ * @param num_lines The number of lines.
+ *
+ * @return 0 if the clipboard could be accessed, -1 otherwise.
+ */
+int copy_clipboard(const struct raw_line *lines, size_t num_lines);
+
+/**
+ * Reads lines from the clipboard.
+ *
+ * @param p_num_lines   The number of lines read.
+ *
+ * @return The lines read, they shall NOT be freed or modified.
+ */
+struct raw_line *paste_clipboard(size_t *p_num_lines);
+
+/**
+ * Sets the current register to given data.
+ *
+ * @param data_i    The data index.
+ * @param flags     The register flags.
+ */
+void yank_data(size_t data_i, int flags);
+
+/**
+ * Sets the current register to given lines.
+ *
+ * @param lines     The lines.
+ * @param num_lines The numer of lines lines.
+ * @param flags     The register flags.
+ */
+void yank_lines(struct raw_line *lines, size_t num_lines, int flags);
+
+/**
  * Checks if a recording is currently being played. If yes, then the next call
  * to `get_ch()` will NOT be interactive user input but a playback.
  *

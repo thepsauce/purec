@@ -33,6 +33,8 @@ extern struct undo {
         size_t num_lines;
         /// position within the file `fp`
         fpos_t file_pos;
+        /// how many times this segment was loaded without unloading
+        size_t load_count;
     } *segments;
     /// number of undo segments
     size_t num_segments;
@@ -321,9 +323,9 @@ struct raw_line *get_lines(struct buf *buf, const struct pos *from,
         const struct pos *to, size_t *p_num_lines);
 
 /**
- * Gets the lines within the buffer inside a given block.
+ * Gets a block from within a buffer.
  *
- * @param buf   Buffer to get lines from.
+ * @param buf   Buffer to get the block from.
  * @param from  Upper left corner of the block.
  * @param to    Lower right corner of the block.
  *

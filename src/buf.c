@@ -469,6 +469,34 @@ struct raw_line *get_lines(struct buf *buf, const struct pos *from,
     return lines;
 }
 
+struct raw_line *get_block(struct buf *buf, const struct pos *from,
+        const struct pos *to, size_t *p_num_lines)
+{
+    struct raw_line *lines;
+    size_t num_lines;
+    struct line *line;
+    size_t to_col;
+
+    num_lines = to->line - from->line + 1;
+    lines = xreallocarray(NULL, num_lines, sizeof(*lines));
+    for (size_t i = from->line; i <= to->line; i++) {
+        line = &buf->lines[i];
+        if (from->col >= line->n) {
+            init_raw_line(&lines[i - from->line], NULL, 0);
+            continue;
+        }
+        to_col = MIN(to->col + 1, line->n);
+        if (to_col == 0) {
+            init_raw_line(&lines[i - from->line], NULL, 0);
+            continue;
+        }
+        init_raw_line(&lines[i - from->line], &line->s[from->col],
+                to_col - from->col);
+    }
+    *p_num_lines = num_lines;
+    return lines;
+}
+
 struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
         const struct pos *pto)
 {

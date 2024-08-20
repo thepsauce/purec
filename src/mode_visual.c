@@ -62,6 +62,8 @@ int visual_handle_input(int c)
     struct selection sel;
     struct undo_event *ev, *ev_o;
     bool line_based;
+    struct raw_line *lines;
+    size_t num_lines;
 
     buf = SelFrame->buf;
     switch (c) {
@@ -144,13 +146,38 @@ int visual_handle_input(int c)
         set_mode(next_mode);
         if (ev != NULL) {
             ev->cur = Core.pos;
-            if (ev_o != NULL) {
-            } else {
-            }
+            yank_data(ev->data_i, ev->flags);
             set_cursor(SelFrame, &sel.beg);
             return UPDATE_UI;
         }
         break;
+
+    case 'Y':
+    case 'y':
+        get_selection(&sel);
+        if (sel.is_block) {
+            lines = get_block(buf, &sel.beg, &sel.end, &num_lines);
+        } else {
+            if (Core.mode == VISUAL_MODE && isupper(c)) {
+                /* upgrade to line yanking */
+                sel.beg.col = 0;
+                sel.end.col = 0;
+                sel.end.line++;
+            } else if (Core.mode != VISUAL_LINE_MODE) {
+                if (sel.end.col == buf->lines[sel.end.line].n) {
+                    sel.end.line++;
+                    sel.end.col = 0;
+                } else {
+                    sel.end.col++;
+                }
+            }
+            lines = get_lines(buf, &sel.beg, &sel.end, &num_lines);
+        }
+
+        yank_lines(lines, num_lines, sel.is_block ? IS_BLOCK : 0);
+
+        set_mode(NORMAL_MODE);
+        return UPDATE_UI;
 
     case 'U':
     case 'u':

@@ -3,9 +3,11 @@
 #include "frame.h"
 #include "fuzzy.h"
 #include "purec.h"
+#include "xalloc.h"
 
 #include <ctype.h>
 #include <ncurses.h>
+#include <string.h>
 
 int ConvChar;
 
@@ -190,8 +192,7 @@ int normal_handle_input(int c)
             set_cursor(SelFrame, &from);
         }
         if (ev != NULL) {
-            Core.regs[Core.user_reg - '.'].flags = ev->flags;
-            Core.regs[Core.user_reg - '.'].data_i = ev->data_i;
+            yank_data(ev->data_i, 0);
             ev->cur = cur;
             r = UPDATE_UI;
         }
@@ -205,8 +206,7 @@ int normal_handle_input(int c)
         cur.col = safe_add(cur.col, Core.counter);
         ev = delete_range(buf, &SelFrame->cur, &cur);
         if (ev != NULL) {
-            Core.regs[Core.user_reg - '.'].flags = ev->flags;
-            Core.regs[Core.user_reg - '.'].data_i = ev->data_i;
+            yank_data(ev->data_i, 0);
             ev->cur = SelFrame->cur;
             r = UPDATE_UI;
         }
@@ -225,8 +225,7 @@ int normal_handle_input(int c)
         (void) move_horz(SelFrame, Core.counter, -1);
         ev = delete_range(buf, &cur, &SelFrame->cur);
         if (ev != NULL) {
-            Core.regs[Core.user_reg - '.'].flags = ev->flags;
-            Core.regs[Core.user_reg - '.'].data_i = ev->data_i;
+            yank_data(ev->data_i, 0);
             ev->cur = cur;
             r = UPDATE_UI | DO_RECORD;
         }
@@ -438,21 +437,93 @@ int normal_handle_input(int c)
         Core.repeat_count = Core.counter;
         return UPDATE_UI;
 
-    case 'p':
-        reg = &Core.regs[Core.user_reg - '.'];
-        d_lines = load_undo_data(reg->data_i, &num_lines);
-        if (d_lines == NULL) {
-            return 0;
+    case 'Y':
+    case 'y':
+        if (c == 'Y') {
+            e_c = '$';
+        } else {
+            e_c = get_extra_char();
         }
-        if ((reg->flags & IS_BLOCK)) {
-            ev = insert_block(buf, &SelFrame->cur, d_lines, num_lines,
+        cur = SelFrame->cur;
+        ev = NULL;
+        switch (e_c) {
+        case 'y':
+            to.line = safe_add(cur.line, Core.counter);
+            if (to.line > buf->num_lines) {
+                to.line = buf->num_lines;
+            }
+
+            if (cur.line > 0) {
+                from.line = cur.line - 1;
+                from.col = buf->lines[from.line].n;
+                to.line--;
+                to.col = buf->lines[to.line].n;
+            } else {
+                from.line = cur.line;
+                from.col = 0;
+                to.col = 0;
+            }
+            break;
+
+        default:
+            do_motion(SelFrame, motions[e_c]);
+            from = SelFrame->cur;
+            to = cur;
+            sort_positions(&from, &to);
+            /* some motions do not want increment, this is to make some motions
+             * seem more natural
+             */
+            switch (motions[e_c]) {
+            case MOTION_NEXT_WORD:
+            case MOTION_PREV_WORD:
+            case MOTION_UP:
+            case MOTION_DOWN:
+            case MOTION_LEFT:
+            case MOTION_RIGHT:
+            case MOTION_PREV:
+            case MOTION_NEXT:
+            case MOTION_FILE_BEG:
+            case MOTION_FILE_END:
+                break;
+
+            default:
+                to.col++;
+            }
+        }
+        d_lines = get_lines(buf, &from, &to, &num_lines);
+        yank_lines(d_lines, num_lines, 0);
+        return UPDATE_UI;
+
+    case 'P':
+    case 'p':
+        cur = SelFrame->cur;
+        if (c == 'p') {
+            cur.col++;
+            cur.col = MIN(cur.col, buf->lines[cur.line].n);
+        }
+
+        if (Core.user_reg == '+') {
+            d_lines = paste_clipboard(&num_lines);
+            if (d_lines == NULL) {
+                return 0;
+            }
+            ev = insert_lines(buf, &cur, d_lines, num_lines,
                     Core.counter);
         } else {
-            ev = insert_lines(buf, &SelFrame->cur, d_lines, num_lines,
-                    Core.counter);
+            reg = &Core.regs[Core.user_reg - '.'];
+            d_lines = load_undo_data(reg->data_i, &num_lines);
+            if (d_lines == NULL) {
+                return 0;
+            }
+            if ((reg->flags & IS_BLOCK)) {
+                ev = insert_block(buf, &cur, d_lines, num_lines, Core.counter);
+            } else {
+                ev = insert_lines(buf, &cur, d_lines, num_lines, Core.counter);
+            }
+            unload_undo_data(reg->data_i);
         }
         ev->cur = SelFrame->cur;
-        unload_undo_data(reg->data_i);
+        set_cursor(SelFrame, &ev->end);
         return UPDATE_UI;
 
     case 'Z':

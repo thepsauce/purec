@@ -1,10 +1,10 @@
 # Compiler flags
-DEBUG_FLAGS := -g -fsanitize=address
-C_FLAGS := -std=gnu99 -Wall -Wextra -Wpedantic -Werror
+DEBUG_FLAGS := -g -fsanitize=address -Werror
+C_FLAGS := -std=gnu99 -Wall -Wextra -Wpedantic
 RELEASE_FLAGS := -O3
 
 # Libraries
-C_LIBS := -lncursesw
+C_LIBS := -lncursesw -lX11
 
 # Input
 SRC := src
