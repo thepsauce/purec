@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <string.h>
+#include <limits.h>
 
 #define ACCEPTS_RANGE   0x1
 #define ACCEPTS_NUMBER  0x2
@@ -23,15 +24,16 @@ struct cmd_data {
 
 #include "cmd_impl.h"
 
+#define MAX_COMMAND_NAME 8
+
 static const struct cmd {
     /// name of the command
-    const char *name;
-    /// whether this command accepts a range
+    char name[MAX_COMMAND_NAME];
+    /// whether this command accepts a range or a number
     int flags;
     /// callback of the command to call
     int (*callback)(struct cmd_data *cd);
 } Commands[] = {
-    /* must be sorted */
     { "cq", ACCEPTS_NUMBER, cmd_cquit },
     { "cquit", ACCEPTS_NUMBER, cmd_cquit },
 
@@ -72,35 +74,94 @@ static const struct cmd {
     { "xall", 0, cmd_exit_all },
 };
 
-static const struct cmd *get_command(const char *s, size_t s_len)
+static const struct cmd *get_command(const char *s, size_t s_m)
 {
-    size_t l, m, r;
-    const char *name;
-    int cmp;
+    struct {
+        const struct cmd *cmd;
+        int val;
+    } mins[3];
+    int min_cnt = 0;
+    const char *s0;
+    int v0[MAX_COMMAND_NAME];
+    int v1[MAX_COMMAND_NAME];
+    int m, n;
+    int del_cost, ins_cost, sub_cost;
+    int d;
+    int max, max_i;
 
-    l = 0;
-    r = ARRAY_SIZE(Commands);
-    while (l < r) {
-        m = (l + r) / 2;
-        name = Commands[m].name;
-        cmp = strncmp(name, s, s_len);
-        if (cmp == 0) {
-            if (name[s_len] == '\0') {
-                return &Commands[m];
-            }
-            cmp = (unsigned char) name[s_len];
+    if (s_m >= 12) {
+        werase(Message);
+        wprintw(Message, "command '%.*s' does not exist", (int) s_m, s);
+        return NULL;
+    }
+
+    m = s_m;
+    for (size_t c = 0; c < ARRAY_SIZE(Commands); c++) {
+        s0 = Commands[c].name;
+        n = strlen(s0);
+
+        for (int i = 0; i <= n; i++) {
+            v0[i] = i;
         }
 
-        if (cmp < 0) {
-            l = m + 1;
-        } else {
-            r = m;
+        for (int i = 0; i < m; i++) {
+            v1[0] = i + 1;
+
+            for (int j = 0; j < n; j++) {
+                del_cost = v0[j + 1] + 1;
+                ins_cost = v1[j] + 1;
+                sub_cost = v0[j];
+                if (s[i] != s0[j]) {
+                    sub_cost++;
+                }
+                v1[j + 1] = MIN(del_cost, MIN(ins_cost, sub_cost));
+            }
+
+            memcpy(v0, v1, sizeof(v1));
+        }
+
+        d = v0[n];
+        if (d == 0) {
+            return &Commands[c];
+        }
+        if (d < 4) {
+            if (min_cnt < (int) ARRAY_SIZE(mins)) {
+                mins[min_cnt].cmd = &Commands[c];
+                mins[min_cnt].val = d;
+                min_cnt++;
+            } else {
+                max = mins[0].val;
+                max_i = 0;
+                for (int i = 1; i < min_cnt; i++) {
+                    if (mins[i].val > max) {
+                        max = mins[i].val;
+                        max_i = i;
+                    }
+                }
+                if (d < max) {
+                    mins[max_i].cmd = &Commands[c];
+                    mins[max_i].val = d;
+                }
+            }
         }
     }
 
     werase(Message);
-    wprintw(Message, "command '%.*s' does not exist, did you mean '%s'?",
-            (int) s_len, s, Commands[l].name);
+    wprintw(Message, "command '%.*s' does not exist", (int) m, s);
+    if (min_cnt > 0) {
+        waddstr(Message, ", did you mean");
+        for (int i = 0; i < min_cnt; i++) {
+            if (i > 0) {
+                if (i + 1 == min_cnt) {
+                    waddstr(Message, " or");
+                } else {
+                    waddch(Message, ',');
+                }
+            }
+            wprintw(Message, " '%s'", mins[i].cmd->name);
+        }
+        waddch(Message, '?');
+    }
     return NULL;
 }
 

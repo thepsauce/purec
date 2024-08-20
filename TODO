@@ -43,8 +43,11 @@
     [ ] -s Session restore
 
 [-] Add registers
-    [ ] Add keybinds for copy paste
-    [ ] Add X11 clipboard support
+    [X] Add keybinds for copy paste
+    [-] Add X11 clipboard support
+        [X] Implement simple clipboard
+        [X] Support primary
+        [ ] Support INCR
 
 [ ] Add marks
     [ ] Add keybind for moving to mark
