@@ -85,7 +85,7 @@ static void render_entries(void)
         }
 
         /* erase to end of line */
-        while (getcurx(stdscr) < Fuzzy.x + Fuzzy.w - 1) {
+        while (getcurx(stdscr) < Fuzzy.x + Fuzzy.w) {
             addch(' ');
         }
     }
@@ -94,7 +94,7 @@ static void render_entries(void)
     attr_off(A_REVERSE, NULL);
     for (; i < Fuzzy.scroll.line + Fuzzy.h; i++) {
         move(Fuzzy.y + 1 + i - Fuzzy.scroll.line, Fuzzy.x);
-        while (getcurx(stdscr) < Fuzzy.x + Fuzzy.w - 1) {
+        while (getcurx(stdscr) < Fuzzy.x + Fuzzy.w) {
             addch(' ');
         }
     }
