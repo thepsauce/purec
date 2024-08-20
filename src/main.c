@@ -188,6 +188,37 @@ void set_mode(int mode)
     } else if (mode == INSERT_MODE) {
         Core.ev_from_ins = SelFrame->buf->event_i;
     }
+
+    if (!is_playback()) {
+        set_message_to_default();
+    }
+}
+
+void set_message_to_default(void)
+{
+    static const char *mode_strings[] = {
+        [NORMAL_MODE] = "",
+
+        [INSERT_MODE] = "-- INSERT --",
+
+        [VISUAL_MODE] = "-- VISUAL --",
+        [VISUAL_LINE_MODE] = "-- VISUAL LINE --",
+        [VISUAL_BLOCK_MODE] = "-- VISUAL BLOCK --",
+    };
+
+    wmove(Message, 0, 0);
+    wattr_on(Message, A_BOLD, NULL);
+    waddstr(Message, mode_strings[Core.mode]);
+    if (Core.mode == INSERT_MODE && Core.counter > 1) {
+        wprintw(Message, " REPEAT * %zu", Core.counter);
+    }
+    wattr_off(Message, A_BOLD, NULL);
+
+    if (Core.user_rec_ch != '\0') {
+        waddstr(Message, " recording @");
+        waddch(Message, Core.user_rec_ch);
+    }
+    wclrtoeol(Message);
 }
 
 bool get_selection(struct selection *sel)
@@ -232,17 +263,7 @@ int main(void)
         [VISUAL_BLOCK_MODE] = '\x30',
     };
 
-    static const char *mode_strings[] = {
-        [NORMAL_MODE] = "",
-
-        [INSERT_MODE] = "-- INSERT --",
-
-        [VISUAL_MODE] = "-- VISUAL --",
-        [VISUAL_LINE_MODE] = "-- VISUAL LINE --",
-        [VISUAL_BLOCK_MODE] = "-- VISUAL BLOCK --",
-    };
-
-    static int (*const input_handlers[])(int c) = {
+   static int (*const input_handlers[])(int c) = {
         [NORMAL_MODE] = normal_handle_input,
         [INSERT_MODE] = insert_handle_input,
         [VISUAL_MODE] = visual_handle_input,
@@ -299,20 +320,6 @@ int main(void)
         for (struct frame *f = FirstFrame; f != NULL; f = f->next) {
             render_frame(f);
         }
-
-        wmove(Message, 0, 0);
-        wattr_on(Message, A_BOLD, NULL);
-        waddstr(Message, mode_strings[Core.mode]);
-        if (Core.mode == INSERT_MODE && Core.counter > 1) {
-            wprintw(Message, " REPEAT * %zu", Core.counter);
-        }
-        wattr_off(Message, A_BOLD, NULL);
-
-        if (Core.user_rec_ch != '\0') {
-            waddstr(Message, " recording @");
-            waddch(Message, Core.user_rec_ch);
-        }
-        wclrtoeol(Message);
 
         copywin(Message, stdscr, 0, 0, LINES - 1, 0, LINES - 1,
                 MIN(COLS - 1, getmaxx(Message)), 0);
