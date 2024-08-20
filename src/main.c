@@ -28,9 +28,9 @@ void yank_data(size_t data_i, int flags)
     size_t num_lines;
     struct reg *reg;
 
-    if (Core.user_reg == '+') {
+    if (Core.user_reg == '+' || Core.user_reg == '*') {
         lines = load_undo_data(data_i, &num_lines);
-        copy_clipboard(lines, num_lines);
+        copy_clipboard(lines, num_lines, Core.user_reg == '*');
         unload_undo_data(data_i);
     } else {
         reg = &Core.regs[Core.user_reg - '.'];
@@ -43,8 +43,8 @@ void yank_lines(struct raw_line *lines, size_t num_lines, int flags)
 {
     struct reg *reg;
 
-    if (Core.user_reg == '+') {
-        copy_clipboard(lines, num_lines);
+    if (Core.user_reg == '+' || Core.user_reg == '*') {
+        copy_clipboard(lines, num_lines, Core.user_reg == '*');
         (void) save_lines(lines, num_lines);
     } else {
         reg = &Core.regs[Core.user_reg - '.'];

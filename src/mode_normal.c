@@ -502,8 +502,8 @@ int normal_handle_input(int c)
             cur.col = MIN(cur.col, buf->lines[cur.line].n);
         }
 
-        if (Core.user_reg == '+') {
-            d_lines = paste_clipboard(&num_lines);
+        if (Core.user_reg == '+' || Core.user_reg == '*') {
+            d_lines = paste_clipboard(&num_lines, Core.user_reg == '*');
             if (d_lines == NULL) {
                 return 0;
             }

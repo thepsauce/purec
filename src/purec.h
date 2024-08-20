@@ -139,19 +139,21 @@ void init_clipboard(void);
  *
  * @param lines     The lines to copy to the clipboard.
  * @param num_lines The number of lines.
+ * @param primary   For X11, if the primary clipboard should be used.
  *
  * @return 0 if the clipboard could be accessed, -1 otherwise.
  */
-int copy_clipboard(const struct raw_line *lines, size_t num_lines);
+int copy_clipboard(const struct raw_line *lines, size_t num_lines, int primary);
 
 /**
  * Reads lines from the clipboard.
  *
  * @param p_num_lines   The number of lines read.
+ * @param primary       For X11, if the primary clipboard should be used.
  *
  * @return The lines read, they shall NOT be freed or modified.
  */
-struct raw_line *paste_clipboard(size_t *p_num_lines);
+struct raw_line *paste_clipboard(size_t *p_num_lines, int primary);
 
 /**
  * Sets the current register to given data.

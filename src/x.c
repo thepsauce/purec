@@ -83,17 +83,17 @@ static void *x_thread(void *_unused)
     XEvent xev;
 
     while (XNextEvent(X.dpy_copy, &xev), 1) {
-        pthread_mutex_lock(&X.sel_lock);
         if (xev.type == SelectionRequest) {
+            pthread_mutex_lock(&X.sel_lock);
             handle_sel_request(&xev);
+            pthread_mutex_unlock(&X.sel_lock);
         }
-        pthread_mutex_unlock(&X.sel_lock);
     }
 
     return _unused;
 }
 
-int copy_clipboard(const struct raw_line *lines, size_t num_lines)
+int copy_clipboard(const struct raw_line *lines, size_t num_lines, int primary)
 {
     char *s;
     size_t len;
@@ -133,8 +133,13 @@ int copy_clipboard(const struct raw_line *lines, size_t num_lines)
     X.sel_text = s;
     X.sel_len = len;
 
-    clipboard = XInternAtom(X.dpy_copy, "CLIPBOARD", False);
+    if (primary == 0) {
+        clipboard = XInternAtom(X.dpy_copy, "CLIPBOARD", False);
+    } else {
+        clipboard = XA_PRIMARY;
+    }
     XSetSelectionOwner(X.dpy_copy, clipboard, X.win_copy, CurrentTime);
+    /* flush must be here so that the x_thread does not halt indefinitelyy */
     XFlush(X.dpy_copy);
 
     pthread_mutex_unlock(&X.sel_lock);
@@ -188,7 +193,7 @@ static void handle_sel_request(XEvent *e)
     (void) XSendEvent(xsre->display, xsre->requestor, True, 0, (XEvent*) &xev);
 }
 
-struct raw_line *paste_clipboard(size_t *p_num_lines)
+struct raw_line *paste_clipboard(size_t *p_num_lines, int primary)
 {
     Atom clipboard, target;
     XEvent xev;
@@ -198,7 +203,11 @@ struct raw_line *paste_clipboard(size_t *p_num_lines)
         return NULL;
     }
 
-    clipboard = XInternAtom(X.dpy_paste, "CLIPBOARD", False);
+    if (primary == 0) {
+        clipboard = XInternAtom(X.dpy_paste, "CLIPBOARD", False);
+    } else {
+        clipboard = XA_PRIMARY;
+    }
     target = XInternAtom(X.dpy_paste, "UTF8_STRING", False);
     if (target == None) {
         target = XA_STRING;
@@ -213,11 +222,9 @@ struct raw_line *paste_clipboard(size_t *p_num_lines)
     X.lines = NULL;
     X.num_lines = 0;
 
-    while (1) {
-        XNextEvent(X.dpy_paste, &xev);
-        if (xev.type == SelectionNotify) {
-            break;
-        }
+    /* get the next selection notify event */
+    while (XNextEvent(X.dpy_paste, &xev), xev.type != SelectionNotify) {
+        (void) 0;
     }
     handle_sel_notify(&xev);
 
