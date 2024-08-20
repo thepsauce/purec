@@ -238,6 +238,7 @@ int insert_handle_input(int c)
 
     case 0x7f:
     case KEY_BACKSPACE:
+    case '\b':
         /* TODO: add handling for indentation deletion */
         old_cur = SelFrame->cur;
         r = move_dir(SelFrame, 1, -1);

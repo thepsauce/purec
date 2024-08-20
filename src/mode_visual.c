@@ -45,6 +45,7 @@ int visual_handle_input(int c)
 
         [0x7f] = MOTION_PREV,
         [KEY_BACKSPACE] = MOTION_PREV,
+        ['\b'] = MOTION_PREV,
         [' '] = MOTION_NEXT,
 
         [KEY_PPAGE] = MOTION_PAGE_UP,

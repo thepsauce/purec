@@ -657,6 +657,8 @@ int move_dir(struct frame *frame, size_t dist, int dir)
         }
     }
 
+    frame->vct = frame->cur.col;
+
     if (adjust_scroll(frame) || old_dist != dist) {
         return 1;
     }

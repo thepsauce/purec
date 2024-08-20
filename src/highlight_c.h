@@ -144,6 +144,7 @@ static size_t c_read_escapist(struct state_ctx *ctx, size_t i)
     case '\\':
     case '\'':
     case '\"':
+    case '0':
         return i + 1;
 
     case 'x':
@@ -202,13 +203,9 @@ static size_t c_get_char(struct state_ctx *ctx)
         ctx->hi = HI_CHAR;
     } else {
         n++;
-        if (ctx->i + n == ctx->n) {
-            ctx->hi = HI_NORMAL;
-            return 2;
-        }
     }
 
-    if (ctx->s[ctx->i + n] != '\'') {
+    if (ctx->i + n == ctx->n || ctx->s[ctx->i + n] != '\'') {
         ctx->hi = HI_NORMAL;
         return n;
     }

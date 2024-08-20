@@ -258,8 +258,8 @@ void render_frame(struct frame *frame)
     perc = 100 * (frame->cur.line + 1) / buf->num_lines;
 
     set_highlight(stdscr, HI_STATUS);
-    for (int i = x; i < frame->x + frame->w; i++) {
-        mvaddch(frame->y + frame->h - 1, i, ' ');
+    for (int i = x; i < frame->w; i++) {
+        mvaddch(frame->y + frame->h - 1, frame->x + i, ' ');
     }
 
     set_highlight(OffScreen, HI_STATUS);
@@ -272,8 +272,8 @@ void render_frame(struct frame *frame)
         w = frame->w;
     }
     copywin(OffScreen, stdscr, 0, 0,
-            frame->y + frame->h - 1, MIN(frame->x, 1),
-            frame->y + frame->h - 1, MIN(frame->x, 1) + w - 1, 0);
+            frame->y + frame->h - 1, frame->x + MIN(frame->x, 1),
+            frame->y + frame->h - 1, frame->x + MIN(frame->x, 1) + w - 1, 0);
 
     mvwprintw(OffScreen, 0, 0, "%d%% ¶%zu/%zu☰℅%zu",
             perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1);

@@ -63,6 +63,7 @@ int normal_handle_input(int c)
 
         [0x7f] = MOTION_PREV,
         [KEY_BACKSPACE] = MOTION_PREV,
+        ['\b'] = MOTION_PREV,
         [' '] = MOTION_NEXT,
 
         [KEY_PPAGE] = MOTION_PAGE_UP,
@@ -407,8 +408,12 @@ int normal_handle_input(int c)
     case 'I':
     case 'i':
         set_mode(INSERT_MODE);
-        if (c == 'a') {
+        if (c == 'A') {
+            move_horz(SelFrame, SIZE_MAX, 1);
+        } else if (c == 'a') {
             move_horz(SelFrame, 1, 1);
+        } else if (c == 'I') {
+            do_motion(SelFrame, MOTION_HOME_SP);
         }
         return UPDATE_UI | DO_RECORD;
 
