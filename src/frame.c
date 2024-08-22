@@ -284,7 +284,36 @@ int adjust_scroll(struct frame *frame)
         frame->scroll.line = MIN(frame->scroll.line, frame->buf->num_lines - h);
         r |= 1;
     }
-    return 0;
+    return r;
+}
+
+int scroll_frame(struct frame *frame, size_t dist, int dir)
+{
+    size_t old_scroll;
+    int x, y, w, h;
+
+    get_text_rect(frame, &x, &y, &w, &h);
+
+    old_scroll = frame->scroll.line;
+    if (dir < 0) {
+        if (frame->scroll.line < dist) {
+            frame->scroll.line = 0;
+        } else {
+            frame->scroll.line -= dist;
+        }
+        if (frame->cur.line >= frame->scroll.line + h) {
+            frame->cur.line = frame->scroll.line + h - 1;
+        }
+    } else {
+        frame->scroll.line = safe_add(frame->scroll.line, dist);
+        if (frame->scroll.line >= frame->buf->num_lines) {
+            frame->scroll.line = frame->buf->num_lines - 1;
+        }
+        if (frame->cur.line < frame->scroll.line) {
+            frame->cur.line = frame->scroll.line;
+        }
+    }
+    return old_scroll != frame->scroll.line;
 }
 
 void clip_column(struct frame *frame)

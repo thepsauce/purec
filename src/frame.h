@@ -131,6 +131,15 @@ void set_frame_buffer(struct frame *frame, struct buf *buf);
 int adjust_scroll(struct frame *frame);
 
 /**
+ * Scrolls the frame by a distance in a direction.
+ *
+ * @param frame Frame to scroll.
+ * @param dist  Distance to scroll.
+ * @param dir   The direction to go.
+ */
+int scroll_frame(struct frame *frame, size_t dist, int dir);
+
+/**
  * Places the cursor at `vct` and places it in bound vertically.
  *
  * If the cursor is out of bounds vertically, it is set to the last line. Then

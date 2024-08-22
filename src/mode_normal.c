@@ -77,7 +77,7 @@ int normal_handle_input(int c)
     struct buf *buf;
     struct pos cur, from, to;
     int e_c;
-    struct undo_event *ev;
+    struct undo_event *ev, *ev_nn;
     struct raw_line lines[2];
     struct frame *frame;
     struct file_list file_list;
@@ -101,6 +101,12 @@ int normal_handle_input(int c)
             e_c = 0;
         }
         break;
+
+    case 'J':
+        return scroll_frame(SelFrame, Core.counter, 1);
+
+    case 'K':
+        return scroll_frame(SelFrame, Core.counter, -1);
 
     /* change or delete */
     case 'c':
@@ -128,10 +134,10 @@ int normal_handle_input(int c)
             }
             from.line = cur.line;
             from.col = 0;
-            to.line = safe_add(from.line, Core.counter);
+            to.line = safe_add(from.line, Core.counter - 1);
             to.col = SIZE_MAX;
             ev = delete_range(buf, &from, &to);
-            indent_line(buf, from.line);
+            (void) indent_line(buf, from.line);
             from.col = buf->lines[from.line].n;
             set_cursor(SelFrame, &from);
             break;
@@ -199,7 +205,7 @@ int normal_handle_input(int c)
         }
         r |= DO_RECORD;
         set_mode(next_mode);
-        break;
+        return r;
 
     case 'x':
     case 's':
@@ -212,14 +218,13 @@ int normal_handle_input(int c)
             r = UPDATE_UI;
         }
         if (c == 's') {
-            Core.counter = 0;
             set_mode(INSERT_MODE);
             r = UPDATE_UI;
         } else {
             clip_column(SelFrame);
         }
         r |= DO_RECORD;
-        break;
+        return r;
 
     case 'X':
         cur = SelFrame->cur;
@@ -228,14 +233,14 @@ int normal_handle_input(int c)
         if (ev != NULL) {
             yank_data(ev->data_i, 0);
             ev->cur = cur;
-            r = UPDATE_UI | DO_RECORD;
+            return UPDATE_UI | DO_RECORD;
         }
-        break;
+        return 0;
 
     case 'r':
         c = get_ch();
         if (!isprint(c) && c != '\n') {
-            break;
+            return 0;
         }
         cur = SelFrame->cur;
         cur.col = safe_add(cur.col, Core.counter);
@@ -246,38 +251,48 @@ int normal_handle_input(int c)
                 ev->flags |= IS_TRANSIENT;
             }
             ev = break_line(buf, &SelFrame->cur);
-            ev->cur = SelFrame->cur;
         } else {
             ConvChar = c;
             ev = change_range(buf, &SelFrame->cur, &cur, conv_to_char);
             ev->cur = SelFrame->cur;
         }
+        ev->cur = SelFrame->cur;
         set_cursor(SelFrame, &cur);
         return UPDATE_UI | DO_RECORD;
 
     case 'u':
+        ev_nn = NULL;
         for (size_t i = 0; i < Core.counter; i++) {
             ev = undo_event(buf);
             if (ev == NULL) {
-                return 0;
+                break;
             }
+            ev_nn = ev;
         }
-        set_cursor(SelFrame, &ev->cur);
-        return UPDATE_UI;
+        if (ev_nn != NULL) {
+            set_cursor(SelFrame, &ev_nn->cur);
+            return UPDATE_UI;
+        }
+        return 0;
 
     case CONTROL('R'):
+        ev_nn = NULL;
         for (size_t i = 0; i < Core.counter; i++) {
             ev = redo_event(buf);
             if (ev == NULL) {
-                return 0;
+                break;
             }
+            ev_nn = ev;
         }
-        if ((ev->flags & IS_DELETION)) {
-            set_cursor(SelFrame, &ev->cur);
-        } else {
-            set_cursor(SelFrame, &ev->end);
+        if (ev_nn != NULL) {
+            if ((ev_nn->flags & IS_DELETION)) {
+                set_cursor(SelFrame, &ev_nn->cur);
+            } else {
+                set_cursor(SelFrame, &ev_nn->end);
+            }
+            return UPDATE_UI;
         }
-        return UPDATE_UI;
+        return 0;
 
     case 'O':
         set_mode(INSERT_MODE);
@@ -395,6 +410,9 @@ int normal_handle_input(int c)
         return UPDATE_UI | DO_RECORD;
 
     case '.':
+        if (Core.dot_i >= Core.rec_len - 1) {
+            return 0;
+        }
         if (Core.dot_e == Core.rec_len) {
             /* exclude the '.' itself */
             Core.dot_e--;
