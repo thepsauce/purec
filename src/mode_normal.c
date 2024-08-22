@@ -180,6 +180,27 @@ int normal_handle_input(int c)
         }
         return 0;
 
+    case CONTROL('J'):
+        from = SelFrame->cur;
+        for (size_t i = 0; i < Core.counter; i++) {
+            if (from.line + 1 == buf->num_lines) {
+                break;
+            }
+            from.col = buf->lines[from.line].n;
+            to = from;
+            to.line++;
+            to.col = get_line_indent(buf, to.line);
+            ev = delete_range(buf, &from, &to);
+            if (from.col > 0 && from.col != buf->lines[from.line].n &&
+                    !isblank(buf->lines[from.line].s[from.col - 1])) {
+                init_raw_line(&lines[0], " ", 1);
+                (void) insert_lines(buf, &from, lines, 1, 1);
+                free(lines[0].s);
+            }
+            ev->cur = SelFrame->cur;
+        }
+        return UPDATE_UI;
+
     case 'r':
         c = get_ch();
         if (!isprint(c) && c != '\n') {

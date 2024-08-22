@@ -94,18 +94,15 @@ struct lang {
 };
 
 /**
- * Highlight a line with syntax highlighting.
+ * Highlights a line with syntax highlighting.
  *
- * @param ri    Render information.
+ * @param line  The line to highlight.
  * @param state The starting state.
  */
-static void highlight_line(struct render_info *ri, size_t state)
+static void highlight_line(struct line *line, size_t state)
 {
-    struct line *line;
     struct state_ctx ctx;
     size_t n;
-
-    line = ri->line;
 
     line->attribs = xreallocarray(line->attribs, line->n,
             sizeof(*line->attribs));
@@ -178,6 +175,33 @@ static void render_line(struct render_info *ri)
     }
 }
 
+void clean_lines(struct buf *buf)
+{
+    struct line *line;
+    size_t prev_state;
+
+    prev_state = buf->min_dirty_i == 0 ? STATE_START :
+        buf->min_dirty_i == SIZE_MAX ? 0 :
+        buf->lines[buf->min_dirty_i - 1].state;
+    for (size_t i = buf->min_dirty_i;; i++) {
+        line = &buf->lines[i];
+        if (line->state == 0) {
+            highlight_line(line, prev_state);
+            if ((line->state != STATE_START ||
+                    line->prev_state != STATE_START) &&
+                    i + 1 != buf->num_lines) {
+                mark_dirty(&line[1]);
+            }
+        } else if (i > buf->max_dirty_i) {
+            break;
+        }
+        prev_state = line->state;
+    }
+
+    buf->min_dirty_i = SIZE_MAX;
+    buf->max_dirty_i = 0;
+}
+
 void render_frame(struct frame *frame)
 {
     struct buf *buf;
@@ -187,6 +211,7 @@ void render_frame(struct frame *frame)
     size_t last_line;
     size_t prev_state;
     int x, y, w, h;
+    int orig_x;
 
     buf = frame->buf;
 
@@ -207,7 +232,7 @@ void render_frame(struct frame *frame)
         ri.line_i = i;
         ri.line = &buf->lines[i];
         if (ri.line->state == 0) {
-            highlight_line(&ri, prev_state);
+            highlight_line(ri.line, prev_state);
             if ((ri.line->state != STATE_START ||
                     ri.line->prev_state != STATE_START) &&
                     i + 1 != buf->num_lines) {
@@ -226,17 +251,26 @@ void render_frame(struct frame *frame)
         buf->min_dirty_i = MAX(buf->min_dirty_i, last_line);
     }
 
+    if (x == 0) {
+        orig_x = 0;
+    } else {
+        orig_x = 1;
+    }
     get_text_rect(frame, &x, &y, &w, &h);
 
-    if (x >= 5) {
+    if (x > 2) {
         set_highlight(stdscr, HI_LINE_NO);
         line = frame->scroll.line + 1;
         for (; y < h; y++) {
             if (line > buf->num_lines) {
                 set_highlight(stdscr, HI_NORMAL);
-                mvprintw(frame->y + y, frame->x + x - 5, " ~   ");
+                mvaddstr(frame->y + y, frame->x + orig_x, " ~");
+                for (int i = orig_x + 2; i < x; i++) {
+                    addch(' ');
+                }
             } else {
-                mvprintw(frame->y + y, frame->x + x - 5, " %3zu ", line);
+                mvprintw(frame->y + y, frame->x + orig_x, " %*zu ",
+                        x - orig_x - 2, line);
             }
             line++;
         }
@@ -258,7 +292,7 @@ void render_frame(struct frame *frame)
     perc = 100 * (frame->cur.line + 1) / buf->num_lines;
 
     set_highlight(stdscr, HI_STATUS);
-    for (int i = x; i < frame->w; i++) {
+    for (int i = orig_x; i < frame->w; i++) {
         mvaddch(frame->y + frame->h - 1, frame->x + i, ' ');
     }
 
@@ -272,8 +306,8 @@ void render_frame(struct frame *frame)
         w = frame->w;
     }
     copywin(OffScreen, stdscr, 0, 0,
-            frame->y + frame->h - 1, frame->x + MIN(frame->x, 1),
-            frame->y + frame->h - 1, frame->x + MIN(frame->x, 1) + w - 1, 0);
+            frame->y + frame->h - 1, frame->x + orig_x,
+            frame->y + frame->h - 1, frame->x + orig_x + w - 1, 0);
 
     mvwprintw(OffScreen, 0, 0, "%d%% ¶%zu/%zu☰℅%zu",
             perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1);
@@ -292,10 +326,20 @@ void get_text_rect(const struct frame *frame,
         int *p_x, int *p_y, int *p_w, int *p_h)
 {
     int x;
+    int dg_cnt;
+    size_t n;
+
+    dg_cnt = 0;
+    n = frame->buf->num_lines;
+    while (n > 0) {
+        dg_cnt++;
+        n /= 10;
+    }
+    dg_cnt = MAX(dg_cnt, 3);
 
     x = frame->x > 0;
-    if (frame->w > 8) {
-        x += 5;
+    if (frame->w > 3 + dg_cnt) {
+        x += 2 + dg_cnt;
     }
 
     *p_x = x;
@@ -306,10 +350,22 @@ void get_text_rect(const struct frame *frame,
 
 void get_visual_cursor(const struct frame *frame, struct pos *pos)
 {
-    pos->col = frame->x > 0;
-    if (frame->w > 8) {
-        pos->col += 5;
+    int x;
+    int dg_cnt;
+    size_t n;
+
+    dg_cnt = 0;
+    n = frame->buf->num_lines;
+    while (n > 0) {
+        dg_cnt++;
+        n /= 10;
     }
-    pos->col += frame->cur.col;
+    dg_cnt = MAX(dg_cnt, 3);
+
+    x = frame->x > 0;
+    if (frame->w > 3 + dg_cnt) {
+        x += 2 + dg_cnt;
+    }
+    pos->col = x + frame->cur.col;
     pos->line = frame->cur.line;
 }
