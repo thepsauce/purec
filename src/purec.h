@@ -37,6 +37,17 @@ extern WINDOW *OffScreen;
 #define VISUAL_LINE_MODE (2|1) /* 3 */
 #define VISUAL_BLOCK_MODE (2|4) /* 6 */
 
+#define REG_MIN '.'
+#define REG_MAX 'Z'
+
+#define MARK_MIN '.'
+#define MARK_MAX '^'
+
+#define USER_REC_MIN 'A'
+#define USER_REC_MAX 'Z'
+
+#define IS_REG_CHAR(r) (((r)>=REG_MIN&&(r)<=REG_MAX)||(r)=='+'||(r)=='*')
+
 /**
  * The core struct contains information about all modes and the state of the
  * editor.
@@ -77,22 +88,21 @@ extern struct core {
     struct reg {
         int flags;
         size_t data_i;
-    } regs['Z' - '.'];
+    } regs[REG_MAX - REG_MIN + 1];
 
     /// saved cursor positon (for visual mode)
     struct pos pos;
-    /// normal mode
-    struct normal_mode {
-        /* TODO: move jumps */
-        struct pos *jumps;
-        size_t num_jumps;
-        size_t jump_i;
-    } normal;
 
     /// event from which the last insert mode started
     size_t ev_from_ins;
-    /// how many times to move down
+    /// how many times to move down and repeat the insertion
     size_t move_down_count;
+
+    /// saved positions within a buffer
+    struct mark {
+        struct buf *buf;
+        struct pos pos;
+    } marks[MARK_MAX - MARK_MIN + 1];
 
     /* All variables below here shall NOT be modified while a recording is
      * playing. To check if a recording is playing, do
@@ -123,8 +133,8 @@ extern struct core {
     struct {
         size_t from;
         size_t to;
-    } user_recs['Z' - 'A' + 1];
-    /// current user recording (lower case), '\0' signals nothing being recorded
+    } user_recs[USER_REC_MAX - USER_REC_MIN + 1];
+    /// current user recording (upper case), '\0' signals nothing being recorded
     char user_rec_ch;
 } Core;
 

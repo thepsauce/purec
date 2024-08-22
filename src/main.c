@@ -141,7 +141,7 @@ static int get_first_char(void)
                 counter = 0;
             }
             c = toupper(get_ch());
-            if ((c < '.' || c > 'Z') && c != '+') {
+            if (!IS_REG_CHAR(c)) {
                 return -1;
             }
             Core.user_reg = c;
@@ -184,7 +184,6 @@ int get_extra_char(void)
     }
 
     Core.counter = safe_mul(Core.counter, counter);
-
     return c;
 }
 

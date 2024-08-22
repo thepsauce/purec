@@ -1,4 +1,5 @@
 #include "buf.h"
+#include "frame.h"
 #include "xalloc.h"
 
 #include <string.h>
@@ -167,6 +168,7 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
 {
     struct undo_event *ev;
     size_t max_n;
+    struct mark *mark;
 
     /* free old events */
     for (size_t i = buf->event_i; i < buf->num_events; i++) {
@@ -194,6 +196,10 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
     }
     ev->data_i = save_lines(lines, num_lines);
     ev->time = time(NULL);
+
+    mark = &Core.marks['.' - MARK_MIN];
+    mark->buf = buf;
+    mark->pos = SelFrame->cur;
 
     buf->events[buf->event_i++] = ev;
     buf->num_events = buf->event_i;

@@ -232,6 +232,17 @@ void set_cursor(struct frame *frame, const struct pos *pos);
 int do_motion(struct frame *frame, int motion);
 
 /**
+ * Gets a motion from a keybind.
+ *
+ * Note that this function may ask the user for more input.
+ *
+ * @param c The input character.
+ *
+ * @return The corresponding motion or 0 if nothing bound to that key.
+ */
+int get_binded_motion(int c);
+
+/**
  * Moves the cursor in horizontal direct but also vertically across lines.
  *
  * @param frame Frame to move the cursor within.

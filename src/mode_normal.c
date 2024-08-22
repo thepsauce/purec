@@ -19,60 +19,6 @@ int conv_to_char(int c)
 
 int normal_handle_input(int c)
 {
-    static int motions[KEY_MAX] = {
-        [KEY_LEFT] = MOTION_LEFT,
-        [KEY_RIGHT] = MOTION_RIGHT,
-        [KEY_UP] = MOTION_UP,
-        [KEY_DOWN] = MOTION_DOWN,
-
-        ['h'] = MOTION_LEFT,
-        ['l'] = MOTION_RIGHT,
-        ['k'] = MOTION_UP,
-        ['j'] = MOTION_DOWN,
-
-        ['0'] = MOTION_HOME,
-        ['$'] = MOTION_END,
-
-        ['H'] = MOTION_BEG_FRAME,
-        ['M'] = MOTION_MIDDLE_FRAME,
-        ['L'] = MOTION_END_FRAME,
-
-        ['f'] = MOTION_FIND_NEXT,
-        ['F'] = MOTION_FIND_PREV,
-
-        ['t'] = MOTION_FIND_EXCL_NEXT,
-        ['T'] = MOTION_FIND_EXCL_PREV,
-
-        ['W'] = MOTION_NEXT_WORD,
-        ['w'] = MOTION_NEXT_WORD,
-
-        ['E'] = MOTION_END_WORD,
-        ['e'] = MOTION_END_WORD,
-
-        ['B'] = MOTION_PREV_WORD,
-        ['b'] = MOTION_PREV_WORD,
-
-        [KEY_HOME] = MOTION_HOME,
-        [KEY_END] = MOTION_END,
-
-        ['I'] = MOTION_HOME_SP,
-        ['A'] = MOTION_END,
-
-        ['g'] = MOTION_FILE_BEG,
-        ['G'] = MOTION_FILE_END,
-
-        [0x7f] = MOTION_PREV,
-        [KEY_BACKSPACE] = MOTION_PREV,
-        ['\b'] = MOTION_PREV,
-        [' '] = MOTION_NEXT,
-
-        [KEY_PPAGE] = MOTION_PAGE_UP,
-        [KEY_NPAGE] = MOTION_PAGE_DOWN,
-
-        ['{'] = MOTION_PARA_UP,
-        ['}'] = MOTION_PARA_DOWN,
-    };
-
     int r = 0;
     struct buf *buf;
     struct pos cur, from, to;
@@ -86,21 +32,17 @@ int normal_handle_input(int c)
     struct raw_line *d_lines;
     size_t num_lines;
     struct reg *reg;
+    int motion;
+    struct mark *mark;
 
     buf = SelFrame->buf;
     switch (c) {
-    case 'g':
-        e_c = get_extra_char();
-        switch (e_c) {
-        case 'G':
-        case 'g':
-            c = e_c;
-            break;
-
-        default:
-            e_c = 0;
+    case '\x1b':
+        if (Core.msg_state != MSG_DEFAULT) {
+            Core.msg_state = MSG_TO_DEFAULT;
+            return UPDATE_UI;
         }
-        break;
+        return 0;
 
     case 'J':
         return scroll_frame(SelFrame, Core.counter, 1);
@@ -172,14 +114,15 @@ int normal_handle_input(int c)
             break;
 
         default:
-            do_motion(SelFrame, motions[e_c]);
+            motion = get_binded_motion(e_c);
+            do_motion(SelFrame, motion);
             from = SelFrame->cur;
             to = cur;
             sort_positions(&from, &to);
             /* some motions do not want increment, this is to make some motions
              * seem more natural
              */
-            switch (motions[e_c]) {
+            switch (motion) {
             case MOTION_NEXT_WORD:
             case MOTION_PREV_WORD:
             case MOTION_UP:
@@ -437,27 +380,33 @@ int normal_handle_input(int c)
     case 'q':
         if (Core.user_rec_ch != '\0') {
             /* minus 1 to exclude the 'q' */
-            Core.user_recs[Core.user_rec_ch - 'a'].to = Core.rec_len - 1;
+            Core.user_recs[Core.user_rec_ch - USER_REC_MIN].to =
+                Core.rec_len - 1;
             Core.user_rec_ch = '\0';
             Core.msg_state = MSG_TO_DEFAULT;
             return UPDATE_UI;
         }
-        c = get_ch();
-        if (c < 'a' || c > 'z') {
+        c = toupper(get_ch());
+        if (c < USER_REC_MIN || c > USER_REC_MAX) {
             break;
         }
         Core.user_rec_ch = c;
-        Core.user_recs[Core.user_rec_ch - 'a'].from = Core.rec_len;
+        Core.user_recs[Core.user_rec_ch - USER_REC_MIN].from = Core.rec_len;
         Core.msg_state = MSG_TO_DEFAULT;
         return UPDATE_UI;
 
     case '@':
-        c = get_ch();
-        if (c < 'a' || c > 'z') {
+        c = toupper(get_ch());
+        if (c < USER_REC_MIN || c > USER_REC_MAX) {
             break;
         }
-        Core.dot_i = Core.user_recs[c - 'a'].from;
-        Core.dot_e = Core.user_recs[c - 'a'].to;
+        if (Core.user_recs[c - USER_REC_MIN].from >=
+                Core.user_recs[c - USER_REC_MIN].to) {
+            set_error("recording %c is empty", c);
+            return 0;
+        }
+        Core.dot_i = Core.user_recs[c - USER_REC_MIN].from;
+        Core.dot_e = Core.user_recs[c - USER_REC_MIN].to;
         Core.repeat_count = Core.counter;
         return UPDATE_UI;
 
@@ -490,14 +439,15 @@ int normal_handle_input(int c)
             break;
 
         default:
-            do_motion(SelFrame, motions[e_c]);
+            motion = get_binded_motion(e_c);
+            do_motion(SelFrame, motion);
             from = SelFrame->cur;
             to = cur;
             sort_positions(&from, &to);
             /* some motions do not want increment, this is to make some motions
              * seem more natural
              */
-            switch (motions[e_c]) {
+            switch (motion) {
             case MOTION_NEXT_WORD:
             case MOTION_PREV_WORD:
             case MOTION_UP:
@@ -550,6 +500,56 @@ int normal_handle_input(int c)
         set_cursor(SelFrame, &ev->end);
         return UPDATE_UI;
 
+    case 'm':
+        c = toupper(get_ch());
+        if (c == '\x1b') {
+            return 0;
+        }
+        if (c < MARK_MIN || c > MARK_MAX) {
+            set_error("invalid mark");
+            return UPDATE_UI;
+        }
+        mark = &Core.marks[c - MARK_MIN];
+        mark->buf = SelFrame->buf;
+        mark->pos = SelFrame->cur;
+        return UPDATE_UI;
+
+    case '`':
+    case '\'':
+        c = toupper(get_ch());
+        if (c == '\x1b') {
+            return 0;
+        }
+        if (c == '?') {
+            /* TODO: show window with all marks */
+            return 0;
+        }
+        if (c < MARK_MIN || c > MARK_MAX) {
+            set_error("invalid mark");
+            return UPDATE_UI;
+        }
+        mark = &Core.marks[c - MARK_MIN];
+        if (mark->buf == NULL) {
+            set_error("invalid mark");
+            return UPDATE_UI;
+        }
+        if (SelFrame->buf == mark->buf) {
+            set_cursor(SelFrame, &mark->pos);
+            return UPDATE_UI;
+        }
+        for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+            if (frame->buf == mark->buf) {
+                SelFrame = frame;
+                set_cursor(frame, &mark->pos);
+                return UPDATE_UI;
+            }
+        }
+        if (buf != mark->buf) {
+            set_frame_buffer(SelFrame, mark->buf);
+        }
+        set_cursor(SelFrame, &mark->pos);
+        return 0;
+
     case 'Z':
         init_file_list(&file_list, ".");
         if (get_deep_files(&file_list) == 0) {
@@ -562,5 +562,5 @@ int normal_handle_input(int c)
         clear_file_list(&file_list);
         return UPDATE_UI;
     }
-    return r | do_motion(SelFrame, motions[c]);
+    return do_motion(SelFrame, get_binded_motion(c));
 }

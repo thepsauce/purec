@@ -635,6 +635,75 @@ int do_motion(struct frame *frame, int motion)
     return 0;
 }
 
+int get_binded_motion(int c)
+{
+    static int motions[KEY_MAX] = {
+        [KEY_LEFT] = MOTION_LEFT,
+        [KEY_RIGHT] = MOTION_RIGHT,
+        [KEY_UP] = MOTION_UP,
+        [KEY_DOWN] = MOTION_DOWN,
+
+        ['h'] = MOTION_LEFT,
+        ['l'] = MOTION_RIGHT,
+        ['k'] = MOTION_UP,
+        ['j'] = MOTION_DOWN,
+
+        ['0'] = MOTION_HOME,
+        ['$'] = MOTION_END,
+
+        ['H'] = MOTION_BEG_FRAME,
+        ['M'] = MOTION_MIDDLE_FRAME,
+        ['L'] = MOTION_END_FRAME,
+
+        ['f'] = MOTION_FIND_NEXT,
+        ['F'] = MOTION_FIND_PREV,
+
+        ['t'] = MOTION_FIND_EXCL_NEXT,
+        ['T'] = MOTION_FIND_EXCL_PREV,
+
+        ['W'] = MOTION_NEXT_WORD,
+        ['w'] = MOTION_NEXT_WORD,
+
+        ['E'] = MOTION_END_WORD,
+        ['e'] = MOTION_END_WORD,
+
+        ['B'] = MOTION_PREV_WORD,
+        ['b'] = MOTION_PREV_WORD,
+
+        [KEY_HOME] = MOTION_HOME,
+        [KEY_END] = MOTION_END,
+
+        ['g'] = MOTION_FILE_BEG,
+        ['G'] = MOTION_FILE_END,
+
+        [0x7f] = MOTION_PREV,
+        [KEY_BACKSPACE] = MOTION_PREV,
+        ['\b'] = MOTION_PREV,
+        [' '] = MOTION_NEXT,
+
+        [KEY_PPAGE] = MOTION_PAGE_UP,
+        [KEY_NPAGE] = MOTION_PAGE_DOWN,
+
+        ['{'] = MOTION_PARA_UP,
+        ['}'] = MOTION_PARA_DOWN,
+    };
+
+    switch (c) {
+    case 'g':
+        c = get_extra_char();
+        switch (c) {
+        case 'G':
+        case 'g':
+            break;
+
+        default:
+            c = 0;
+        }
+    }
+
+    return motions[c];
+}
+
 int move_dir(struct frame *frame, size_t dist, int dir)
 {
     struct buf *buf;

@@ -146,9 +146,6 @@ static void repeat_last_insertion(void)
 
         cur.col = orig_col;
         ev = insert_lines(SelFrame->buf, &cur, lines, num_lines, repeat);
-        if (ev != NULL) {
-            ev->flags |= IS_TRANSIENT;
-        }
 
         if (num_lines == 1) {
             cur.col += lines[0].n;
@@ -161,8 +158,6 @@ static void repeat_last_insertion(void)
     cur.line--;
 
     set_cursor(SelFrame, &cur);
-
-    ev->flags |= IS_TRANSIENT;
 
 end:
     for (size_t i = 0; i < num_lines; i++) {
@@ -188,8 +183,9 @@ int insert_handle_input(int c)
 
     int r = 0;
     struct buf *buf;
-    struct undo_event *ev;
     char ch;
+    struct mark *mark;
+    struct undo_event *ev;
     size_t n;
     struct pos old_cur;
     struct raw_line lines[2];
@@ -200,6 +196,9 @@ int insert_handle_input(int c)
     case '\x1b':
         attempt_join();
         repeat_last_insertion();
+        mark = &Core.marks['^' - MARK_MIN];
+        mark->buf = buf;
+        mark->pos = SelFrame->cur;
         move_horz(SelFrame, 1, -1);
         set_mode(NORMAL_MODE);
         return UPDATE_UI;
