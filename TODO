@@ -17,9 +17,10 @@
     [ ] R for replace mode
     [X] f find character
     [X] F find character backward
-    [X] Add macro recording
+    [-] Add macro recording
         [X] q for recording
         [X] @ for playback
+        [ ] Support recursive use of @
     [ ] ... (comes from other todos)
 
 [-] Finish insert mode

@@ -86,7 +86,7 @@ struct buf {
     /**
      * Unique identifier of this buffer. The pointer returned by
      * `create_buffer()` is also a unique identifier, however, the ID is meant
-     * to be human redable and easy to type.
+     * to be human redable and easy to type, it is never 0.
      */
     size_t id;
 

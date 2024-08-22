@@ -12,8 +12,6 @@
 #include <stdint.h>
 #include <string.h>
 
-WINDOW *Message;
-
 WINDOW *OffScreen;
 
 bool IsRunning;
@@ -21,6 +19,30 @@ bool IsRunning;
 int ExitCode;
 
 struct core Core;
+
+void set_message(const char *msg, ...)
+{
+    va_list l;
+
+    wclear(Core.msg_win);
+    set_highlight(Core.msg_win, HI_CMD);
+    va_start(l, msg);
+    vw_printw(Core.msg_win, msg, l);
+    va_end(l);
+    Core.msg_state = MSG_OTHER;
+}
+
+void set_error(const char *err, ...)
+{
+    va_list l;
+
+    wclear(Core.msg_win);
+    set_highlight(Core.msg_win, HI_ERROR);
+    va_start(l, err);
+    vw_printw(Core.msg_win, err, l);
+    va_end(l);
+    Core.msg_state = MSG_OTHER;
+}
 
 void yank_data(size_t data_i, int flags)
 {
@@ -189,36 +211,7 @@ void set_mode(int mode)
         Core.ev_from_ins = SelFrame->buf->event_i;
     }
 
-    if (!is_playback()) {
-        set_message_to_default();
-    }
-}
-
-void set_message_to_default(void)
-{
-    static const char *mode_strings[] = {
-        [NORMAL_MODE] = "",
-
-        [INSERT_MODE] = "-- INSERT --",
-
-        [VISUAL_MODE] = "-- VISUAL --",
-        [VISUAL_LINE_MODE] = "-- VISUAL LINE --",
-        [VISUAL_BLOCK_MODE] = "-- VISUAL BLOCK --",
-    };
-
-    wmove(Message, 0, 0);
-    wattr_on(Message, A_BOLD, NULL);
-    waddstr(Message, mode_strings[Core.mode]);
-    if (Core.mode == INSERT_MODE && Core.counter > 1) {
-        wprintw(Message, " REPEAT * %zu", Core.counter);
-    }
-    wattr_off(Message, A_BOLD, NULL);
-
-    if (Core.user_rec_ch != '\0') {
-        waddstr(Message, " recording @");
-        waddch(Message, Core.user_rec_ch);
-    }
-    wclrtoeol(Message);
+    Core.msg_state = MSG_TO_DEFAULT;
 }
 
 bool get_selection(struct selection *sel)
@@ -249,6 +242,36 @@ bool is_in_selection(const struct selection *sel, const struct pos *pos)
         return is_in_block(pos, &sel->beg, &sel->end);
     }
     return is_in_range(pos, &sel->beg, &sel->end);
+}
+
+static void set_message_to_default(void)
+{
+    static const char *mode_strings[] = {
+        [NORMAL_MODE] = "",
+
+        [INSERT_MODE] = "-- INSERT --",
+
+        [VISUAL_MODE] = "-- VISUAL --",
+        [VISUAL_LINE_MODE] = "-- VISUAL LINE --",
+        [VISUAL_BLOCK_MODE] = "-- VISUAL BLOCK --",
+    };
+
+    set_highlight(Core.msg_win, HI_CMD);
+    wattr_on(Core.msg_win, A_BOLD, NULL);
+    mvwaddstr(Core.msg_win, 0, 0, mode_strings[Core.mode]);
+    if (Core.mode == INSERT_MODE && Core.counter > 1) {
+        wprintw(Core.msg_win, " REPEAT * %zu", Core.counter);
+    }
+    wattr_off(Core.msg_win, A_BOLD, NULL);
+
+    if (Core.user_rec_ch != '\0') {
+        if (Core.mode != NORMAL_MODE) {
+            waddch(Core.msg_win, ' ');
+        }
+        waddstr(Core.msg_win, "recording @");
+        waddch(Core.msg_win, Core.user_rec_ch);
+    }
+    wclrtoeol(Core.msg_win);
 }
 
 int main(void)
@@ -294,11 +317,11 @@ int main(void)
     init_colors();
     init_clipboard();
 
-    Message = newpad(1, 128);
+    Core.msg_win = newpad(1, 128);
     OffScreen = newpad(1, 512);
 
     wbkgdset(stdscr, ' ' | COLOR_PAIR(HI_NORMAL));
-    wbkgdset(Message, ' ' | COLOR_PAIR(HI_NORMAL));
+    wbkgdset(Core.msg_win, ' ' | COLOR_PAIR(HI_NORMAL));
     wbkgdset(OffScreen, ' ' | COLOR_PAIR(HI_NORMAL));
 
     getmaxyx(stdscr, Core.prev_lines, Core.prev_cols);
@@ -321,8 +344,12 @@ int main(void)
             render_frame(f);
         }
 
-        copywin(Message, stdscr, 0, 0, LINES - 1, 0, LINES - 1,
-                MIN(COLS - 1, getmaxx(Message)), 0);
+        if (Core.msg_state == MSG_TO_DEFAULT) {
+            set_message_to_default();
+            Core.msg_state = MSG_DEFAULT;
+        }
+        copywin(Core.msg_win, stdscr, 0, 0, LINES - 1, 0, LINES - 1,
+                MIN(COLS - 1, getmaxx(Core.msg_win)), 0);
 
         get_visual_cursor(SelFrame, &cur);
         if (cur.col >= SelFrame->scroll.col &&

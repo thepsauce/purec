@@ -81,9 +81,6 @@ static int reload_file(struct buf *buf)
 
     fp = fopen(buf->path, "r");
     if (fp == NULL) {
-        werase(Message);
-        wprintw(Message, "failed opening '%s': %s\n",
-                buf->path, strerror(errno));
         return -1;
     }
 
@@ -152,13 +149,14 @@ struct buf *create_buffer(const char *path)
         buf->a_lines = 1;
     }
 
-    /* xcalloc does this alread */
+    /* xcalloc does this already */
     //buf->min_dirty_i = 0;
     buf->max_dirty_i = buf->num_lines - 1;
 
     /* add buffer to linked list */
     if (FirstBuffer == NULL) {
         FirstBuffer = buf;
+        buf->id = 1;
     } else {
         /* find next id and insert */
         for (prev = FirstBuffer; prev->next != NULL; ) {

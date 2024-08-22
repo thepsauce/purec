@@ -19,18 +19,15 @@
 #include <ncurses.h>
 
 /**
- * Message that is rendered at the bottom of the screen.
- *
- * The size of the window is 128x1.
- */
-extern WINDOW *Message;
-
-/**
  * Off screen window that can be used for measuring.
  *
  * Its size is 512x1.
  */
 extern WINDOW *OffScreen;
+
+#define MSG_DEFAULT     0
+#define MSG_TO_DEFAULT  1
+#define MSG_OTHER       2
 
 #define NORMAL_MODE 0 /* 0 */
 #define INSERT_MODE 1 /* 1 */
@@ -45,6 +42,17 @@ extern WINDOW *OffScreen;
  * editor.
  */
 extern struct core {
+    /**
+     * Message that is rendered at the bottom of the screen.
+     *
+     * The size of the window is 128x1.
+     */
+    WINDOW *msg_win;
+    /**
+     * The state of the message.
+     */
+    int msg_state;
+
     /// whether the editor should quit
     bool is_stopped;
     /// the exit code to return in `main()`
@@ -154,6 +162,22 @@ int copy_clipboard(const struct raw_line *lines, size_t num_lines, int primary);
  * @return The lines read, they shall NOT be freed or modified.
  */
 struct raw_line *paste_clipboard(size_t *p_num_lines, int primary);
+
+/**
+ * Sets the string shown in the message window.
+ *
+ * @param msg   The format string (like `printf()`)
+ * @param ...   The format string arguments
+ */
+void set_message(const char *msg, ...);
+
+/**
+ * Sets the string shown in the message window and applies the error highlight.
+ *
+ * @param err   The format string (like `printf()`)
+ * @param ...   The format string arguments
+ */
+void set_error(const char *err, ...);
 
 /**
  * Sets the current register to given data.

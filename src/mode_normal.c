@@ -311,8 +311,7 @@ int normal_handle_input(int c)
         return UPDATE_UI;
 
     case CONTROL('C'):
-        werase(Message);
-        waddstr(Message, "Type  :qa!<ENTER>  to quit and abandon all changes");
+        set_message("Type  :qa!<ENTER>  to quit and abandon all changes");
         return UPDATE_UI;
 
     case 'v':
@@ -422,6 +421,7 @@ int normal_handle_input(int c)
             /* minus 1 to exclude the 'q' */
             Core.user_recs[Core.user_rec_ch - 'a'].to = Core.rec_len - 1;
             Core.user_rec_ch = '\0';
+            Core.msg_state = MSG_TO_DEFAULT;
             return UPDATE_UI;
         }
         c = get_ch();
@@ -430,6 +430,7 @@ int normal_handle_input(int c)
         }
         Core.user_rec_ch = c;
         Core.user_recs[Core.user_rec_ch - 'a'].from = Core.rec_len;
+        Core.msg_state = MSG_TO_DEFAULT;
         return UPDATE_UI;
 
     case '@':

@@ -90,8 +90,7 @@ static const struct cmd *get_command(const char *s, size_t s_m)
     int max, max_i;
 
     if (s_m >= 12) {
-        werase(Message);
-        wprintw(Message, "command '%.*s' does not exist", (int) s_m, s);
+        set_error("command '%.*s' does not exist", (int) s_m, s);
         return NULL;
     }
 
@@ -146,21 +145,20 @@ static const struct cmd *get_command(const char *s, size_t s_m)
         }
     }
 
-    werase(Message);
-    wprintw(Message, "command '%.*s' does not exist", (int) m, s);
+    set_error("command '%.*s' does not exist", (int) m, s);
     if (min_cnt > 0) {
-        waddstr(Message, ", did you mean");
+        waddstr(Core.msg_win, ", did you mean");
         for (int i = 0; i < min_cnt; i++) {
             if (i > 0) {
                 if (i + 1 == min_cnt) {
-                    waddstr(Message, " or");
+                    waddstr(Core.msg_win, " or");
                 } else {
-                    waddch(Message, ',');
+                    waddch(Core.msg_win, ',');
                 }
             }
-            wprintw(Message, " '%s'", mins[i].cmd->name);
+            wprintw(Core.msg_win, " '%s'", mins[i].cmd->name);
         }
-        waddch(Message, '?');
+        waddch(Core.msg_win, '?');
     }
     return NULL;
 }
@@ -218,8 +216,7 @@ static int run_command(char *s_cmd)
         len++;
     }
     if (len == 0) {
-        werase(Message);
-        wprintw(Message, "expected word but got: '%.*s'", 8, s_cmd);
+        set_error("expected word but got: '%.*s'", 8, s_cmd);
         return -1;
     }
 
@@ -228,8 +225,7 @@ static int run_command(char *s_cmd)
         return -1;
     }
     if (cmd->callback == NULL) {
-        werase(Message);
-        wprintw(Message, "'%s' is not implemented", cmd->name);
+        set_error("'%s' is not implemented", cmd->name);
         return -1;
     }
 
@@ -244,13 +240,11 @@ static int run_command(char *s_cmd)
         }
     } else {
         if (data.has_range) {
-            werase(Message);
-            wprintw(Message, "'%s' does not expect a range", cmd->name);
+            set_error("'%s' does not expect a range", cmd->name);
             return -1;
         }
         if (data.has_number && !(cmd->flags & ACCEPTS_NUMBER)) {
-            werase(Message);
-            wprintw(Message, "'%s' does not expect a number", cmd->name);
+            set_error("'%s' does not expect a number", cmd->name);
             return -1;
         }
     }
@@ -277,7 +271,7 @@ void read_command_line(const char *beg)
 
     char *s;
 
-    werase(Message);
+    Core.msg_state = MSG_TO_DEFAULT;
 
     set_input(0, LINES - 1, COLS, beg, 1, history, num_history);
 

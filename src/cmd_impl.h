@@ -17,22 +17,25 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
 
     if (file[0] == '\0') {
         if (buf->path == NULL) {
-            werase(Message);
-            waddstr(Message, "no file name");
+            werase(Core.msg_win);
+            waddstr(Core.msg_win, "no file name");
+            Core.msg_state = MSG_OTHER;
             return -1;
         }
 
         if ((cd->has_range || cd->has_number) && !cd->force) {
-            werase(Message);
-            waddstr(Message, "use ! to write partial buffer");
+            werase(Core.msg_win);
+            waddstr(Core.msg_win, "use ! to write partial buffer");
+            Core.msg_state = MSG_OTHER;
             return -1;
         }
 
         file = buf->path;
         if (!cd->force && stat(file, &st) == 0) {
             if (st.st_mtime != buf->st.st_mtime) {
-                werase(Message);
-                waddstr(Message, "file changed, use  :w!  to overwrite");
+                werase(Core.msg_win);
+                waddstr(Core.msg_win, "file changed, use  :w!  to overwrite");
+                Core.msg_state = MSG_OTHER;
                 return -1;
             }
         }
@@ -48,8 +51,9 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
 
     fp = fopen(file, "w");
     if (fp == NULL) {
-        werase(Message);
-        wprintw(Message, "could not open '%s': %s", file, strerror(errno));
+        werase(Core.msg_win);
+        wprintw(Core.msg_win, "could not open '%s': %s", file, strerror(errno));
+        Core.msg_state = MSG_OTHER;
         return -1;
     }
     num_bytes = write_file(buf, cd->from, cd->to, fp);
@@ -61,14 +65,15 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
     }
 
     if (num_bytes == 0) {
-        werase(Message);
-        waddstr(Message, "nothing to write");
+        werase(Core.msg_win);
+        waddstr(Core.msg_win, "nothing to write");
     } else {
-        werase(Message);
-        wprintw(Message, "%s %zuL, %zuB written", file,
+        werase(Core.msg_win);
+        wprintw(Core.msg_win, "%s %zuL, %zuB written", file,
                 MIN(buf->num_lines, cd->to) - MIN(buf->num_lines, cd->from) + 1,
                 num_bytes);
     }
+    Core.msg_state = MSG_OTHER;
     return 0;
 }
 
@@ -127,8 +132,9 @@ int cmd_exit_all(struct cmd_data *cd)
 int cmd_quit(struct cmd_data *cd)
 {
     if (!cd->force && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
-        werase(Message);
-        waddstr(Message, "buffer has changed, use  :q!  to quit");
+        werase(Core.msg_win);
+        waddstr(Core.msg_win, "buffer has changed, use  :q!  to quit");
+        Core.msg_state = MSG_OTHER;
         return 1;
     }
     destroy_frame(SelFrame);
@@ -143,8 +149,9 @@ int cmd_quit_all(struct cmd_data *cd)
     }
     for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
         if (!cd->force && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
-            werase(Message);
-            waddstr(Message, "buffer has changed, use  :qa!  to quit");
+            werase(Core.msg_win);
+            waddstr(Core.msg_win, "buffer has changed, use  :qa!  to quit");
+            Core.msg_state = MSG_OTHER;
             return 1;
         }
     }
@@ -160,8 +167,9 @@ int cmd_read(struct cmd_data *cd)
     if (cd->arg[0] == '\0') {
         file = SelFrame->buf->path;
         if (file == NULL) {
-            werase(Message);
-            waddstr(Message, "no file name");
+            werase(Core.msg_win);
+            waddstr(Core.msg_win, "no file name");
+            Core.msg_state = MSG_OTHER;
             return -1;
         }
     } else {
@@ -169,8 +177,9 @@ int cmd_read(struct cmd_data *cd)
     }
     fp = fopen(cd->arg, "r");
     if (fp == NULL) {
-        werase(Message);
-        wprintw(Message, "failed opening '%s': %s\n", file, strerror(errno));
+        werase(Core.msg_win);
+        wprintw(Core.msg_win, "failed opening '%s': %s\n", file, strerror(errno));
+        Core.msg_state = MSG_OTHER;
         return -1;
     }
     read_file(SelFrame->buf, &SelFrame->cur, fp);
