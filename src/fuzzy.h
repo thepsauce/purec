@@ -17,7 +17,11 @@
 size_t choose_fuzzy(const char **entries, size_t num_entries);
 
 struct file_list {
-    /// all paths
+    /// root of all paths
+    char *root;
+    /// length of `root`
+    size_t root_len;
+    /// all paths relative to the root
     char **paths;
     /// allocated space in `paths`
     size_t a;

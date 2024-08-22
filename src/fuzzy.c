@@ -241,8 +241,15 @@ void init_file_list(struct file_list *list, const char *root)
     list->paths = NULL;
     list->a = 0;
     list->num = 0;
-    list->path = xstrdup(root);
-    list->path_len = strlen(root);
+
+    list->root = get_relative_path(root);
+    list->root_len = strlen(list->root);
+    list->root = xrealloc(list->root, list->root_len + 2);
+    list->root[list->root_len++] = '/';
+    list->root[list->root_len] = '\0';
+
+    list->path = xstrdup(list->root);
+    list->path_len = list->root_len;
     /* +1 for the null terminator */
     list->a_path = list->path_len + 1;
 }
@@ -253,6 +260,7 @@ int get_deep_files(struct file_list *list)
     struct dirent *ent;
     size_t name_len;
     char *path;
+    size_t len;
 
     dir = opendir(list->path);
     if (dir == NULL) {
@@ -272,10 +280,10 @@ int get_deep_files(struct file_list *list)
                         sizeof(*list->paths));
             }
 
-            path = xmalloc(list->path_len + 1 + name_len + 1);
-            memcpy(&path[0], list->path, list->path_len);
-            path[list->path_len] = '/';
-            strcpy(&path[list->path_len + 1], ent->d_name);
+            len = list->path_len - list->root_len;
+            path = xmalloc(len + name_len + 1);
+            memcpy(&path[0], &list->path[list->root_len], len);
+            strcpy(&path[len], ent->d_name);
 
             list->paths[list->num++] = path;
         } else if (ent->d_type == DT_DIR) {
@@ -284,8 +292,9 @@ int get_deep_files(struct file_list *list)
                 list->a_path += name_len + 1;
                 list->path = xrealloc(list->path, list->a_path);
             }
-            list->path[list->path_len] = '/';
-            strcpy(&list->path[list->path_len + 1], ent->d_name);
+            memcpy(&list->path[list->path_len], ent->d_name, name_len);
+            list->path[list->path_len + name_len] = '/';
+            list->path[list->path_len + name_len + 1] = '\0';
 
             list->path_len += name_len + 1;
             (void) get_deep_files(list);
@@ -298,6 +307,7 @@ int get_deep_files(struct file_list *list)
 
 void clear_file_list(struct file_list *list)
 {
+    free(list->root);
     for (size_t i = 0; i < list->num; i++) {
         free(list->paths[i]);
     }
