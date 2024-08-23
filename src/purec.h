@@ -307,4 +307,28 @@ int insert_handle_input(int c);
  */
 int visual_handle_input(int c);
 
+/**
+ * Frees all resources in a way where another session can be loaded in.
+ */
+void free_session(void);
+
+/**
+ * Saves the current session into given file.
+ *
+ * @param fp    The file to write the session to.
+ */
+void save_session(FILE *fp);
+
+/**
+ * Loads a session from a file.
+ *
+ * This function assumes that nothing is loaded yet and that `FirstBuffer` and
+ * `FirstFrame` are both `NULL`.
+ *
+ * @param fp    The file to load the session from.
+ *
+ * @return -1 if the file had any mistakes, 0 otherwise.
+ */
+int load_session(FILE *fp);
+
 #endif

@@ -90,6 +90,13 @@ struct buf {
      */
     size_t id;
 
+    /// path on the file system (can be `NULL` to signal no file)
+    char *path;
+    /// last statistics of the file
+    struct stat st;
+    /// the event index at the time of saving
+    size_t save_event_i;
+
     /// saved cursor position
     struct pos save_cur;
     /// saved scrolling
@@ -99,13 +106,6 @@ struct buf {
     size_t min_dirty_i;
     /// the last dirty line; there might also be dirty lines in the middle
     size_t max_dirty_i;
-
-    /// path on the file system (can be `NULL` to signal no file)
-    char *path;
-    /// last statistics of the file
-    struct stat st;
-    /// the event index at the time of saving
-    size_t save_event_i;
 
     /// lines within this buffer
     struct line *lines;
@@ -141,6 +141,14 @@ extern struct buf *FirstBuffer;
 struct buf *create_buffer(const char *path);
 
 /**
+ * Sets the buffer to the file contents of the buffer file, the buffer should
+ * have been initialized to 0 and the buffer file should be set at this point.
+ *
+ * @param buf   The buffer to reload.
+ */
+void init_load_buffer(struct buf *buf);
+
+/**
  * Deletes a buffer and removes it from the buffer list.
  *
  * When deleting a buffer, there will be a gap in the IDs, so the next buffer
@@ -149,6 +157,15 @@ struct buf *create_buffer(const char *path);
  * @param buf   The buffer to destroy.
  */
 void destroy_buffer(struct buf *buf);
+
+/**
+ * Gets a buffer by and id.
+ *
+ * @param id    The id of the buffer.
+ *
+ * @return The buffer with that id or `NULL` if none exists.
+ */
+struct buf *get_buffer(size_t id);
 
 /**
  * Writes lines from a buffer to a file.

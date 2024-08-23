@@ -176,14 +176,14 @@ void destroy_frame(struct frame *frame)
 
         if (frame == SelFrame) {
             /* focus frame that is now at the same position */
-            SelFrame = frame_at(frame->x, frame->y);
+            SelFrame = get_frame_at(frame->x, frame->y);
         }
     }
 
     free(frame);
 }
 
-struct frame *frame_at(int x, int y)
+struct frame *get_frame_at(int x, int y)
 {
     for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
         if (x < frame->x || y < frame->y || x >= frame->x + frame->w ||
@@ -206,7 +206,7 @@ void update_screen_size(void)
         x = Core.prev_cols - 1;
         y = 0;
         while (y < Core.prev_lines - 1) {
-            frame = frame_at(x, y);
+            frame = get_frame_at(x, y);
             frame->w += cols - Core.prev_cols;
             y += frame->h;
         }
@@ -215,7 +215,7 @@ void update_screen_size(void)
         x = 0;
         y = Core.prev_lines - 2;
         while (x < Core.prev_cols) {
-            frame = frame_at(x, y);
+            frame = get_frame_at(x, y);
             frame->h += lines - Core.prev_lines;
             x += frame->w;
         }
@@ -267,7 +267,7 @@ int adjust_scroll(struct frame *frame)
         }
         r |= 1;
     } else if (frame->cur.col >= frame->scroll.col + w) {
-        frame->scroll.col = frame->cur.col - w + MIN(w / 3, 25);
+        frame->scroll.col = frame->cur.col - w + MAX(MIN(w / 3, 25), 1);
         r |= 1;
     }
 

@@ -106,7 +106,7 @@ void get_visual_cursor(const struct frame *frame, struct pos *pos);
  *
  * @return The frame at given position.
  */
-struct frame *frame_at(int x, int y);
+struct frame *get_frame_at(int x, int y);
 
 /**
  * Resizes all frames according to the new screen size in `COLS`, `LINES`.

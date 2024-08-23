@@ -1,6 +1,10 @@
-[ ] Add session management
-    [ ] Add session restore
-    [ ] Add session saving
+[-] Add session management
+    [-] Add session restore
+        [.] See session saving
+    [-] Add session saving
+        [X] Save frames and buffers
+        [ ] Save undo data
+        [ ] Save core information (registers, recordings and marks)
 
 [-] Add motions
     [-] Add word movement motions
@@ -50,9 +54,9 @@
         [X] Support primary
         [ ] Support INCR
 
-[ ] Add marks
-    [ ] Add keybind for moving to mark
-    [ ] Add keybind for adding mark
+[X] Add marks
+    [X] Add keybind for moving to mark
+    [X] Add keybind for adding mark
 
 [ ] Add jump list
     [ ] Add jump list to each frame (or buffer?)

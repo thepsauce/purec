@@ -9,6 +9,127 @@
 
 struct buf *FirstBuffer;
 
+struct buf *create_buffer(const char *path)
+{
+    char *rel_path;
+    struct buf *buf, *prev;
+
+    /* check if a buffer with that path exists already */
+    if (path != NULL) {
+        rel_path = get_relative_path(path);
+        for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
+            if (buf->path == NULL) {
+                continue;
+            }
+            if (strcmp(buf->path, rel_path) == 0) {
+                free(rel_path);
+                return buf;
+            }
+        }
+    } else {
+        rel_path = NULL;
+    }
+
+    buf = xcalloc(1, sizeof(*buf));
+    buf->path = rel_path;
+    init_load_buffer(buf);
+
+    /* add buffer to linked list */
+    if (FirstBuffer == NULL) {
+        FirstBuffer = buf;
+        buf->id = 1;
+    } else {
+        /* find next id and insert */
+        for (prev = FirstBuffer; prev->next != NULL; ) {
+            if (prev->id + 1 != prev->next->id) {
+                break;
+            }
+            prev = prev->next;
+        }
+        buf->next = prev->next;
+        prev->next = buf;
+        buf->id = prev->id + 1;
+    }
+
+    return buf;
+}
+
+void init_load_buffer(struct buf *buf)
+{
+    FILE *fp;
+    char *s_line = NULL;
+    size_t a_line = 0;
+    ssize_t line_len;
+    struct line *line;
+
+    if (buf->path == NULL || (fp = fopen(buf->path, "r")) == NULL) {
+        buf->num_lines = 1;
+        buf->lines = xcalloc(1, sizeof(*buf->lines));
+        return;
+    }
+
+    (void) stat(buf->path, &buf->st);
+
+    while (line_len = getline(&s_line, &a_line, fp), line_len > 0) {
+        for (; line_len > 0; line_len--) {
+            if (s_line[line_len - 1] != '\n' &&
+                    s_line[line_len - 1] != '\r') {
+                break;
+            }
+        }
+        line = grow_lines(buf, buf->num_lines, 1);
+        line->flags = 0;
+        line->state = 0;
+        line->attribs = NULL;
+        line->s = xmalloc(line_len);
+        memcpy(line->s, s_line, line_len);
+        line->n = line_len;
+    }
+
+    buf->max_dirty_i = buf->num_lines - 1;
+
+    free(s_line);
+}
+
+void destroy_buffer(struct buf *buf)
+{
+    struct buf *prev;
+
+    free(buf->path);
+    for (size_t i = 0; i < buf->num_lines; i++) {
+        clear_line(&buf->lines[i]);
+    }
+    free(buf->lines);
+    for (size_t i = 0; i < buf->num_events; i++) {
+        free(buf->events[i]);
+    }
+    free(buf->events);
+
+    /* remove from linked list */
+    if (FirstBuffer == buf) {
+        FirstBuffer = buf->next;
+    } else {
+        for (prev = FirstBuffer; prev->next != NULL; ) {
+            prev = prev->next;
+        }
+        prev->next = buf->next;
+    }
+
+    free(buf);
+}
+
+struct buf *get_buffer(size_t id)
+{
+    struct buf *buf;
+
+    for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
+        if (buf->id == id) {
+            return buf;
+        }
+    }
+    return NULL;
+}
+
 size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp)
 {
     struct line *line;
@@ -68,136 +189,6 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
     }
     free(lines);
     return ev;
-}
-
-static int reload_file(struct buf *buf)
-{
-    FILE *fp;
-    char *s_line = NULL;
-    size_t a_line = 0;
-    ssize_t line_len;
-    struct line *line;
-    size_t num_old;
-
-    fp = fopen(buf->path, "r");
-    if (fp == NULL) {
-        return -1;
-    }
-
-    num_old = buf->num_lines;
-
-    buf->num_lines = 0;
-    while (line_len = getline(&s_line, &a_line, fp), line_len > 0) {
-        for (; line_len > 0; line_len--) {
-            if (s_line[line_len - 1] != '\n' &&
-                    s_line[line_len - 1] != '\r') {
-                break;
-            }
-        }
-        line = grow_lines(buf, buf->num_lines, 1);
-        line->flags = 0;
-        line->state = 0;
-        line->attribs = NULL;
-        line->s = xmalloc(line_len);
-        memcpy(line->s, s_line, line_len);
-        line->n = line_len;
-    }
-
-    for (size_t i = buf->num_lines; i < num_old; i++) {
-        clear_line(&buf->lines[i]);
-    }
-    buf->lines = xreallocarray(buf->lines, buf->num_lines, sizeof(*buf->lines));
-    buf->a_lines = buf->num_lines;
-
-    free(s_line);
-    return 0;
-}
-
-struct buf *create_buffer(const char *path)
-{
-    char *rel_path;
-    struct buf *buf, *prev;
-
-    /* check if a buffer with that path exists already */
-    if (path != NULL) {
-        rel_path = get_relative_path(path);
-        for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
-            if (buf->path == NULL) {
-                continue;
-            }
-            if (strcmp(buf->path, rel_path) == 0) {
-                free(rel_path);
-                return buf;
-            }
-        }
-    } else {
-        rel_path = NULL;
-    }
-
-    buf = xcalloc(1, sizeof(*buf));
-    if (rel_path != NULL) {
-        buf->path = rel_path;
-        if (stat(rel_path, &buf->st) == 0) {
-            (void) reload_file(buf);
-        }
-    }
-
-    /* make sure the buffer has at least one line */
-    if (buf->num_lines == 0) {
-        buf->lines = xcalloc(1, sizeof(*buf->lines));
-        buf->num_lines = 1;
-        buf->a_lines = 1;
-    }
-
-    /* xcalloc does this already */
-    //buf->min_dirty_i = 0;
-    buf->max_dirty_i = buf->num_lines - 1;
-
-    /* add buffer to linked list */
-    if (FirstBuffer == NULL) {
-        FirstBuffer = buf;
-        buf->id = 1;
-    } else {
-        /* find next id and insert */
-        for (prev = FirstBuffer; prev->next != NULL; ) {
-            if (prev->id + 1 != prev->next->id) {
-                break;
-            }
-            prev = prev->next;
-        }
-        buf->next = prev->next;
-        prev->next = buf;
-        buf->id = prev->id + 1;
-    }
-
-    return buf;
-}
-
-void destroy_buffer(struct buf *buf)
-{
-    struct buf *prev;
-
-    free(buf->path);
-    for (size_t i = 0; i < buf->num_lines; i++) {
-        clear_line(&buf->lines[i]);
-    }
-    free(buf->lines);
-    for (size_t i = 0; i < buf->num_events; i++) {
-        free(buf->events[i]);
-    }
-    free(buf->events);
-
-    /* remove from linked list */
-    if (FirstBuffer == buf) {
-        FirstBuffer = buf->next;
-    } else {
-        for (prev = FirstBuffer; prev->next != NULL; ) {
-            prev = prev->next;
-        }
-        prev->next = buf->next;
-    }
-
-    free(buf);
 }
 
 size_t get_line_indent(struct buf *buf, size_t line_i)

@@ -329,28 +329,28 @@ int normal_handle_input(int c)
         case CONTROL('H'):
         case 'h':
             for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-                frame = frame_at(SelFrame->x - 1, SelFrame->y);
+                frame = get_frame_at(SelFrame->x - 1, SelFrame->y);
             }
             break;
 
         case CONTROL('J'):
         case 'j':
             for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-                frame = frame_at(frame->x, frame->y + frame->h);
+                frame = get_frame_at(frame->x, frame->y + frame->h);
             }
             break;
 
         case CONTROL('K'):
         case 'k':
             for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-                frame = frame_at(SelFrame->x, SelFrame->y - 1);
+                frame = get_frame_at(SelFrame->x, SelFrame->y - 1);
             }
             break;
 
         case CONTROL('L'):
         case 'l':
             for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-                frame = frame_at(SelFrame->x + SelFrame->w, SelFrame->y);
+                frame = get_frame_at(SelFrame->x + SelFrame->w, SelFrame->y);
             }
             break;
 
@@ -424,7 +424,7 @@ int normal_handle_input(int c)
         if (Core.user_recs[c - USER_REC_MIN].from >=
                 Core.user_recs[c - USER_REC_MIN].to) {
             set_error("recording %c is empty", c);
-            return 0;
+            return UPDATE_UI;
         }
         Core.dot_i = Core.user_recs[c - USER_REC_MIN].from;
         Core.dot_e = Core.user_recs[c - USER_REC_MIN].to;

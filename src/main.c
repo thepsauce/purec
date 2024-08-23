@@ -293,7 +293,7 @@ int main(void)
         [VISUAL_LINE_MODE] = visual_handle_input,
     };
 
-    struct buf *buf;
+    FILE *fp;
     struct pos cur;
     size_t first_event;
     int c;
@@ -325,12 +325,19 @@ int main(void)
 
     getmaxyx(stdscr, Core.prev_lines, Core.prev_cols);
 
-    //buf = create_buffer("../VM_jsm/cases.h");
-    buf = create_buffer("src/main.c");
-    //buf = create_buffer(NULL);
+    fp = fopen("session", "rb");
+    (void) load_session(fp);
+    if (fp != NULL) {
+        fclose(fp);
+    }
 
-    (void) create_frame(NULL, 0, buf);
-    FirstFrame->buf = buf;
+    if (FirstFrame == NULL) {
+        (void) create_frame(NULL, 0, FirstBuffer);
+    }
+
+    if (SelFrame == NULL) {
+        SelFrame = FirstFrame;
+    }
 
     set_mode(NORMAL_MODE);
 
@@ -414,15 +421,14 @@ int main(void)
     /* restore terminal state */
     endwin();
 
-    /* free resources */
-    for (struct frame *frame = FirstFrame, *next; frame != NULL; frame = next) {
-        next = frame->next;
-        free(frame);
+    if (Core.exit_code == 0) {
+        fp = fopen("session", "wb");
+        save_session(fp);
+        fclose(fp);
     }
 
-    while (FirstBuffer != NULL) {
-        destroy_buffer(FirstBuffer);
-    }
+    /* free resources */
+    free_session();
 
     free(Input.buf);
     free(Input.remember);
