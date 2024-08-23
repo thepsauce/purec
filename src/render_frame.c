@@ -251,11 +251,7 @@ void render_frame(struct frame *frame)
         buf->min_dirty_i = MAX(buf->min_dirty_i, last_line);
     }
 
-    if (x == 0) {
-        orig_x = 0;
-    } else {
-        orig_x = 1;
-    }
+    orig_x = frame->x > 0;
     get_text_rect(frame, &x, &y, &w, &h);
 
     if (x > 2) {
@@ -325,7 +321,7 @@ void render_frame(struct frame *frame)
 void get_text_rect(const struct frame *frame,
         int *p_x, int *p_y, int *p_w, int *p_h)
 {
-    int x;
+    int x, w, h;
     int dg_cnt;
     size_t n;
 
@@ -337,35 +333,31 @@ void get_text_rect(const struct frame *frame,
     }
     dg_cnt = MAX(dg_cnt, 3);
 
+    w = MIN(frame->x + frame->w, COLS) - frame->x;
+    h = MIN(frame->y + frame->h, LINES) - frame->y;
+
     x = frame->x > 0;
-    if (frame->w > 3 + dg_cnt) {
+    if (w > 3 + dg_cnt) {
         x += 2 + dg_cnt;
     }
 
     *p_x = x;
     *p_y = 0;
-    *p_w = frame->w - x;
-    *p_h = frame->h - 1;
+    *p_w = MAX(w - x, 0);
+    *p_h = MAX(h - 1, 0);
 }
 
-void get_visual_cursor(const struct frame *frame, struct pos *pos)
+bool get_visual_cursor(const struct frame *frame, int *p_x, int *p_y)
 {
-    int x;
-    int dg_cnt;
-    size_t n;
+    int x, y, w, h;
 
-    dg_cnt = 0;
-    n = frame->buf->num_lines;
-    while (n > 0) {
-        dg_cnt++;
-        n /= 10;
-    }
-    dg_cnt = MAX(dg_cnt, 3);
+    get_text_rect(frame, &x, &y, &w, &h);
 
-    x = frame->x > 0;
-    if (frame->w > 3 + dg_cnt) {
-        x += 2 + dg_cnt;
-    }
-    pos->col = x + frame->cur.col;
-    pos->line = frame->cur.line;
+    *p_x = frame->x + x + frame->cur.col - frame->scroll.col;
+    *p_y = frame->y + y + frame->cur.line - frame->scroll.line;
+
+    return frame->cur.col >= frame->scroll.col &&
+            frame->cur.line >= frame->scroll.line &&
+            frame->cur.col - frame->scroll.col < (size_t) w &&
+            frame->cur.line - frame->scroll.line < (size_t) h;
 }

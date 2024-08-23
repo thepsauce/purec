@@ -23,7 +23,7 @@ struct frame {
     struct buf *buf;
     /// cursor position
     struct pos cur;
-    /// scrolling (there is no horizontal scrolling)
+    /// scrolling
     struct pos scroll;
     /// vertical column tracking
     size_t vct;
@@ -89,14 +89,15 @@ void get_text_rect(const struct frame *frame,
         int *p_x, int *p_y, int *p_w, int *p_h);
 
 /**
- * Gets the visible relative cursor position of the frame.
- *
- * This cursor is independent of the scrolling values;
+ * Gets the cursor position relative to the screen origin.
  *
  * @param frame The frame to get the cursor from.
- * @param pos   The resulting position.
+ * @param p_x   The resulting x position.
+ * @param p_y   The resulting y position.
+ *
+ * @return Whether the cursor is visible.
  */
-void get_visual_cursor(const struct frame *frame, struct pos *pos);
+bool get_visual_cursor(const struct frame *frame, int *p_x, int *p_y);
 
 /**
  * Gets the frame at given position.

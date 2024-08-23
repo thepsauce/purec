@@ -294,7 +294,7 @@ int main(void)
     };
 
     FILE *fp;
-    struct pos cur;
+    int cur_x, cur_y;
     size_t first_event;
     int c;
     int r;
@@ -322,8 +322,6 @@ int main(void)
     wbkgdset(stdscr, ' ' | COLOR_PAIR(HI_NORMAL));
     wbkgdset(Core.msg_win, ' ' | COLOR_PAIR(HI_NORMAL));
     wbkgdset(OffScreen, ' ' | COLOR_PAIR(HI_NORMAL));
-
-    getmaxyx(stdscr, Core.prev_lines, Core.prev_cols);
 
     fp = fopen("session", "rb");
     (void) load_session(fp);
@@ -357,20 +355,11 @@ int main(void)
         copywin(Core.msg_win, stdscr, 0, 0, LINES - 1, 0, LINES - 1,
                 MIN(COLS - 1, getmaxx(Core.msg_win)), 0);
 
-        get_visual_cursor(SelFrame, &cur);
-        if (cur.col >= SelFrame->scroll.col &&
-                cur.line >= SelFrame->scroll.line) {
-            cur.col -= SelFrame->scroll.col;
-            cur.line -= SelFrame->scroll.line;
-            if (cur.col < (size_t) SelFrame->w &&
-                    cur.line < (size_t) SelFrame->h) {
-                cur.col += SelFrame->x;
-                cur.line += SelFrame->y;
-                move(cur.line, cur.col);
-                printf("\x1b[%c q", cursors[Core.mode]);
-                fflush(stdout);
-                curs_set(1);
-            }
+        if (get_visual_cursor(SelFrame, &cur_x, &cur_y)) {
+            move(cur_y, cur_x);
+            printf("\x1b[%c q", cursors[Core.mode]);
+            fflush(stdout);
+            curs_set(1);
         }
 
         old_frame = SelFrame;

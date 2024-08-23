@@ -69,11 +69,6 @@ extern struct core {
     /// the exit code to return in `main()`
     int exit_code;
 
-    /// the previous column count
-    int prev_cols;
-    /// the previous line count
-    int prev_lines;
-
     /// type of the mode (`*_MODE`)
     int mode;
     /// counter

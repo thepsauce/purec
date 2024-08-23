@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <limits.h>
 
 struct frame *FirstFrame;
 struct frame *SelFrame;
@@ -15,6 +16,18 @@ struct frame *create_frame(struct frame *split, int dir, struct buf *buf)
     struct frame *frame, *f;
     int w, h;
 
+    if (dir == SPLIT_LEFT || dir == SPLIT_RIGHT) {
+        if (split->w == 1) {
+            set_error("Not enough room");
+            return NULL;
+        }
+    } else if (dir == SPLIT_UP || dir == SPLIT_DOWN) {
+        if (split->h == 1) {
+            set_error("Not enough room");
+            return NULL;
+        }
+    }
+
     frame = xcalloc(1, sizeof(*frame));
     if (buf == NULL) {
         frame->buf = create_buffer(NULL);
@@ -22,7 +35,6 @@ struct frame *create_frame(struct frame *split, int dir, struct buf *buf)
         frame->buf = buf;
     }
 
-    /* TODO: CHECK for too small */
     switch (dir) {
     case 0:
         frame->x = 0;
@@ -68,10 +80,6 @@ struct frame *create_frame(struct frame *split, int dir, struct buf *buf)
         frame->y = split->y + split->h;
         frame->h = h - split->h;
         break;
-
-    default:
-        endwin();
-        abort();
     }
 
     /* add frame to the linked list */
@@ -195,35 +203,40 @@ struct frame *get_frame_at(int x, int y)
     return NULL;
 }
 
+bool is_frame_in(int x, int y, int w, int h)
+{
+    for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (x < frame->x + frame->w && frame->x < x + w &&
+                y < frame->y + frame->h && frame->y < y + h) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void update_screen_size(void)
 {
-    int x, y;
-    int cols, lines;
     struct frame *frame;
 
-    getmaxyx(stdscr, lines, cols);
-    if (cols > Core.prev_cols) {
-        x = Core.prev_cols - 1;
-        y = 0;
-        while (y < Core.prev_lines - 1) {
-            frame = get_frame_at(x, y);
-            frame->w += cols - Core.prev_cols;
-            y += frame->h;
+    /* expand frames that have no frame on the right */
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (is_frame_in(frame->x + frame->w, frame->y, INT_MAX / 2, frame->h)) {
+            continue;
+        }
+        if (frame->x + 1 < COLS) {
+            frame->w = COLS - frame->x;
         }
     }
-    if (lines > Core.prev_lines) {
-        x = 0;
-        y = Core.prev_lines - 2;
-        while (x < Core.prev_cols) {
-            frame = get_frame_at(x, y);
-            frame->h += lines - Core.prev_lines;
-            x += frame->w;
-        }
-    } else if (lines < Core.prev_lines) {
 
+    /* expand frame at the bottom edge */
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (is_frame_in(frame->x, frame->y + frame->h, frame->w, INT_MAX / 2)) {
+            continue;
+        }
+        if (frame->y + 2 < LINES) {
+            frame->h = LINES - 1 - frame->y;
+        }
     }
-    Core.prev_cols = cols;
-    Core.prev_lines = lines;
 }
 
 void set_frame_buffer(struct frame *frame, struct buf *buf)
