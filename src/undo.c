@@ -30,8 +30,28 @@ size_t save_lines(struct raw_line *lines, size_t num_lines)
     size_t l, m, r;
     struct undo_seg *seg;
     int cmp;
-    struct raw_line *seg_lines;
-    size_t seg_num_lines;
+    char *data, *new_s;
+    size_t data_len;
+
+    data = lines[0].s;
+    data_len = lines[0].n;
+
+    for (size_t i = 1; i < num_lines; i++) {
+        data_len += 1 + lines[i].n;
+    }
+
+    data = xrealloc(data, data_len);
+    lines[0].s = data;
+    for (size_t i = 1, j = lines[0].n; i < num_lines; i++) {
+        data[j++] = '\n';
+
+        new_s = memcpy(&data[j], lines[i].s, lines[i].n);
+        j += lines[i].n;
+
+        free(lines[i].s);
+
+        lines[i].s = new_s;
+    }
 
     l = 0;
     r = Undo.num_segments;
@@ -40,41 +60,39 @@ size_t save_lines(struct raw_line *lines, size_t num_lines)
 
         seg = &Undo.segments[m];
 
-        seg_lines = NULL;
-
         if (num_lines < seg->num_lines) {
             cmp = -1;
             goto diff;
-        } if (num_lines > seg->num_lines) {
+        }
+        if (num_lines > seg->num_lines) {
             cmp = 1;
             goto diff;
         }
 
-        seg_lines = load_undo_data(m, &seg_num_lines);
-
         for (size_t i = 0; i < num_lines; i++) {
-            if (lines[i].n > seg_lines[i].n) {
+            if (lines[i].n < seg->lines[i].n) {
                 cmp = -1;
                 goto diff;
             }
-            if (lines[i].n < seg_lines[i].n) {
+            if (lines[i].n > seg->lines[i].n) {
                 cmp = 1;
                 goto diff;
             }
         }
 
-        for (size_t i = 0; i < num_lines; i++) {
-            cmp = memcmp(lines[i].s, seg_lines[i].s, seg_lines[i].n);
-            if (cmp != 0) {
-                goto diff;
-            }
+        (void) load_undo_data(m);
+
+        cmp = memcmp(data, seg->data, data_len);
+
+        unload_undo_data(seg);
+
+        if (cmp != 0) {
+            goto diff;
         }
 
-        for (size_t i = 0; i < num_lines; i++) {
-            free(lines[i].s);
-        }
+        /* do not need these anymore, already stored this information */
+        free(data);
         free(lines);
-        unload_undo_data(m);
         return m;
 
     diff:
@@ -82,9 +100,6 @@ size_t save_lines(struct raw_line *lines, size_t num_lines)
             l = m + 1;
         } else {
             r = m;
-        }
-        if (seg_lines != NULL) {
-            unload_undo_data(m);
         }
     }
 
@@ -95,71 +110,59 @@ size_t save_lines(struct raw_line *lines, size_t num_lines)
                 sizeof(*Undo.segments));
     }
     seg = &Undo.segments[Undo.num_segments];
-    if (num_lines > HUGE_UNDO_THRESHOLD) {
+    if (data_len > HUGE_UNDO_THRESHOLD) {
         if (Undo.fp == NULL) {
             Undo.fp = fopen("undo_data", "w+");
         }
         fseek(Undo.fp, 0, SEEK_END);
         fgetpos(Undo.fp, &seg->file_pos);
-        fwrite(&num_lines, sizeof(num_lines), 1, Undo.fp);
+        fwrite(data, 1, data_len, Undo.fp);
         for (size_t i = 0; i < num_lines; i++) {
-            fwrite(&lines[i].n, sizeof(lines[i].n), 1, Undo.fp);
+            lines[i].s -= (size_t) data;
         }
-        for (size_t i = 0; i < num_lines; i++) {
-            fwrite(lines[i].s, 1, lines[i].n, Undo.fp);
-            free(lines[i].s);
-        }
-        free(lines);
-        lines = NULL;
+        free(data);
+        data = NULL;
     }
+    seg->data = data;
+    seg->data_len = data_len;
     seg->lines = lines;
     seg->num_lines = num_lines;
     seg->load_count = 0;
     return Undo.num_segments++;
 }
 
-struct raw_line *load_undo_data(size_t data_i, size_t *p_num_lines)
+struct undo_seg *load_undo_data(size_t data_i)
 {
     struct undo_seg *seg;
 
     if (data_i >= Undo.num_segments) {
-        *p_num_lines = 0;
         return NULL;
     }
+
     seg = &Undo.segments[data_i];
     seg->load_count++;
-    if (seg->lines == NULL) {
-        seg->lines = xreallocarray(NULL, seg->num_lines,
-                sizeof(*seg->lines));
+    if (seg->data == NULL) {
+        seg->data = xmalloc(seg->data_len);
+
+        for (size_t i = 0; i < seg->num_lines; i++) {
+            seg->lines[i].s += (size_t) seg->data;
+        }
+
         fsetpos(Undo.fp, &seg->file_pos);
-        fseek(Undo.fp, sizeof(seg->num_lines), SEEK_CUR);
-        for (size_t i = 0; i < seg->num_lines; i++) {
-            fread(&seg->lines[i].n, sizeof(seg->lines[i].n), 1, Undo.fp);
-        }
-        for (size_t i = 0; i < seg->num_lines; i++) {
-            seg->lines[i].s = xmalloc(seg->lines[i].n);
-            fread(seg->lines[i].s, 1, seg->lines[i].n, Undo.fp);
-        }
+        fread(seg->data, 1, seg->data_len, Undo.fp);
     }
-    *p_num_lines = seg->num_lines;
-    return seg->lines;
+    return seg;
 }
 
-void unload_undo_data(size_t data_i)
+void unload_undo_data(struct undo_seg *seg)
 {
-    struct undo_seg *seg;
-
-    if (data_i >= Undo.num_segments) {
-        return;
-    }
-    seg = &Undo.segments[data_i];
     seg->load_count--;
-    if (seg->num_lines > HUGE_UNDO_THRESHOLD && seg->load_count == 0) {
+    if (seg->data_len > HUGE_UNDO_THRESHOLD && seg->load_count == 0) {
         for (size_t i = 0; i < seg->num_lines; i++) {
-            free(seg->lines[i].s);
+            seg->lines[i].s -= (size_t) seg->data;
         }
-        free(seg->lines);
-        seg->lines = NULL;
+        free(seg->data);
+        seg->data = NULL;
     }
 }
 
@@ -208,8 +211,7 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
 
 static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
 {
-    struct raw_line *lines;
-    size_t num_lines;
+    struct undo_seg *seg;
     struct line *line;
 
     if ((flags & IS_DELETION)) {
@@ -221,29 +223,30 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
         return;
     }
 
-    lines = load_undo_data(ev->data_i, &num_lines);
+    seg = load_undo_data(ev->data_i);
     if ((flags & IS_REPLACE)) {
-        update_dirty_lines(buf, ev->pos.line, ev->pos.line + num_lines - 1);
+        update_dirty_lines(buf, ev->pos.line,
+                ev->pos.line + seg->num_lines - 1);
         line = &buf->lines[ev->pos.line];
-        for (size_t i = 0; i < lines[0].n; i++) {
-            line->s[i + ev->pos.col] ^= lines[0].s[i];
+        for (size_t i = 0; i < seg->lines[0].n; i++) {
+            line->s[i + ev->pos.col] ^= seg->lines[0].s[i];
         }
         mark_dirty(line);
-        for (size_t i = 1; i < num_lines; i++) {
+        for (size_t i = 1; i < seg->num_lines; i++) {
             line = &buf->lines[i + ev->pos.line];
-            for (size_t j = 0; j < lines[i].n; j++) {
-                line->s[j] ^= lines[i].s[j];
+            for (size_t j = 0; j < seg->lines[i].n; j++) {
+                line->s[j] ^= seg->lines[i].s[j];
             }
             mark_dirty(line);
         }
     } else {
         if ((flags & IS_BLOCK)) {
-            _insert_block(buf, &ev->pos, lines, num_lines);
+            _insert_block(buf, &ev->pos, seg->lines, seg->num_lines);
         } else {
-            _insert_lines(buf, &ev->pos, lines, num_lines);
+            _insert_lines(buf, &ev->pos, seg->lines, seg->num_lines);
         }
     }
-    unload_undo_data(ev->data_i);
+    unload_undo_data(seg);
 }
 
 struct undo_event *undo_event(struct buf *buf)

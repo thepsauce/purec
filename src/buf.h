@@ -13,8 +13,8 @@
 
 #include <sys/stat.h>
 
-/// at which number of lines to start writing to the undo file
-#define HUGE_UNDO_THRESHOLD 8
+/// at which number of bytes to start writing to the undo file
+#define HUGE_UNDO_THRESHOLD 64
 
 /**
  * This undo works by caching small text segments and writing huge text segments
@@ -27,6 +27,10 @@ extern struct undo {
     /// the off memory file for large text segments
     FILE *fp;
     struct undo_seg {
+        /// the raw string data
+        char *data;
+        /// length of `data`
+        size_t data_len;
         /// lines within the segment
         struct raw_line *lines;
         /// number of lines
@@ -490,23 +494,24 @@ bool should_join(const struct undo_event *ev1, const struct undo_event *ev2);
 size_t save_lines(struct raw_line *lines, size_t num_lines);
 
 /**
- * Gets lines at given data index.
+ * Gets a undo data segment at a given data index.
  *
  * Do NOT free the returned data.
  *
- * @param data_i        The data index to get the lines from.
- * @param p_num_lines   The result of the number of lines.
+ * This function returns `NULL` if the data index is invalid.
  *
- * @return The lines on this data index.
+ * @param data_i    The data index of the undo segment.
+ *
+ * @return The the data segment associated to the data index.
  */
-struct raw_line *load_undo_data(size_t data_i, size_t *p_num_lines);
+struct undo_seg *load_undo_data(size_t data_i);
 
 /**
- * Cleans up after a call to `load_undo_data`.
+ * Cleans up after a call to `load_undo_data()`.
  *
- * @param data_i    The data index.
+ * @param seg   The undo data segment.
  */
-void unload_undo_data(size_t data_i);
+void unload_undo_data(struct undo_seg *seg);
 
 /**
  * Adds an event to the buffer event list.

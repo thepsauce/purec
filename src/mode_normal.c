@@ -32,6 +32,7 @@ int normal_handle_input(int c)
     struct raw_line *d_lines;
     size_t num_lines;
     struct reg *reg;
+    struct undo_seg *seg;
     int motion;
     struct mark *mark;
 
@@ -502,20 +503,21 @@ int normal_handle_input(int c)
             if (d_lines == NULL) {
                 return 0;
             }
-            ev = insert_lines(buf, &cur, d_lines, num_lines,
-                    Core.counter);
+            ev = insert_lines(buf, &cur, d_lines, num_lines, Core.counter);
         } else {
             reg = &Core.regs[Core.user_reg - '.'];
-            d_lines = load_undo_data(reg->data_i, &num_lines);
-            if (d_lines == NULL) {
+            seg = load_undo_data(reg->data_i);
+            if (seg == NULL) {
                 return 0;
             }
             if ((reg->flags & IS_BLOCK)) {
-                ev = insert_block(buf, &cur, d_lines, num_lines, Core.counter);
+                ev = insert_block(buf, &cur, seg->lines, seg->num_lines,
+                        Core.counter);
             } else {
-                ev = insert_lines(buf, &cur, d_lines, num_lines, Core.counter);
+                ev = insert_lines(buf, &cur, seg->lines, seg->num_lines,
+                        Core.counter);
             }
-            unload_undo_data(reg->data_i);
+            unload_undo_data(seg);
         }
         ev->cur = SelFrame->cur;
         set_cursor(SelFrame, &ev->end);

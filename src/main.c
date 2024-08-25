@@ -46,14 +46,13 @@ void set_error(const char *err, ...)
 
 void yank_data(size_t data_i, int flags)
 {
-    struct raw_line *lines;
-    size_t num_lines;
+    struct undo_seg *seg;
     struct reg *reg;
 
     if (Core.user_reg == '+' || Core.user_reg == '*') {
-        lines = load_undo_data(data_i, &num_lines);
-        copy_clipboard(lines, num_lines, Core.user_reg == '*');
-        unload_undo_data(data_i);
+        seg = load_undo_data(data_i);
+        copy_clipboard(seg->data, seg->data_len, Core.user_reg == '*');
+        unload_undo_data(seg);
     } else {
         reg = &Core.regs[Core.user_reg - '.'];
         reg->flags = flags;
@@ -63,16 +62,7 @@ void yank_data(size_t data_i, int flags)
 
 void yank_lines(struct raw_line *lines, size_t num_lines, int flags)
 {
-    struct reg *reg;
-
-    if (Core.user_reg == '+' || Core.user_reg == '*') {
-        copy_clipboard(lines, num_lines, Core.user_reg == '*');
-        (void) save_lines(lines, num_lines);
-    } else {
-        reg = &Core.regs[Core.user_reg - '.'];
-        reg->flags = flags;
-        reg->data_i = save_lines(lines, num_lines);
-    }
+    yank_data(save_lines(lines, num_lines), flags);
 }
 
 bool is_playback(void)

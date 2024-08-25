@@ -93,10 +93,8 @@ static void *x_thread(void *_unused)
     return _unused;
 }
 
-int copy_clipboard(const struct raw_line *lines, size_t num_lines, int primary)
+int copy_clipboard(char *data, size_t data_len, int primary)
 {
-    char *s;
-    size_t len;
     Atom clipboard;
 
     pthread_mutex_lock(&X.sel_lock);
@@ -106,32 +104,8 @@ int copy_clipboard(const struct raw_line *lines, size_t num_lines, int primary)
         return -1;
     }
 
-    if (X.sel_text != NULL) {
-        free(X.sel_text);
-    }
-
-    len = 0;
-    for (size_t i = 0; i < num_lines; i++) {
-        len += lines[i].n + 1;
-    }
-    len--;
-
-    if (len == 0) {
-        return 0;
-    }
-
-    s = xmalloc(len);
-    for (size_t i = 0, j = 0;; i++) {
-        memcpy(&s[j], &lines[i].s[0], lines[i].n);
-        j += lines[i].n;
-        if (j == len) {
-            break;
-        }
-        s[j++] = '\n';
-    }
-
-    X.sel_text = s;
-    X.sel_len = len;
+    X.sel_text = data;
+    X.sel_len = data_len;
 
     if (primary == 0) {
         clipboard = XInternAtom(X.dpy_copy, "CLIPBOARD", False);
