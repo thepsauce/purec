@@ -6,15 +6,143 @@
 #include "xalloc.h"
 
 #include <ctype.h>
+#include <limits.h>
 #include <ncurses.h>
 #include <string.h>
 
-int ConvChar;
+/// "outside parameter" for `conv_to_char()`
+static int ConvChar;
 
-int conv_to_char(int c)
+/**
+ * Returns `ConvChar`, used in the replace bind.
+ */
+static int conv_to_char(int c)
 {
     (void) c;
     return ConvChar;
+}
+
+static size_t get_frame_count(void)
+{
+    struct frame *frame;
+    size_t count;
+
+    count = 0;
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+        count++;
+    }
+    return count;
+}
+
+/**
+ * Does the motion binded to given input character.
+ *
+ * @param c The input character.
+ *
+ * @return 1 if the UI needs an update, 0 otherwise.
+ */
+static int do_binded_frame_movement(int c)
+{
+    struct frame *frame;
+
+    switch (c) {
+    case CONTROL('Q'):
+    case 'q':
+        destroy_frame(SelFrame);
+        break;
+
+    case CONTROL('P'):
+    case 'p':
+        Core.counter %= get_frame_count();
+        for (size_t i = 0; i < Core.counter; i++) {
+            for (frame = FirstFrame; frame->next != NULL &&
+                    frame->next != SelFrame; ) {
+                frame = frame->next;
+            }
+        }
+        if (frame->next == NULL) {
+            return 0;
+        }
+        SelFrame = frame;
+        break;
+
+    case CONTROL('N'):
+    case 'n':
+        Core.counter %= get_frame_count();
+        if (Core.counter == 0) {
+            return 0;
+        }
+        for (; Core.counter > 0; Core.counter--) {
+            SelFrame = SelFrame->next;
+            if (SelFrame == NULL) {
+                SelFrame = FirstFrame;
+            }
+        }
+        break;
+
+    case CONTROL('H'):
+    case 'h':
+        for (; Core.counter > 0; Core.counter--) {
+            frame = get_frame_at(SelFrame->x - 1, SelFrame->y);
+            if (frame == NULL) {
+                break;
+            }
+            SelFrame = frame;
+        }
+        break;
+
+    case CONTROL('J'):
+    case 'j':
+        for (frame = SelFrame; Core.counter > 0; Core.counter--) {
+            frame = get_frame_at(SelFrame->x, SelFrame->y + SelFrame->h);
+            if (frame == NULL) {
+                break;
+            }
+            SelFrame = frame;
+        }
+        break;
+
+    case CONTROL('K'):
+    case 'k':
+        for (frame = SelFrame; Core.counter > 0; Core.counter--) {
+            frame = get_frame_at(SelFrame->x, SelFrame->y - 1);
+            if (frame == NULL) {
+                break;
+            }
+            SelFrame = frame;
+        }
+        break;
+
+    case CONTROL('L'):
+    case 'l':
+        for (frame = SelFrame; Core.counter > 0; Core.counter--) {
+            frame = get_frame_at(SelFrame->x + SelFrame->w, SelFrame->y);
+            if (frame == NULL) {
+                break;
+            }
+            SelFrame = frame;
+        }
+        break;
+
+    case CONTROL('V'):
+    case 'v':
+    case 'V':
+        frame = create_frame(SelFrame, SPLIT_RIGHT, SelFrame->buf);
+        if (c == 'V') {
+            SelFrame = frame;
+        }
+        break;
+
+    case CONTROL('S'):
+    case 's':
+    case 'S':
+        frame = create_frame(SelFrame, SPLIT_DOWN, SelFrame->buf);
+        if (c == 'S') {
+            SelFrame = frame;
+        }
+        break;
+    }
+    return UPDATE_UI;
 }
 
 int normal_handle_input(int c)
@@ -304,71 +432,7 @@ int normal_handle_input(int c)
 
     case CONTROL('W'):
         e_c = get_extra_char();
-
-        frame = SelFrame;
-        switch (e_c) {
-        case CONTROL('Q'):
-        case 'q':
-            destroy_frame(SelFrame);
-            frame = SelFrame;
-            break;
-
-        case CONTROL('P'):
-        case 'p':
-            for (frame = FirstFrame; frame->next != NULL &&
-                    frame->next != SelFrame; ) {
-                frame = frame->next;
-            }
-            frame = frame->next == NULL ? FirstFrame : frame;
-            break;
-
-        case CONTROL('N'):
-        case 'n':
-            frame = SelFrame->next;
-            break;
-
-        case CONTROL('H'):
-        case 'h':
-            for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-                frame = get_frame_at(SelFrame->x - 1, SelFrame->y);
-            }
-            break;
-
-        case CONTROL('J'):
-        case 'j':
-            for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-                frame = get_frame_at(frame->x, frame->y + frame->h);
-            }
-            break;
-
-        case CONTROL('K'):
-        case 'k':
-            for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-                frame = get_frame_at(SelFrame->x, SelFrame->y - 1);
-            }
-            break;
-
-        case CONTROL('L'):
-        case 'l':
-            for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-                frame = get_frame_at(SelFrame->x + SelFrame->w, SelFrame->y);
-            }
-            break;
-
-        case CONTROL('V'):
-        case 'v':
-            (void) create_frame(SelFrame, SPLIT_RIGHT, SelFrame->buf);
-            break;
-
-        case CONTROL('S'):
-        case 's':
-            (void) create_frame(SelFrame, SPLIT_DOWN, SelFrame->buf);
-            break;
-        }
-        if (frame != NULL) {
-            SelFrame = frame;
-        }
-        return UPDATE_UI;
+        return do_binded_frame_movement(e_c);
 
     case CONTROL('V'):
         set_mode(VISUAL_BLOCK_MODE);
