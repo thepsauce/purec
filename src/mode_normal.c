@@ -141,6 +141,12 @@ static int do_binded_frame_movement(int c)
             SelFrame = frame;
         }
         break;
+
+    case '>':
+        return move_right_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
+
+    case '<':
+        return move_left_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
     }
     return UPDATE_UI;
 }

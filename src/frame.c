@@ -35,6 +35,14 @@ struct frame *create_frame(struct frame *split, int dir, struct buf *buf)
         frame->buf = buf;
     }
 
+    if (dir == SPLIT_LEFT || dir == SPLIT_RIGHT) {
+        split->split_dir = 0;
+        frame->split_dir = 0;
+    } else if (dir == SPLIT_UP || dir == SPLIT_DOWN) {
+        split->split_dir = 1;
+        frame->split_dir = 1;
+    }
+
     switch (dir) {
     case 0:
         frame->x = 0;
@@ -96,10 +104,103 @@ struct frame *create_frame(struct frame *split, int dir, struct buf *buf)
     return frame;
 }
 
+/**
+ * Fills a gap by expanding frames into it.
+ *
+ * @param x         The x position of the gap.
+ * @param y         The y position of the gap.
+ * @param w         The width of the gap.
+ * @param h         The height of the gap.
+ * @param pref_vert 1 if it preferred to expand frames vertically, 0 otherwise.
+ */
+static void fill_gap(int x, int y, int w, int h, int pref_vert)
+{
+    struct frame *frame;
+    struct frame *l_f, *r_f, *t_f, *b_f;
+    int border;
+    int expand;
+
+    /* find frames that can expand into this frame */
+    l_f = NULL;
+    r_f = NULL;
+    t_f = NULL;
+    b_f = NULL;
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (frame->y >= y && frame->y + frame->h <= y + h) {
+            if (frame->x + frame->w == x) {
+                l_f = frame;
+            } else if (x + w == frame->x) {
+                r_f = frame;
+            }
+        }
+
+        if (frame->x >= x && frame->x + frame->w <= x + w) {
+            if (frame->y + frame->h == y) {
+                t_f = frame;
+            } else if (y + h == frame->y) {
+                b_f = frame;
+            }
+        }
+    }
+
+    if (l_f == NULL && r_f == NULL && t_f == NULL && b_f == NULL) {
+        return;
+    }
+
+    border = 0;
+    /* take preference into account */
+    if (pref_vert == 0 && (r_f != NULL || l_f != NULL)) {
+        t_f = NULL;
+        b_f = NULL;
+    } else if (pref_vert == 1 && (t_f != NULL || b_f != NULL)) {
+        l_f = NULL;
+        r_f = NULL;
+    }
+
+    if (l_f != NULL || r_f != NULL) {
+        if (l_f != NULL && r_f != NULL) {
+           border = x + w / 2;
+        } else if (l_f != NULL) {
+           border = x + w;
+        } else {
+           border = x;
+        }
+        expand = 0;
+    } else if (t_f != NULL || b_f != NULL) {
+        if (t_f != NULL && b_f != NULL) {
+           border = y + h / 2;
+        } else if (t_f != NULL) {
+           border = y + h;
+        } else {
+           border = y;
+        }
+        expand = 1;
+    }
+
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (expand == 0 && frame->y >= y &&
+                frame->y + frame->h <= y + h) {
+            if (frame->x + frame->w == x) {
+                frame->w += border - x;
+            } else if (x + w == frame->x) {
+                frame->x = border;
+                frame->w += x + w - border;
+            }
+        } else if (expand == 1 && frame->x >= x &&
+                frame->x + frame->w <= x + w) {
+            if (frame->y + frame->h == y) {
+                frame->h += border - y;
+            } else if (y + h == frame->y) {
+                frame->y = border;
+                frame->h += y + h - border;
+            }
+        }
+    }
+}
+
 void destroy_frame(struct frame *frame)
 {
-    struct frame *f, *l_f, *r_f, *t_f, *b_f;
-    int border, expand;
+    struct frame *f;
 
     /* remove from linked list */
     if (frame == FirstFrame) {
@@ -114,73 +215,7 @@ void destroy_frame(struct frame *frame)
     if (FirstFrame == NULL) {
         Core.is_stopped = true;
     } else {
-        /* find frames that can expand into this frame */
-        l_f = NULL;
-        r_f = NULL;
-        t_f = NULL;
-        b_f = NULL;
-        for (f = FirstFrame; f != NULL; f = f->next) {
-            if (f->y >= frame->y && f->y + f->h <= frame->y + frame->h) {
-                if (f->x + f->w == frame->x) {
-                    l_f = f;
-                } else if (frame->x + frame->w == f->x) {
-                    r_f = f;
-                }
-            }
-
-            if (f->x >= frame->x && f->x + f->w <= frame->x + frame->w) {
-                if (f->y + f->h == frame->y) {
-                    t_f = f;
-                } else if (frame->y + frame->h == f->y) {
-                    b_f = f;
-                }
-            }
-        }
-
-        border = 0;
-        if (t_f != NULL || b_f != NULL) {
-            if (t_f != NULL && b_f != NULL) {
-               border = frame->y + frame->h / 2;
-            } else if (t_f != NULL) {
-               border = frame->y + frame->h;
-            } else {
-               border = frame->y;
-            }
-            expand = 1;
-        } else if (l_f != NULL || r_f != NULL) {
-            if (l_f != NULL && r_f != NULL) {
-               border = frame->x + frame->w / 2;
-            } else if (l_f != NULL) {
-               border = frame->x + frame->w;
-            } else {
-               border = frame->x;
-            }
-            expand = 0;
-        } else {
-            expand = -1;
-        }
-
-        for (f = FirstFrame; f != NULL; f = f->next) {
-            if (expand == 0 && f->y >= frame->y &&
-                    f->y + f->h <= frame->y + frame->h) {
-                if (f->x + f->w == frame->x) {
-                    f->w += border - frame->x;
-                } else if (frame->x + frame->w == f->x) {
-                    f->x = border;
-                    f->w += frame->x + frame->w - border;
-                }
-            }
-
-            if (expand == 1 && f->x >= frame->x &&
-                    f->x + f->w <= frame->x + frame->w) {
-                if (f->y + f->h == frame->y) {
-                    f->h += border - frame->y;
-                } else if (frame->y + frame->h == f->y) {
-                    f->y = border;
-                    f->h += frame->y + frame->h - border;
-                }
-            }
-        }
+        fill_gap(frame->x, frame->y, frame->w, frame->h, frame->split_dir);
 
         if (frame == SelFrame) {
             /* focus frame that is now at the same position */
@@ -237,6 +272,139 @@ void update_screen_size(void)
             frame->h = LINES - 1 - frame->y;
         }
     }
+}
+
+/**
+ * Counts how many frames are in a rectangular region.
+ *
+ * @param x The x position.
+ * @param y The y position.
+ * @param w The width.
+ * @param h The height.
+ *
+ * @return The number of frames.
+ */
+static size_t count_frames(int x, int y, int w, int h)
+{
+    size_t c = 0;
+
+    for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (x < frame->x + frame->w && frame->x < x + w &&
+                y < frame->y + frame->h && frame->y < y + h) {
+            c++;
+        }
+    }
+    return c;
+}
+
+/**
+ * Returns all frames within a rectangular region.
+ *
+ * @param x         The x position.
+ * @param y         The y position.
+ * @param w         The width.
+ * @param h         The height.
+ * @param p_frames  The destination of the frames (must be big enough).
+ */
+static void get_frames(int x, int y, int w, int h, struct frame **p_frames)
+{
+    size_t i = 0;
+
+    for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (x < frame->x + frame->w && frame->x < x + w &&
+                y < frame->y + frame->h && frame->y < y + h) {
+            p_frames[i++] = frame;
+        }
+    }
+}
+
+static int push_left(struct frame *frame, int amount)
+{
+    int a;
+
+    a = MIN(amount, frame->w - 2);
+    amount -= a;
+    if (amount != 0) {
+        a += move_left_edge(frame, amount);
+    }
+    frame->w -= a;
+    return a;
+}
+
+int move_left_edge(struct frame *frame, int amount)
+{
+    size_t c;
+    struct frame **r_frames;
+    int a, min_a;
+
+    c = count_frames(frame->x - 1, frame->y, 1, frame->h);
+    if (c == 0) {
+        return 0;
+    }
+
+    r_frames = xreallocarray(NULL, c, sizeof(*r_frames));
+    get_frames(frame->x - 1, frame->y, 1, frame->h, r_frames);
+
+    min_a = amount;
+    for (size_t i = 0; i < c; i++) {
+        a = push_left(r_frames[i], amount);
+        min_a = MIN(min_a, a);
+    }
+
+    frame->x -= min_a;
+    frame->w += min_a;
+
+    free(r_frames);
+    return min_a;
+}
+
+/**
+ * Increases the x position of a frame and recursively resolves overlaps and
+ * gaps.
+ *
+ * @param frame     The frame whose x position to increase.
+ * @param amount    The amount to add to the x position.
+ *
+ * @return The amount x was actually increased by.
+ */
+static int push_right(struct frame *frame, int amount)
+{
+    int a;
+
+    a = MIN(amount, frame->w - MIN(frame->w, 2));
+    amount -= a;
+    if (amount != 0) {
+        a += move_right_edge(frame, amount);
+    }
+    frame->x += a;
+    frame->w -= a;
+    return a;
+}
+
+int move_right_edge(struct frame *frame, int amount)
+{
+    size_t c;
+    struct frame **r_frames;
+    int a, min_a;
+
+    c = count_frames(frame->x + frame->w, frame->y, 1, frame->h);
+    if (c == 0) {
+        return 0;
+    }
+
+    r_frames = xreallocarray(NULL, c, sizeof(*r_frames));
+    get_frames(frame->x + frame->w, frame->y, 1, frame->h, r_frames);
+
+    min_a = amount;
+    for (size_t i = 0; i < c; i++) {
+        a = push_right(r_frames[i], amount);
+        min_a = MIN(min_a, a);
+    }
+
+    frame->w += min_a;
+
+    free(r_frames);
+    return min_a;
 }
 
 void set_frame_buffer(struct frame *frame, struct buf *buf)

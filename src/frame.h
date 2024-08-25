@@ -19,6 +19,8 @@
 struct frame {
     /// position and size on the screen
     int x, y, w, h;
+    /// the most recent direction the frame did a split
+    int split_dir;
     /// buffer that is active within this frame
     struct buf *buf;
     /// cursor position
@@ -113,6 +115,26 @@ struct frame *get_frame_at(int x, int y);
  * Resizes all frames according to the new screen size in `COLS`, `LINES`.
  */
 void update_screen_size(void);
+
+/**
+ * Moves the left edge of a frame to the left.
+ *
+ * @param frame     The frame whose edge to move left.
+ * @param amount    The amount to move it left by.
+ *
+ * @return The amount it actually moved by.
+ */
+int move_left_edge(struct frame *frame, int amount);
+
+/**
+ * Moves the right edge of a frame to the right.
+ *
+ * @param frame     The frame whose edge to move right.
+ * @param amount    The amount to move it right by.
+ *
+ * @return The amount it actually moved by.
+ */
+int move_right_edge(struct frame *frame, int amount);
 
 /**
  * Changes the buffer of a frame.
