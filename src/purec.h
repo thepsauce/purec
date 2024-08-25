@@ -40,13 +40,13 @@ extern WINDOW *OffScreen;
 #define REG_MIN '.'
 #define REG_MAX 'Z'
 
+#define IS_REG_CHAR(r) (((r)>=REG_MIN&&(r)<=REG_MAX)||(r)=='+'||(r)=='*')
+
 #define MARK_MIN '.'
 #define MARK_MAX '^'
 
 #define USER_REC_MIN 'A'
 #define USER_REC_MAX 'Z'
-
-#define IS_REG_CHAR(r) (((r)>=REG_MIN&&(r)<=REG_MAX)||(r)=='+'||(r)=='*')
 
 /**
  * The core struct contains information about all modes and the state of the
@@ -59,9 +59,7 @@ extern struct core {
      * The size of the window is 128x1.
      */
     WINDOW *msg_win;
-    /**
-     * The state of the message.
-     */
+    /// the state of the message
     int msg_state;
 
     /// whether the editor should quit
@@ -108,8 +106,7 @@ extern struct core {
      * Series of key presses. Keys larger than 0xff, for example `KEY_LEFT` are
      * encoded with (in binary) 1111111X XXXXXXXX, so this encodes the range from
      * 256 to 511 (0777 is the maximum ncurses key value) (inclusive).
-     * This works because even in UTF-8 because 11111110 or 11111111 mean
-     * nothing.
+     * This works because even in UTF-8, 11111110 or 11111111 mean nothing.
      */
     char *rec;
     /// the amount of inputted characters
@@ -191,15 +188,6 @@ void set_error(const char *err, ...);
  * @param flags     The register flags.
  */
 void yank_data(size_t data_i, int flags);
-
-/**
- * Sets the current register to given lines.
- *
- * @param lines     The lines.
- * @param num_lines The numer of lines lines.
- * @param flags     The register flags.
- */
-void yank_lines(struct raw_line *lines, size_t num_lines, int flags);
 
 /**
  * Checks if a recording is currently being played. If yes, then the next call

@@ -1,6 +1,9 @@
+[ ] Add cache directory
+    [ ] Save recent sessions
+
 [-] Add session management
     [-] Add session restore
-        [.] See session saving
+        [.] (See session saving)
     [-] Add session saving
         [X] Save frames and buffers
         [ ] Save undo data
@@ -25,7 +28,7 @@
         [X] q for recording
         [X] @ for playback
         [ ] Support recursive use of @
-    [ ] ... (comes from other todos)
+    [.] (Comes from other todos)
 
 [-] Finish insert mode
     [X] Finish repeat insertion
@@ -43,9 +46,10 @@
         [X] Handle clashes
         [X] Handle screen resizing
 
-[ ] Add command line options
-    [ ] Add option to open files
-    [ ] -s Session restore
+[-] Add command line options
+    [X] Add option to open files
+    [-] -s Session restore
+        [.] (Needs proper session management)
 
 [-] Add registers
     [X] Add keybinds for copy paste
@@ -58,21 +62,27 @@
     [X] Add keybind for moving to mark
     [X] Add keybind for adding mark
 
-[ ] Add jump list
-    [ ] Add jump list to each frame (or buffer?)
+[?] Add jump list
+    [?] Add jump list to each frame (or buffer?)
 
 [-] Add syntax highlighting
     [-] Add C syntax
         [X] Add core syntax
         [ ] Add paran matching
+        [ ] Add auto indentation
     [ ] Add git syntax
+
+[-] Add color themes
+    [X] Add simple color theme
+    [ ] Make array of color themes for easy switching
 
 [X] Add file opener
 
 [-] Add commands
     [X] Add :e for opening a file
     [ ] Add :s for substitute
+    [ ] Add / and ? for searching
 
 [ ] Add regex
-    [ ] Add regex engine (maybe steal it?)
+    [ ] Add regex engine
     [ ] Add search and replace

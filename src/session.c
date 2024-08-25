@@ -309,5 +309,7 @@ int load_session(FILE *fp)
         }
     }
 
+    /* the screen size back then might be different than the current one */
+    update_screen_size();
     return 0;
 }

@@ -487,7 +487,7 @@ int normal_handle_input(int c)
             }
         }
         d_lines = get_lines(buf, &from, &to, &num_lines);
-        yank_lines(d_lines, num_lines, 0);
+        yank_data(save_lines(d_lines, num_lines), 0);
         return UPDATE_UI;
 
     case 'P':

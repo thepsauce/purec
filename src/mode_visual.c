@@ -119,7 +119,7 @@ int visual_handle_input(int c)
             lines = get_lines(buf, &sel.beg, &sel.end, &num_lines);
         }
 
-        yank_lines(lines, num_lines, sel.is_block ? IS_BLOCK : 0);
+        yank_data(save_lines(lines, num_lines), sel.is_block ? IS_BLOCK : 0);
 
         set_mode(NORMAL_MODE);
         return UPDATE_UI;

@@ -1,15 +1,17 @@
 #include "color.h"
-#include "input.h"
 #include "frame.h"
+#include "input.h"
 #include "purec.h"
 #include "xalloc.h"
 
 #include <locale.h>
 
 #include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
 #include <stdarg.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 WINDOW *OffScreen;
@@ -19,6 +21,35 @@ bool IsRunning;
 int ExitCode;
 
 struct core Core;
+
+static struct program_arguments {
+    bool needs_help;
+    bool load_session;
+    char **files;
+    int num_files;
+} Args;
+
+static const struct program_opt {
+    const char *loong;
+    const char *desc;
+    char shrt;
+    /* 0 - no arguments */
+    /* 1 - single argument */
+    /* 2 - optional argument */
+    /* 3 - arguments until the next '-' */
+    int n;
+    bool *b; /* 0 | 2 */
+    struct {
+        char ***p;
+        size_t *n;
+    } v; /* 3 */
+    char **s; /* 1 | 2 */
+} ProgramOptions[] = {
+    { "help", "show this help",
+        'h', 0, .b = &Args.needs_help },
+    { "load-session", "loads the last cached session",
+        's', 0, .b = &Args.load_session },
+};
 
 void set_message(const char *msg, ...)
 {
@@ -58,11 +89,6 @@ void yank_data(size_t data_i, int flags)
         reg->flags = flags;
         reg->data_i = data_i;
     }
-}
-
-void yank_lines(struct raw_line *lines, size_t num_lines, int flags)
-{
-    yank_data(save_lines(lines, num_lines), flags);
 }
 
 bool is_playback(void)
@@ -254,16 +280,248 @@ static void set_message_to_default(void)
     wattr_off(Core.msg_win, A_BOLD, NULL);
 
     if (Core.user_rec_ch != '\0') {
-        if (Core.mode != NORMAL_MODE) {
+        if (getcurx(Core.msg_win) > 0) {
             waddch(Core.msg_win, ' ');
         }
         waddstr(Core.msg_win, "recording @");
-        waddch(Core.msg_win, Core.user_rec_ch);
+        waddch(Core.msg_win, tolower(Core.user_rec_ch));
     }
     wclrtoeol(Core.msg_win);
 }
 
-int main(void)
+static void usage(FILE *fp, const char *program_name)
+{
+    const struct program_opt *opt;
+
+    fprintf(fp, "PureC text editor.\n"
+            "%s [options] [files]\n"
+            "options:\n", program_name);
+    for (size_t i = 0; i < ARRAY_SIZE(ProgramOptions); i++) {
+        opt = &ProgramOptions[i];
+        if (opt->loong != NULL) {
+            fprintf(fp, "--%s", opt->loong);
+        }
+        if (opt->shrt != '\0') {
+            if (opt->loong != NULL) {
+                fputc('|', fp);
+            }
+            fputc(opt->shrt, fp);
+        }
+        fprintf(fp, " - %s\n", opt->desc);
+    }
+}
+
+static bool parse_args(int argc, char **argv)
+{
+    char *arg;
+    char **vals;
+    int num_vals;
+    int on;
+    const struct program_opt *o;
+    char *equ;
+    char s_arg[2];
+
+    argc--;
+    argv++;
+    s_arg[1] = '\0';
+    for (int i = 0; i != argc; ) {
+        arg = argv[i];
+        vals = NULL;
+        num_vals = 0;
+        on = -1;
+
+        if (arg[0] == '-') {
+            arg++;
+            equ = strchr(arg, '=');
+            if (equ != NULL) {
+                *(equ++) = '\0';
+            }
+            if (arg[0] == '-' || equ != NULL) {
+                if (arg[0] == '-') {
+                    arg++;
+                }
+
+                if (arg[0] == '\0') {
+                    i++;
+                    Args.files = &argv[i];
+                    Args.num_files = argc - i;
+                    break;
+                }
+
+                for (size_t i = 0; i < ARRAY_SIZE(ProgramOptions); i++) {
+                    if (strcmp(ProgramOptions[i].loong, arg) == 0) {
+                        o = &ProgramOptions[i];
+                        on = o->n;
+                        break;
+                    }
+                }
+
+                if (equ != NULL) {
+                    argv[i] = equ;
+                } else {
+                    i++;
+                }
+
+                vals = &argv[i];
+                if (on > 0 && i != argc) {
+                    for (; i != argc && argv[i][0] != '-'; i++) {
+                        num_vals++;
+                        if (on != 1) {
+                            break;
+                        }
+                    }
+                } else if (equ != NULL) {
+                    num_vals = 1;
+                }
+            } else {
+                s_arg[0] = *(arg++);
+                for (size_t i = 0; i < ARRAY_SIZE(ProgramOptions); i++) {
+                    if (ProgramOptions[i].shrt == s_arg[0]) {
+                        o = &ProgramOptions[i];
+                        on = o->n;
+                        break;
+                    }
+                }
+
+                if (arg[0] != '\0') {
+                    if (on > 0) {
+                        argv[i] = arg;
+                        vals = &argv[i];
+                        num_vals = 1;
+                        i++;
+                    } else {
+                        arg[-1] = '-';
+                        argv[i] = arg - 1;
+                    }
+                } else {
+                    i++;
+                    if (on == 1 && i != argc) {
+                        vals = &argv[i++];
+                        num_vals = 1;
+                    } else if (on == 3) {
+                        vals = &argv[i];
+                        for (; i != argc && argv[i][0] != '-'; i++) {
+                            num_vals++;
+                        }
+                    }
+                }
+                arg = s_arg;
+            }
+        } else {
+            /* use rest as files */
+            Args.files = &argv[i];
+            Args.num_files = argc - i;
+            break;
+        }
+
+        switch (on) {
+        case -1:
+            fprintf(stderr, "invalid option '%s'\n", arg);
+            return false;
+
+        case 0:
+            if (num_vals > 0) {
+                fprintf(stderr, "option '%s' does not expect any arguments\n",
+                        arg);
+                return false;
+            }
+            *o->b = true;
+            break;
+
+        case 1:
+            if (num_vals == 0) {
+                fprintf(stderr, "option '%s' expects one argument\n", arg);
+                return false;
+            }
+            *o->s = vals[0];
+            break;
+
+        case 2:
+            *o->b = true;
+            if (num_vals == 1) {
+                *o->s = vals[0];
+            }
+            break;
+
+        case 3:
+            *o->v.p = vals;
+            *o->v.n = num_vals;
+            break;
+        }
+    }
+    return true;
+}
+
+int load_last_session(void)
+{
+    DIR *dir;
+    struct dirent *ent;
+    struct stat st;
+    char *name;
+    char *latest_name;
+    time_t latest_time;
+    FILE *fp;
+
+    dir = opendir("cache/sessions");
+    if (dir == NULL) {
+        return -1;
+    }
+
+    latest_name = NULL;
+    latest_time = 0;
+    while (ent = readdir(dir), ent != NULL) {
+        if (ent->d_type != DT_REG) {
+            continue;
+        }
+        name = xasprintf("cache/sessions/%s", ent->d_name);
+        if (stat(name, &st) != 0) {
+            continue;
+        }
+        if (st.st_mtime > latest_time) {
+            free(latest_name);
+            latest_name = name;
+            latest_time = st.st_mtime;
+        } else {
+            free(name);
+        }
+    }
+
+    closedir(dir);
+
+    fp = fopen(latest_name, "rb");
+    (void) load_session(fp);
+    if (fp != NULL) {
+        fclose(fp);
+    }
+
+    free(latest_name);
+    return 0;
+}
+
+void save_current_session(void)
+{
+    FILE *fp;
+    time_t cur_time;
+    char *name;
+    struct tm *tm;
+
+    cur_time = time(NULL);
+    tm = localtime(&cur_time);
+
+    name = xasprintf("cache/sessions/session_%04d-%02d-%02d_%02d-%02d-%02d",
+            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+            tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+    fp = fopen(name, "wb");
+    if (fp != NULL) {
+        save_session(fp);
+        fclose(fp);
+    }
+
+    free(name);
+}
+
+int main(int argc, char **argv)
 {
     static const char cursors[] = {
         [NORMAL_MODE] = '\x30',
@@ -283,7 +541,6 @@ int main(void)
         [VISUAL_LINE_MODE] = visual_handle_input,
     };
 
-    FILE *fp;
     int cur_x, cur_y;
     size_t first_event;
     int c;
@@ -293,6 +550,16 @@ int main(void)
     struct frame *old_frame;
 
     setlocale(LC_ALL, "");
+
+    if (!parse_args(argc, argv) ||  Args.needs_help) {
+        usage(stderr, argv[0]);
+        return 0;
+    }
+
+    if (mkdir("cache", 0755) == -1 && errno != EEXIST) {
+        fprintf(stderr, "%s\n", strerror(errno));
+        return 1;
+    }
 
     initscr();
     raw();
@@ -313,10 +580,14 @@ int main(void)
     wbkgdset(Core.msg_win, ' ' | COLOR_PAIR(HI_NORMAL));
     wbkgdset(OffScreen, ' ' | COLOR_PAIR(HI_NORMAL));
 
-    fp = fopen("session", "rb");
-    (void) load_session(fp);
-    if (fp != NULL) {
-        fclose(fp);
+    for (int i = 0; i < Args.num_files; i++) {
+        (void) create_buffer(Args.files[i]);
+    }
+
+    if ((!Args.load_session || load_last_session() == -1) &&
+            Args.num_files == 0) {
+        /* stored in `FirstBuffer` */
+        (void) create_buffer(NULL);
     }
 
     if (FirstFrame == NULL) {
@@ -400,11 +671,7 @@ int main(void)
     /* restore terminal state */
     endwin();
 
-    if (Core.exit_code == 0) {
-        fp = fopen("session", "wb");
-        save_session(fp);
-        fclose(fp);
-    }
+    save_current_session();
 
     /* free resources */
     free_session();
