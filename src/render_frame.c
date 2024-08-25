@@ -298,8 +298,8 @@ void render_frame(struct frame *frame)
             buf->path == NULL ? "[No name]" : buf->path,
             buf->event_i == buf->save_event_i ?  "" : "[+]");
     w = getcurx(OffScreen);
-    if (w > frame->w) {
-        w = frame->w;
+    if (w + orig_x > frame->w) {
+        w = frame->w - orig_x;
     }
     copywin(OffScreen, stdscr, 0, 0,
             frame->y + frame->h - 1, frame->x + orig_x,
