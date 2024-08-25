@@ -63,8 +63,9 @@ void init_load_buffer(struct buf *buf)
     struct line *line;
 
     if (buf->path == NULL || (fp = fopen(buf->path, "r")) == NULL) {
+        buf->a_lines = 1;
+        buf->lines = xcalloc(buf->a_lines, sizeof(*buf->lines));
         buf->num_lines = 1;
-        buf->lines = xcalloc(1, sizeof(*buf->lines));
         return;
     }
 
@@ -86,9 +87,16 @@ void init_load_buffer(struct buf *buf)
         line->n = line_len;
     }
 
-    buf->max_dirty_i = buf->num_lines - 1;
-
     free(s_line);
+
+    if (buf->num_lines == 0) {
+        /* the file was completely empty */
+        buf->a_lines = 1;
+        buf->lines = xcalloc(buf->a_lines, sizeof(*buf->lines));
+        buf->num_lines = 1;
+    } else {
+        buf->max_dirty_i = buf->num_lines - 1;
+    }
 }
 
 void destroy_buffer(struct buf *buf)
