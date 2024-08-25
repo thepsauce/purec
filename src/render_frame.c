@@ -308,8 +308,8 @@ void render_frame(struct frame *frame)
     mvwprintw(OffScreen, 0, 0, "%d%% ¶%zu/%zu☰℅%zu",
             perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1);
     w = getcurx(OffScreen);
-    if (w > frame->w) {
-        w = frame->w;
+    if (w + orig_x > frame->w) {
+        w = frame->w - orig_x;
     }
     copywin(OffScreen, stdscr, 0, 0,
             frame->y + frame->h - 1, frame->x + frame->w - w,
