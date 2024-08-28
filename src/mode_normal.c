@@ -22,18 +22,6 @@ static int conv_to_char(int c)
     return ConvChar;
 }
 
-static size_t get_frame_count(void)
-{
-    struct frame *frame;
-    size_t count;
-
-    count = 0;
-    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
-        count++;
-    }
-    return count;
-}
-
 /**
  * Does the motion binded to given input character.
  *
@@ -43,15 +31,22 @@ static size_t get_frame_count(void)
  */
 static int do_binded_frame_movement(int c)
 {
-    struct frame *frame;
+    struct frame *frame, *f;
+    int x, y;
+
+    /* convert all control codes C-X where X is an uppercase letter to x */
+    if (c >= 1 && c <= 26) {
+        c += 'a' - 1;
+    }
 
     switch (c) {
-    case CONTROL('Q'):
+    /* close the current window */
     case 'q':
+    case 'c':
         destroy_frame(SelFrame);
-        break;
+        return UPDATE_UI;
 
-    case CONTROL('P'):
+    /* go to a previous window in the linked list */
     case 'p':
         Core.counter %= get_frame_count();
         for (size_t i = 0; i < Core.counter; i++) {
@@ -60,94 +55,188 @@ static int do_binded_frame_movement(int c)
                 frame = frame->next;
             }
         }
-        if (frame->next == NULL) {
+        if (frame == SelFrame) {
             return 0;
         }
-        SelFrame = frame;
         break;
 
-    case CONTROL('N'):
+    /* go to a next window int the linked list */
     case 'n':
         Core.counter %= get_frame_count();
         if (Core.counter == 0) {
             return 0;
         }
-        for (; Core.counter > 0; Core.counter--) {
-            SelFrame = SelFrame->next;
-            if (SelFrame == NULL) {
-                SelFrame = FirstFrame;
+        for (frame = SelFrame; Core.counter > 0; Core.counter--) {
+            frame = frame->next;
+            if (frame == NULL) {
+                frame = FirstFrame;
             }
+        }
+        if (frame == SelFrame) {
+            return 0;
         }
         break;
 
-    case CONTROL('H'):
+    /* go to a frame on the left */
     case 'h':
-        for (; Core.counter > 0; Core.counter--) {
-            frame = get_frame_at(SelFrame->x - 1, SelFrame->y);
-            if (frame == NULL) {
+        for (frame = SelFrame; Core.counter > 0; Core.counter--) {
+            if (!get_visual_cursor(frame, &x, &y)) {
+                y = frame->y;
+            }
+            f = get_frame_at(frame->x - 1, y);
+            if (f == NULL) {
                 break;
             }
-            SelFrame = frame;
+            frame = f;
+        }
+        if (frame == SelFrame) {
+            return 0;
         }
         break;
 
-    case CONTROL('J'):
+    /* go to a frame below */
     case 'j':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-            frame = get_frame_at(SelFrame->x, SelFrame->y + SelFrame->h);
-            if (frame == NULL) {
+            if (!get_visual_cursor(frame, &x, &y)) {
+                x = frame->x;
+            }
+            f = get_frame_at(x, frame->y + frame->h);
+            if (f == NULL) {
                 break;
             }
-            SelFrame = frame;
+            frame = f;
+        }
+        if (frame == SelFrame) {
+            return 0;
         }
         break;
 
-    case CONTROL('K'):
+    /* goto to a frame above */
     case 'k':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-            frame = get_frame_at(SelFrame->x, SelFrame->y - 1);
-            if (frame == NULL) {
+            if (!get_visual_cursor(frame, &x, &y)) {
+                x = frame->x;
+            }
+            f = get_frame_at(x, frame->y - 1);
+            if (f == NULL) {
                 break;
             }
-            SelFrame = frame;
+            frame = f;
+        }
+        if (frame == SelFrame) {
+            return 0;
         }
         break;
 
-    case CONTROL('L'):
+    /* goto to a frame on the right */
     case 'l':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-            frame = get_frame_at(SelFrame->x + SelFrame->w, SelFrame->y);
-            if (frame == NULL) {
+            if (!get_visual_cursor(frame, &x, &y)) {
+                y = frame->y;
+            }
+            f = get_frame_at(frame->x + frame->w, y);
+            if (f == NULL) {
                 break;
             }
-            SelFrame = frame;
+            frame = f;
+        }
+        if (frame == SelFrame) {
+            return 0;
         }
         break;
 
-    case CONTROL('V'):
+    /* split frame on the right */
     case 'v':
-    case 'V':
+    case 'V': /* also move to it */
         frame = create_frame(SelFrame, SPLIT_RIGHT, SelFrame->buf);
-        if (c == 'V') {
-            SelFrame = frame;
+        if (c != 'V') {
+            return UPDATE_UI;
         }
         break;
 
-    case CONTROL('S'):
+    /* split frame below */
     case 's':
-    case 'S':
+    case 'S': /* also move to it */
         frame = create_frame(SelFrame, SPLIT_DOWN, SelFrame->buf);
-        if (c == 'S') {
-            SelFrame = frame;
+        if (c != 'S') {
+            return UPDATE_UI;
         }
         break;
 
+    /* create new frame below */
+    case 'N':
+        frame = create_frame(SelFrame, SPLIT_DOWN, NULL);
+        break;
+
+    /* make the current frame the only visible frame */
+    case 'o':
+        if (FirstFrame->next == NULL) {
+            return 0;
+        }
+        set_only_frame(SelFrame);
+        return UPDATE_UI;
+
+    /* go to the frame in the top left and then right */
+    case 't':
+        frame = get_frame_at(0, 0);
+        for (size_t i = 1; i < Core.counter; i++) {
+            f = get_frame_at(frame->x + frame->w, 0);
+            if (f == NULL) {
+                break;
+            }
+            frame = f;
+        }
+        if (frame == SelFrame) {
+            return 0;
+        }
+        break;
+
+    /* go to the frame in the bottom right and then left */
+    case 'b':
+        frame = get_frame_at(COLS - 1, LINES - 2);
+        for (size_t i = 1; i < Core.counter; i++) {
+            f = get_frame_at(frame->x - 1, 0);
+            if (f == NULL) {
+                break;
+            }
+            frame = f;
+        }
+        if (frame == SelFrame) {
+            return 0;
+        }
+        break;
+
+    /* expand the width of current frame */
     case '>':
         return move_right_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
 
+    /* move current frame to the left and expand its width */
     case '<':
         return move_left_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
+
+    /* set the width */
+    case '|':
+        /* TODO: */
+        break;
+
+    /* analogous to ><| but for the height */
+    case '+':
+    case '-':
+    case '_':
+        /* TODO: */
+        break;
+
+    /* jump to the file under the cursor */
+    case 'f':
+        /* TODO */
+        break;
     }
+
+    if (SelFrame->buf == frame->buf) {
+        /* clip the cursor */
+        set_cursor(frame, &frame->cur);
+    }
+    SelFrame = frame;
     return UPDATE_UI;
 }
 

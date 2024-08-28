@@ -102,6 +102,13 @@ void get_text_rect(const struct frame *frame,
 bool get_visual_cursor(const struct frame *frame, int *p_x, int *p_y);
 
 /**
+ * Gets the number of frames visible by iterating the frame linked list.
+ *
+ * @return The number of visible frames.
+ */
+size_t get_frame_count(void);
+
+/**
  * Gets the frame at given position.
  *
  * @param x The x position to check.
@@ -110,6 +117,13 @@ bool get_visual_cursor(const struct frame *frame, int *p_x, int *p_y);
  * @return The frame at given position.
  */
 struct frame *get_frame_at(int x, int y);
+
+/**
+ * Destroys all frames but the given one.
+ *
+ * @param frame The frame to keep.
+ */
+void set_only_frame(struct frame *frame);
 
 /**
  * Resizes all frames according to the new screen size in `COLS`, `LINES`.

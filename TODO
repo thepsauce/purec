@@ -1,7 +1,9 @@
-[ ] Add cache directory
-    [ ] Save recent sessions
+[-] Add cache directory
+    [X] Save recent sessions
+    [ ] Add session selection
 
 [-] Add session management
+    [.] (See cache above)
     [-] Add session restore
         [.] (See session saving)
     [-] Add session saving

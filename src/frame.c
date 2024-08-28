@@ -220,10 +220,26 @@ void destroy_frame(struct frame *frame)
         if (frame == SelFrame) {
             /* focus frame that is now at the same position */
             SelFrame = get_frame_at(frame->x, frame->y);
+            if (SelFrame->buf == frame->buf) {
+                /* clip the cursor */
+                set_cursor(SelFrame, &SelFrame->cur);
+            }
         }
     }
 
     free(frame);
+}
+
+size_t get_frame_count(void)
+{
+    struct frame *frame;
+    size_t count;
+
+    count = 0;
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+        count++;
+    }
+    return count;
 }
 
 struct frame *get_frame_at(int x, int y)
@@ -236,6 +252,28 @@ struct frame *get_frame_at(int x, int y)
         return frame;
     }
     return NULL;
+}
+
+void set_only_frame(struct frame *frame)
+{
+    struct frame *f, *n_f;
+
+    for (f = FirstFrame; f != NULL; f = n_f) {
+        n_f = f->next;
+        if (f == frame) {
+            continue;
+        }
+        free(f);
+    }
+    FirstFrame = frame;
+    SelFrame = frame;
+    frame->x = 0;
+    frame->y = 0;
+    frame->w = COLS;
+    frame->h = LINES - 1;
+    frame->next = NULL;
+    /* clip the cursor */
+    set_cursor(frame, &frame->cur);
 }
 
 bool is_frame_in(int x, int y, int w, int h)
