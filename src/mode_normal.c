@@ -23,61 +23,78 @@ static int conv_to_char(int c)
 }
 
 /**
+ * Swaps given frames.
+ *
+ * @param a The first frame.
+ * @param b The second frame.
+ *
+ * @return 0 if the frames are the same, otherwise 1.
+ */
+static int exchange_frames(struct frame *a, struct frame *b)
+{
+    struct buf *buf;
+    struct pos cur, scroll;
+    size_t vct;
+
+    if (a == b) {
+        return 0;
+    }
+
+    buf = a->buf;
+    cur = a->cur;
+    scroll = a->scroll;
+    vct = a->vct;
+
+    a->buf = b->buf;
+    a->cur = b->cur;
+    a->scroll = b->scroll;
+    a->vct = b->vct;
+
+    b->buf = buf;
+    b->cur = cur;
+    b->scroll = scroll;
+    b->vct = vct;
+    return UPDATE_UI;
+}
+
+/**
  * Does the motion binded to given input character.
  *
  * @param c The input character.
  *
- * @return 1 if the UI needs an update, 0 otherwise.
+ * @return The frame resulting from the movement.
  */
-static int do_binded_frame_movement(int c)
+static struct frame *do_binded_frame_movement(int c)
 {
     struct frame *frame, *f;
     int x, y;
 
-    /* convert all control codes C-X where X is an uppercase letter to x */
-    if (c >= 1 && c <= 26) {
-        c += 'a' - 1;
-    }
-
     switch (c) {
-    /* close the current window */
-    case 'q':
-    case 'c':
-        destroy_frame(SelFrame);
-        return UPDATE_UI;
-
     /* go to a previous window in the linked list */
+    case CONTROL('P'):
     case 'p':
         Core.counter %= get_frame_count();
-        for (size_t i = 0; i < Core.counter; i++) {
-            for (frame = FirstFrame; frame->next != NULL &&
-                    frame->next != SelFrame; ) {
+        for (frame = FirstFrame; Core.counter > 0; Core.counter--) {
+            while (frame->next != NULL && frame->next != SelFrame) {
                 frame = frame->next;
             }
         }
-        if (frame == SelFrame) {
-            return 0;
-        }
-        break;
+        return frame;
 
     /* go to a next window int the linked list */
+    case CONTROL('N'):
     case 'n':
         Core.counter %= get_frame_count();
-        if (Core.counter == 0) {
-            return 0;
-        }
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
             frame = frame->next;
             if (frame == NULL) {
                 frame = FirstFrame;
             }
         }
-        if (frame == SelFrame) {
-            return 0;
-        }
-        break;
+        return frame;
 
     /* go to a frame on the left */
+    case CONTROL('H'):
     case 'h':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
             if (!get_visual_cursor(frame, &x, &y)) {
@@ -89,12 +106,10 @@ static int do_binded_frame_movement(int c)
             }
             frame = f;
         }
-        if (frame == SelFrame) {
-            return 0;
-        }
-        break;
+        return frame;
 
     /* go to a frame below */
+    case CONTROL('J'):
     case 'j':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
             if (!get_visual_cursor(frame, &x, &y)) {
@@ -106,12 +121,10 @@ static int do_binded_frame_movement(int c)
             }
             frame = f;
         }
-        if (frame == SelFrame) {
-            return 0;
-        }
-        break;
+        return frame;
 
     /* goto to a frame above */
+    case CONTROL('K'):
     case 'k':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
             if (!get_visual_cursor(frame, &x, &y)) {
@@ -123,12 +136,10 @@ static int do_binded_frame_movement(int c)
             }
             frame = f;
         }
-        if (frame == SelFrame) {
-            return 0;
-        }
-        break;
+        return frame;
 
     /* goto to a frame on the right */
+    case CONTROL('L'):
     case 'l':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
             if (!get_visual_cursor(frame, &x, &y)) {
@@ -140,43 +151,10 @@ static int do_binded_frame_movement(int c)
             }
             frame = f;
         }
-        if (frame == SelFrame) {
-            return 0;
-        }
-        break;
-
-    /* split frame on the right */
-    case 'v':
-    case 'V': /* also move to it */
-        frame = create_frame(SelFrame, SPLIT_RIGHT, SelFrame->buf);
-        if (c != 'V') {
-            return UPDATE_UI;
-        }
-        break;
-
-    /* split frame below */
-    case 's':
-    case 'S': /* also move to it */
-        frame = create_frame(SelFrame, SPLIT_DOWN, SelFrame->buf);
-        if (c != 'S') {
-            return UPDATE_UI;
-        }
-        break;
-
-    /* create new frame below */
-    case 'N':
-        frame = create_frame(SelFrame, SPLIT_DOWN, NULL);
-        break;
-
-    /* make the current frame the only visible frame */
-    case 'o':
-        if (FirstFrame->next == NULL) {
-            return 0;
-        }
-        set_only_frame(SelFrame);
-        return UPDATE_UI;
+        return frame;
 
     /* go to the frame in the top left and then right */
+    case CONTROL('T'):
     case 't':
         frame = get_frame_at(0, 0);
         for (size_t i = 1; i < Core.counter; i++) {
@@ -186,12 +164,10 @@ static int do_binded_frame_movement(int c)
             }
             frame = f;
         }
-        if (frame == SelFrame) {
-            return 0;
-        }
-        break;
+        return frame;
 
     /* go to the frame in the bottom right and then left */
+    case CONTROL('B'):
     case 'b':
         frame = get_frame_at(COLS - 1, LINES - 2);
         for (size_t i = 1; i < Core.counter; i++) {
@@ -201,43 +177,9 @@ static int do_binded_frame_movement(int c)
             }
             frame = f;
         }
-        if (frame == SelFrame) {
-            return 0;
-        }
-        break;
-
-    /* expand the width of current frame */
-    case '>':
-        return move_right_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
-
-    /* move current frame to the left and expand its width */
-    case '<':
-        return move_left_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
-
-    /* set the width */
-    case '|':
-        /* TODO: */
-        break;
-
-    /* analogous to ><| but for the height */
-    case '+':
-    case '-':
-    case '_':
-        /* TODO: */
-        break;
-
-    /* jump to the file under the cursor */
-    case 'f':
-        /* TODO */
-        break;
+        return frame;
     }
-
-    if (SelFrame->buf == frame->buf) {
-        /* clip the cursor */
-        set_cursor(frame, &frame->cur);
-    }
-    SelFrame = frame;
-    return UPDATE_UI;
+    return SelFrame;
 }
 
 int normal_handle_input(int c)
@@ -249,7 +191,6 @@ int normal_handle_input(int c)
     struct undo_event *ev, *ev_nn;
     struct raw_line lines[2];
     struct frame *frame;
-    struct file_list file_list;
     size_t entry;
     int next_mode = NORMAL_MODE;
     struct raw_line *d_lines;
@@ -527,7 +468,110 @@ int normal_handle_input(int c)
 
     case CONTROL('W'):
         e_c = get_extra_char();
-        return do_binded_frame_movement(e_c);
+        switch (e_c) {
+        /* close the current window */
+        case CONTROL('Q'):
+        case 'q':
+        case CONTROL('C'):
+        case 'c':
+            destroy_frame(SelFrame);
+            return UPDATE_UI;
+
+        /* make the current frame the only visible frame */
+        case CONTROL('O'):
+        case 'o':
+            if (FirstFrame->next == NULL) {
+                return 0;
+            }
+            set_only_frame(SelFrame);
+            return UPDATE_UI;
+
+        /* create new frame below */
+        case 'N':
+            SelFrame = create_frame(SelFrame, SPLIT_DOWN, NULL);
+            return UPDATE_UI;
+
+        /* split frame on the right */
+        case CONTROL('V'):
+        case 'v':
+        case 'V': /* also move to it */
+            frame = create_frame(SelFrame, SPLIT_RIGHT, SelFrame->buf);
+            if (c == 'V') {
+                SelFrame = frame;
+            }
+            return UPDATE_UI;
+
+        /* split frame below */
+        case CONTROL('S'):
+        case 's':
+        case 'S': /* also move to it */
+            frame = create_frame(SelFrame, SPLIT_DOWN, SelFrame->buf);
+            if (c == 'S') {
+                SelFrame = frame;
+            }
+            return UPDATE_UI;
+
+        /* exchange current frame with the ... */
+        case 'H': /* ...frame on the left */
+        case 'J': /* ...frame below */
+        case 'K': /* ...frame above */
+        case 'L': /* ...frame on the right */
+            frame = do_binded_frame_movement(tolower(e_c));
+            return exchange_frames(SelFrame, frame);
+
+        /* exchange current frame with frame of given frame movement */
+        case CONTROL('X'):
+        case 'x':
+        case 'X':
+            e_c = get_extra_char();
+            if (c >= 1 && c <= 26) {
+                c += 'a' - 1;
+            }
+            frame = do_binded_frame_movement(e_c);
+            r = exchange_frames(SelFrame, frame);
+            if (e_c == 'X') {
+                SelFrame = frame;
+                set_cursor(SelFrame, &SelFrame->cur);
+            }
+            return r;
+
+        /* expand the width of current frame */
+        case '>':
+            return move_right_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
+
+        /* move current frame to the left and expand its width */
+        case '<':
+            return move_left_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
+
+        /* set the width */
+        case '|':
+            /* TODO: */
+            return 0;
+
+        /* analogous to ><| but for the height */
+        case '+':
+        case '-':
+        case '_':
+            /* TODO: */
+            return 0;
+
+        /* jump to the file under the cursor */
+        case CONTROL('F'):
+        case 'f':
+            /* TODO */
+            return 0;
+        }
+
+        frame = do_binded_frame_movement(e_c);
+        if (frame == SelFrame) {
+            return 0;
+        }
+        if (SelFrame->buf == frame->buf) {
+            /* clip the cursor */
+            set_cursor(frame, &frame->cur);
+        }
+        SelFrame = frame;
+        return UPDATE_UI;
 
     case CONTROL('V'):
         set_mode(VISUAL_BLOCK_MODE);
