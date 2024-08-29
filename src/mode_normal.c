@@ -199,9 +199,11 @@ int normal_handle_input(int c)
     struct undo_seg *seg;
     int motion;
     struct mark *mark;
+    struct file_list file_list;
 
     buf = SelFrame->buf;
     switch (c) {
+    /* reset the bottom status message */
     case '\x1b':
         if (Core.msg_state != MSG_DEFAULT) {
             Core.msg_state = MSG_TO_DEFAULT;
@@ -209,9 +211,11 @@ int normal_handle_input(int c)
         }
         return 0;
 
+    /* scroll down */
     case 'J':
         return scroll_frame(SelFrame, Core.counter, 1);
 
+    /* scroll up */
     case 'K':
         return scroll_frame(SelFrame, Core.counter, -1);
 
@@ -315,8 +319,9 @@ int normal_handle_input(int c)
         set_mode(next_mode);
         return r;
 
+    /* delete current character on the current line */
     case 'x':
-    case 's':
+    case 's': /* also enter insert mode */
         cur = SelFrame->cur;
         cur.col = safe_add(cur.col, Core.counter);
         ev = delete_range(buf, &SelFrame->cur, &cur);
@@ -334,6 +339,7 @@ int normal_handle_input(int c)
         r |= DO_RECORD;
         return r;
 
+    /* delete the previous character on the current line */
     case 'X':
         cur = SelFrame->cur;
         (void) move_horz(SelFrame, Core.counter, -1);
@@ -345,6 +351,7 @@ int normal_handle_input(int c)
         }
         return 0;
 
+    /* join lines */
     case CONTROL('J'):
         from = SelFrame->cur;
         for (size_t i = 0; i < Core.counter; i++) {
@@ -366,6 +373,7 @@ int normal_handle_input(int c)
         }
         return UPDATE_UI;
 
+    /* replace current character */
     case 'r':
         c = get_ch();
         if (!isprint(c) && c != '\n') {
@@ -389,6 +397,7 @@ int normal_handle_input(int c)
         set_cursor(SelFrame, &cur);
         return UPDATE_UI | DO_RECORD;
 
+    /* undo last event in current frame */
     case 'u':
         ev_nn = NULL;
         for (size_t i = 0; i < Core.counter; i++) {
@@ -404,6 +413,7 @@ int normal_handle_input(int c)
         }
         return 0;
 
+    /* redo last undone event in current frame */
     case CONTROL('R'):
         ev_nn = NULL;
         for (size_t i = 0; i < Core.counter; i++) {
@@ -423,6 +433,7 @@ int normal_handle_input(int c)
         }
         return 0;
 
+    /* insert line above and enter insert mode */
     case 'O':
         set_mode(INSERT_MODE);
         cur = SelFrame->cur;
@@ -441,6 +452,7 @@ int normal_handle_input(int c)
         }
         return UPDATE_UI | DO_RECORD;
 
+    /* insert line below and enter insert mode */
     case 'o':
         set_mode(INSERT_MODE);
         cur.line = SelFrame->cur.line;
@@ -450,22 +462,32 @@ int normal_handle_input(int c)
         set_cursor(SelFrame, &ev->end);
         return UPDATE_UI | DO_RECORD;
 
+    /* enter command */
     case ':':
         read_command_line(":");
         return UPDATE_UI;
 
+    /* show message that C-C does not exit */
     case CONTROL('C'):
         set_message("Type  :qa!<ENTER>  to quit and abandon all changes");
         return UPDATE_UI;
 
+    /* enter visual mode */
     case 'v':
         set_mode(VISUAL_MODE);
         return UPDATE_UI | DO_RECORD;
 
+    /* enter visual line mode */
     case 'V':
         set_mode(VISUAL_LINE_MODE);
         return UPDATE_UI | DO_RECORD;
 
+    /* enter visual block mode */
+    case CONTROL('V'):
+        set_mode(VISUAL_BLOCK_MODE);
+        return UPDATE_UI | DO_RECORD;
+
+    /* do a frame command */
     case CONTROL('W'):
         e_c = get_extra_char();
         switch (e_c) {
@@ -573,10 +595,7 @@ int normal_handle_input(int c)
         SelFrame = frame;
         return UPDATE_UI;
 
-    case CONTROL('V'):
-        set_mode(VISUAL_BLOCK_MODE);
-        return UPDATE_UI | DO_RECORD;
-
+    /* repeat last action */
     case '.':
         if (Core.dot_i >= Core.rec_len - 1) {
             return 0;
@@ -588,10 +607,11 @@ int normal_handle_input(int c)
         Core.repeat_count = Core.counter;
         return 0;
 
-    case 'A':
-    case 'a':
-    case 'I':
-    case 'i':
+    /* enter insert mode and ... */
+    case 'A': /* ...go to the end of the line */
+    case 'a': /* ...go one to the right */
+    case 'I': /* ...go to the start of the line and skip space */
+    case 'i': /* ...do nothing */
         set_mode(INSERT_MODE);
         if (c == 'A') {
             move_horz(SelFrame, SIZE_MAX, 1);
@@ -602,6 +622,7 @@ int normal_handle_input(int c)
         }
         return UPDATE_UI | DO_RECORD;
 
+    /* start a recording or end the current recording */
     case 'q':
         if (Core.user_rec_ch != '\0') {
             /* minus 1 to exclude the 'q' */
@@ -620,6 +641,7 @@ int normal_handle_input(int c)
         Core.msg_state = MSG_TO_DEFAULT;
         return UPDATE_UI;
 
+    /* replay a recording */
     case '@':
         c = toupper(get_ch());
         if (c < USER_REC_MIN || c > USER_REC_MAX) {
@@ -635,6 +657,7 @@ int normal_handle_input(int c)
         Core.repeat_count = Core.counter;
         return UPDATE_UI;
 
+    /* yank text to a register */
     case 'Y':
     case 'y':
         if (c == 'Y') {
@@ -693,6 +716,7 @@ int normal_handle_input(int c)
         yank_data(save_lines(d_lines, num_lines), 0);
         return UPDATE_UI;
 
+    /* paste text from a register */
     case 'P':
     case 'p':
         cur = SelFrame->cur;
@@ -726,6 +750,7 @@ int normal_handle_input(int c)
         set_cursor(SelFrame, &ev->end);
         return UPDATE_UI;
 
+    /* set a mark at the current cursor position */
     case 'm':
         c = toupper(get_ch());
         if (c == '\x1b') {
@@ -740,6 +765,7 @@ int normal_handle_input(int c)
         mark->pos = SelFrame->cur;
         return UPDATE_UI;
 
+    /* go to a mark */
     case '`':
     case '\'':
         c = toupper(get_ch());
@@ -776,6 +802,7 @@ int normal_handle_input(int c)
         set_cursor(SelFrame, &mark->pos);
         return 0;
 
+    /* open a file in the fuzzy file dialog */
     case 'Z':
         init_file_list(&file_list, ".");
         if (get_deep_files(&file_list) == 0) {
@@ -788,5 +815,6 @@ int normal_handle_input(int c)
         clear_file_list(&file_list);
         return UPDATE_UI;
     }
+    /* do a motion, see `get_binded_motion()` */
     return do_motion(SelFrame, get_binded_motion(c));
 }
