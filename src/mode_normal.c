@@ -440,8 +440,9 @@ int normal_handle_input(int c)
         if (cur.line == 0) {
             lines[0].n = 0;
             lines[1].n = 0;
+            cur.col = 0;
             ev = insert_lines(buf, &cur, lines, 2, 1);
-            ev->cur = cur;
+            ev->cur = SelFrame->cur;
             clip_column(SelFrame);
         } else {
             cur.line--;

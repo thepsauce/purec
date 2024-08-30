@@ -53,5 +53,4 @@ release:
 	gcc $(RELEASE_FLAGS) $(C_FLAGS) $(SOURCES) -o $(RELEASE)/$(RUN) $(C_LIBS)
 
 clean:
-	rm -rf $(OUT)
-	rm -rf $(RELEASE)
+	rm -rf $(OUT) $(RELEASE)

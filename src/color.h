@@ -22,7 +22,16 @@
 #define HI_CMD          17
 #define HI_MAX          18
 
-extern int HiAttribs[HI_MAX];
+extern struct theme {
+    const char *name;
+    const char *term_colors[256];
+    int attribs[HI_MAX][3];
+    int colors_needed;
+} Themes[];
+
+extern const int Theme;
+
+#define get_attrib_of(hi) (Themes[Theme].attribs[hi][2])
 
 void init_colors(void);
 void set_highlight(WINDOW *win, int hi);

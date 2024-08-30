@@ -135,7 +135,7 @@ int cmd_quit_all(struct cmd_data *cd)
         return 0;
     }
     for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
-        if (!cd->force && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
+        if (!cd->force && frame->buf->save_event_i != frame->buf->event_i) {
             set_error("buffer has changed, use  :qa!  to quit");
             return 1;
         }

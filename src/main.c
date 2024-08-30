@@ -16,10 +16,6 @@
 
 WINDOW *OffScreen;
 
-bool IsRunning;
-
-int ExitCode;
-
 struct core Core;
 
 static struct program_arguments {
@@ -502,13 +498,21 @@ void save_current_session(void)
 {
     FILE *fp;
     time_t cur_time;
-    char *name;
+    char *dir, *name;
     struct tm *tm;
 
     cur_time = time(NULL);
     tm = localtime(&cur_time);
 
-    name = xasprintf("cache/sessions/session_%04d-%02d-%02d_%02d-%02d-%02d",
+    dir = xasprintf("%s/sessions", Core.cache_dir);
+    if (mkdir(dir, 0755) == -1 && errno != EEXIST) {
+        printf("could not store session in '%s' (%s), trying /tmp instead\n",
+                dir, strerror(errno));
+        free(dir);
+        dir = xstrdup("/tmp");
+    }
+    name = xasprintf("%s/session_%04d-%02d-%02d_%02d-%02d-%02d",
+            dir,
             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
             tm->tm_hour, tm->tm_min, tm->tm_sec);
 
@@ -518,6 +522,7 @@ void save_current_session(void)
         fclose(fp);
     }
 
+    free(dir);
     free(name);
 }
 
@@ -556,7 +561,9 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    if (mkdir("cache", 0755) == -1 && errno != EEXIST) {
+    Core.cache_dir = xasprintf("%s/.cache/purec", getenv("HOME"));
+
+    if (mkdir(Core.cache_dir, 0755) == -1 && errno != EEXIST) {
         fprintf(stderr, "%s\n", strerror(errno));
         return 1;
     }
@@ -675,7 +682,6 @@ int main(int argc, char **argv)
 
     /* free resources */
     free_session();
-
     free(Input.buf);
     free(Input.remember);
     return Core.exit_code;

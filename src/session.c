@@ -29,7 +29,7 @@ void save_session(FILE *fp)
 {
     struct buf *buf;
     struct frame *frame;
-    size_t num_frames, sel_i;
+    size_t num_frames, sel_i = 0;
 
     num_frames = 0;
     for (frame = FirstFrame; frame != NULL; frame = frame->next) {

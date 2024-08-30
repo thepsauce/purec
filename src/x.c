@@ -97,12 +97,11 @@ int copy_clipboard(char *data, size_t data_len, int primary)
 {
     Atom clipboard;
 
-    pthread_mutex_lock(&X.sel_lock);
-
     if (X.dpy_copy == NULL) {
-        pthread_mutex_unlock(&X.sel_lock);
         return -1;
     }
+
+    pthread_mutex_lock(&X.sel_lock);
 
     X.sel_text = data;
     X.sel_len = data_len;

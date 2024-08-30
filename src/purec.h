@@ -67,6 +67,9 @@ extern struct core {
     /// the exit code to return in `main()`
     int exit_code;
 
+    /// cache directory
+    char *cache_dir;
+
     /// type of the mode (`*_MODE`)
     int mode;
     /// counter

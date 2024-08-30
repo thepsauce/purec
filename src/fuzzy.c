@@ -57,7 +57,7 @@ static void render_entries(void)
 
     set_highlight(stdscr, HI_FUZZY);
 
-    e = MIN(Fuzzy.num_entries, (size_t) (Fuzzy.scroll.line + Fuzzy.h - 2));
+    e = MIN(Fuzzy.num_entries, (size_t) (Fuzzy.scroll.line + Fuzzy.h));
     for (i = Fuzzy.scroll.line; i < e; i++) {
         move(Fuzzy.y + 1 + i - Fuzzy.scroll.line, Fuzzy.x);
 
@@ -109,7 +109,7 @@ static void filter_entries(void)
     const char *s;
     size_t s_i;
     size_t pat_i;
-    size_t first_i;
+    size_t first_i = 0;
     int score;
     int cons_score;
     struct fuzzy_entry *entry;
@@ -119,6 +119,7 @@ static void filter_entries(void)
         s = Fuzzy.s_entries[i];
         s_i = 0;
         score = 0;
+        cons_score = 1;
         pat_i = Input.prefix;
         while (pat_i != Input.len && s[s_i] != '\0') {
             if (tolower(Input.buf[pat_i]) == tolower(s[s_i])) {

@@ -1,5 +1,7 @@
 lib/
 build/
+release/
+cache/
 
 # Prerequisites
 *.d

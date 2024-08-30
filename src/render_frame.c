@@ -149,7 +149,7 @@ static void render_line(struct render_info *ri)
         ch = ri->line->s[p.col];
         if (x >= ri->x) {
             hi = ri->line->attribs[p.col];
-            if (ch < 32) {
+            if (ch < 32 || ch == 0x7f) {
                 if (x + 1 >= ri->w) {
                     break;
                 }
@@ -157,7 +157,7 @@ static void render_line(struct render_info *ri)
                 addch('?');
             } else {
                 if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
-                    attr_set(HiAttribs[hi] ^ A_REVERSE, 0, NULL);
+                    attr_set(get_attrib_of(hi) ^ A_REVERSE, 0, NULL);
                 } else {
                     set_highlight(stdscr, hi);
                 }

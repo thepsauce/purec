@@ -32,6 +32,8 @@ size_t save_lines(struct raw_line *lines, size_t num_lines)
     int cmp;
     char *data, *new_s;
     size_t data_len;
+    time_t cur_time;
+    struct tm *tm;
 
     data = lines[0].s;
     data_len = lines[0].n;
@@ -112,7 +114,15 @@ size_t save_lines(struct raw_line *lines, size_t num_lines)
     seg = &Undo.segments[Undo.num_segments];
     if (data_len > HUGE_UNDO_THRESHOLD) {
         if (Undo.fp == NULL) {
-            Undo.fp = fopen("undo_data", "w+");
+            cur_time = time(NULL);
+            tm = localtime(&cur_time);
+
+            new_s = xasprintf("/tmp/undo_data_%04d-%02d-%02d_%02d-%02d-%02d",
+                    Core.cache_dir,
+                    tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+                    tm->tm_hour, tm->tm_min, tm->tm_sec);
+            Undo.fp = fopen(new_s, "w+");
+            free(new_s);
         }
         fseek(Undo.fp, 0, SEEK_END);
         fgetpos(Undo.fp, &seg->file_pos);
