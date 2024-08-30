@@ -69,6 +69,8 @@ extern struct core {
 
     /// cache directory
     char *cache_dir;
+    /// directory in which sessions are stored in
+    char *session_dir;
 
     /// type of the mode (`*_MODE`)
     int mode;

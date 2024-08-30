@@ -82,6 +82,13 @@ struct undo_event {
     size_t data_i;
 };
 
+struct match {
+    /* position the match starts from */
+    struct pos from;
+    /* end position */
+    struct pos to;
+};
+
 /**
  * After buffer creation, it is guaranteed that `num_lines` will always be at
  * least 1 and never 0.
@@ -124,6 +131,13 @@ struct buf {
     size_t num_events;
     /// current event index (1 based)
     size_t event_i;
+
+    /// matches found in the buffer
+    struct match *matches;
+    /// number of matches in the buffer
+    size_t num_matches;
+    /// last search pattern
+    char *search_pat;
 
     /// next buffer in the buffer linked list
     struct buf *next;
@@ -562,5 +576,17 @@ struct undo_event *redo_event(struct buf *buf);
  */
 struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev)
     __attribute__((deprecated));
+
+/**
+ * Searches a string within a buffer.
+ *
+ * The result of this function is stored within the buffer itself.
+ *
+ * @param buf   The buffer to search in.
+ * @param s     The string to search for.
+ *
+ * @return The number of matches.
+ */
+size_t search_string(struct buf *buf, const char *s);
 
 #endif

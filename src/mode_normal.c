@@ -200,6 +200,7 @@ int normal_handle_input(int c)
     int motion;
     struct mark *mark;
     struct file_list file_list;
+    char ch[2];
 
     buf = SelFrame->buf;
     switch (c) {
@@ -466,6 +467,14 @@ int normal_handle_input(int c)
     /* enter command */
     case ':':
         read_command_line(":");
+        return UPDATE_UI;
+
+    /* enter search */
+    case '/':
+    case '?':
+        ch[0] = c;
+        ch[1] = '\0';
+        read_command_line(ch);
         return UPDATE_UI;
 
     /* show message that C-C does not exit */

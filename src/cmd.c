@@ -288,9 +288,13 @@ void read_command_line(const char *beg)
     history[num_history++] = xstrdup(&s[-Input.prefix]);
 
     switch (beg[0]) {
-    case '?':
     case '/':
-        /* TODO: */
+    case '?':
+        if (search_string(SelFrame->buf, s) > 0) {
+            Core.counter = 1;
+            do_motion(SelFrame, beg[0] == '/' ? MOTION_NEXT_OCCUR :
+                    MOTION_PREV_OCCUR);
+        }
         break;
 
     case ':':

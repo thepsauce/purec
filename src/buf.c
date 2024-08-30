@@ -112,6 +112,8 @@ void destroy_buffer(struct buf *buf)
         free(buf->events[i]);
     }
     free(buf->events);
+    free(buf->matches);
+    free(buf->search_pat);
 
     /* remove from linked list */
     if (FirstBuffer == buf) {
@@ -814,4 +816,45 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
     }
 
     return add_event(buf, IS_REPLACE, &from, lines, num_lines);
+}
+
+size_t search_string(struct buf *buf, const char *s)
+{
+    size_t l;
+    struct line *line;
+
+    struct match *matches;
+    size_t n;
+
+    free(buf->search_pat);
+    buf->search_pat = xstrdup(s);
+
+    l = strlen(s);
+    if (l == 0) {
+        free(buf->matches);
+        buf->matches = NULL;
+        buf->num_matches = 0;
+        return 0;
+    }
+
+    matches = NULL;
+    n = 0;
+    for (size_t i = 0; i < buf->num_lines; i++) {
+        line = &buf->lines[i];
+        for (size_t j = 0; j + l < line->n; j++) {
+            if (memcmp(&line->s[j], s, l) != 0) {
+                continue;
+            }
+            matches = xreallocarray(matches, n + 1, sizeof(*matches));
+            matches[n].from.line = i;
+            matches[n].from.col = j;
+            matches[n].to.line = i;
+            matches[n].to.col = j + l;
+            n++;
+        }
+    }
+    free(buf->matches);
+    buf->matches = matches;
+    buf->num_matches = n;
+    return n;
 }

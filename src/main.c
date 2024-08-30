@@ -498,21 +498,14 @@ void save_current_session(void)
 {
     FILE *fp;
     time_t cur_time;
-    char *dir, *name;
+    char *name;
     struct tm *tm;
 
     cur_time = time(NULL);
     tm = localtime(&cur_time);
 
-    dir = xasprintf("%s/sessions", Core.cache_dir);
-    if (mkdir(dir, 0755) == -1 && errno != EEXIST) {
-        printf("could not store session in '%s' (%s), trying /tmp instead\n",
-                dir, strerror(errno));
-        free(dir);
-        dir = xstrdup("/tmp");
-    }
     name = xasprintf("%s/session_%04d-%02d-%02d_%02d-%02d-%02d",
-            dir,
+            Core.session_dir,
             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
             tm->tm_hour, tm->tm_min, tm->tm_sec);
 
@@ -522,7 +515,6 @@ void save_current_session(void)
         fclose(fp);
     }
 
-    free(dir);
     free(name);
 }
 
@@ -546,6 +538,7 @@ int main(int argc, char **argv)
         [VISUAL_LINE_MODE] = visual_handle_input,
     };
 
+    const char *home;
     int cur_x, cur_y;
     size_t first_event;
     int c;
@@ -561,11 +554,25 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    Core.cache_dir = xasprintf("%s/.cache/purec", getenv("HOME"));
-
-    if (mkdir(Core.cache_dir, 0755) == -1 && errno != EEXIST) {
-        fprintf(stderr, "%s\n", strerror(errno));
+    home = getenv("HOME");
+    if (home == NULL) {
+        fprintf(stderr, "could not get environment variable 'HOME': %s\n",
+                strerror(errno));
         return 1;
+    }
+
+    Core.cache_dir = xasprintf("%s/.cache/purec", home);
+    if (mkdir(Core.cache_dir, 0755) == -1 && errno != EEXIST) {
+        fprintf(stderr, "could not create, '%s/.cache/purec': %s\n",
+                home, strerror(errno));
+        return 1;
+    }
+
+    Core.session_dir = xasprintf("%s/sessions", Core.cache_dir);
+    if (mkdir(Core.session_dir, 0755) == -1 && errno != EEXIST) {
+        Core.session_dir = xstrdup("/tmp");
+        fprintf(stderr, "could not create session directory,"
+                "using /tmp instead\n");
     }
 
     initscr();

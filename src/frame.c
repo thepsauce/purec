@@ -577,6 +577,48 @@ int get_char_state(char ch)
     return 0;
 }
 
+/**
+ * Finds the index of the match that would come before the cursor.
+ *
+ * @param buf   The buffer containing all matches.
+ * @param pos   The current position.
+ *
+ * @return The index of the match.
+ */
+static size_t find_current_match(struct buf *buf, struct pos *pos)
+{
+    size_t l, m, r;
+    struct match *match;
+    int cmp;
+
+    l = 0;
+    r = buf->num_matches;
+    while (l < r) {
+        m = (l + r) / 2;
+        match = &buf->matches[m];
+        if (match->from.line == pos->line) {
+            cmp = match->from.col < pos->col ? -1 :
+                match->from.col > pos->col ? 1 : 0;
+        } else if (match->from.line < pos->line) {
+            cmp = -1;
+        } else {
+            cmp = 1;
+        }
+
+        if (cmp == 0) {
+            l = m + 1;
+            break;
+        }
+
+        if (cmp < 0) {
+            l = m + 1;
+        } else {
+            r = m;
+        }
+    }
+    return l == 0 ? buf->num_matches - 1 : l - 1;
+}
+
 int do_motion(struct frame *frame, int motion)
 {
     size_t new_line;
@@ -584,6 +626,7 @@ int do_motion(struct frame *frame, int motion)
     struct line *line;
     int c;
     int s, o_s;
+    size_t index;
 
     switch (motion) {
     case MOTION_LEFT:
@@ -850,6 +893,40 @@ int do_motion(struct frame *frame, int motion)
 
         set_cursor(frame, &pos);
         return 1;
+
+    case MOTION_NEXT_OCCUR:
+        if (frame->buf->num_matches == 0) {
+            set_message("no matches");
+            return 0;
+        }
+        index = find_current_match(frame->buf, &frame->cur);
+        index += Core.counter % frame->buf->num_matches;
+        index %= frame->buf->num_matches;
+        set_cursor(frame, &frame->buf->matches[index].from);
+        set_message("%s [%zu/%zu]", frame->buf->search_pat, index + 1,
+                frame->buf->num_matches);
+        return 1;
+
+    case MOTION_PREV_OCCUR:
+        if (frame->buf->num_matches == 0) {
+            return 0;
+        }
+        index = find_current_match(frame->buf, &frame->cur);
+        pos = frame->buf->matches[index].from;
+        if (pos.line != frame->cur.line || pos.col != frame->cur.col) {
+            Core.counter--;
+        }
+        Core.counter %= frame->buf->num_matches;
+        if (Core.counter > index) {
+            index = frame->buf->num_matches - Core.counter;
+        } else {
+            index -= Core.counter;
+        }
+        index %= frame->buf->num_matches;
+        set_cursor(frame, &frame->buf->matches[index].from);
+        set_message("%s [%zu/%zu]", frame->buf->search_pat, index + 1,
+                frame->buf->num_matches);
+        return 1;
     }
     return 0;
 }
@@ -905,6 +982,9 @@ int get_binded_motion(int c)
 
         ['{'] = MOTION_PARA_UP,
         ['}'] = MOTION_PARA_DOWN,
+
+        ['n'] = MOTION_NEXT_OCCUR,
+        ['N'] = MOTION_PREV_OCCUR,
     };
 
     switch (c) {

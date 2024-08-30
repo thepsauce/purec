@@ -257,6 +257,10 @@ void set_cursor(struct frame *frame, const struct pos *pos);
 #define MOTION_END_WORD         24
 /// move to previous word
 #define MOTION_PREV_WORD        25
+/// jump to the next occurence of a search
+#define MOTION_NEXT_OCCUR       26
+/// jump to the previous occurence of a search
+#define MOTION_PREV_OCCUR       27
 
 /**
  * Does a special cursor motion.
