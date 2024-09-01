@@ -10,7 +10,7 @@
 /**
  * A frame is a rectangle on the screen that shows a buffer.
  *
- * It allows a cursor to move over the buffer and make changes.
+ * It allows a cursor to move through the buffer and make changes.
  *
  * Note that the frame does not implement any buffer editing functions itself,
  * it merely shows the buffer and allows to move through it. `buf.h/c` implement
@@ -23,9 +23,9 @@ struct frame {
     int split_dir;
     /// buffer that is active within this frame
     struct buf *buf;
-    /// cursor position
+    /// cursor position within the buffer
     struct pos cur;
-    /// scrolling
+    /// offset of the text origin
     struct pos scroll;
     /// vertical column tracking
     size_t vct;
@@ -261,6 +261,14 @@ void set_cursor(struct frame *frame, const struct pos *pos);
 #define MOTION_NEXT_OCCUR       26
 /// jump to the previous occurence of a search
 #define MOTION_PREV_OCCUR       27
+/// scroll up
+#define MOTION_SCROLL_UP        28
+/// scroll down
+#define MOTION_SCROLL_DOWN      29
+/// scroll up half the window height
+#define MOTION_HALF_UP          30
+/// scroll down half the window height
+#define MOTION_HALF_DOWN        31
 
 /**
  * Does a special cursor motion.

@@ -212,14 +212,6 @@ int normal_handle_input(int c)
         }
         return 0;
 
-    /* scroll down */
-    case 'J':
-        return scroll_frame(SelFrame, Core.counter, 1);
-
-    /* scroll up */
-    case 'K':
-        return scroll_frame(SelFrame, Core.counter, -1);
-
     /* change or delete */
     case 'c':
         next_mode = INSERT_MODE;

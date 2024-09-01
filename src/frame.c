@@ -509,36 +509,33 @@ int adjust_scroll(struct frame *frame)
 int scroll_frame(struct frame *frame, size_t dist, int dir)
 {
     size_t old_scroll;
-    int x, y, w, h;
-
-    get_text_rect(frame, &x, &y, &w, &h);
 
     old_scroll = frame->scroll.line;
     if (dir < 0) {
-        if (frame->scroll.line < dist) {
-            frame->scroll.line = 0;
-        } else {
-            frame->scroll.line -= dist;
-        }
-        if (frame->cur.line >= frame->scroll.line + h) {
-            frame->cur.line = frame->scroll.line + h - 1;
-        }
+        dist = MIN(frame->scroll.line, dist);
+        frame->scroll.line -= dist;
+        frame->cur.line -= dist;
     } else {
         frame->scroll.line = safe_add(frame->scroll.line, dist);
         if (frame->scroll.line >= frame->buf->num_lines) {
             frame->scroll.line = frame->buf->num_lines - 1;
         }
-        if (frame->cur.line < frame->scroll.line) {
-            frame->cur.line = frame->scroll.line;
-        }
+        frame->cur.line += frame->scroll.line - old_scroll;
+        frame->cur.line = MIN(frame->cur.line, frame->buf->num_lines - 1);
     }
-    return old_scroll != frame->scroll.line;
+    if (old_scroll != frame->scroll.line) {
+        clip_column(frame);
+        return 1;
+    }
+    return 0;
 }
 
 void clip_column(struct frame *frame)
 {
-    frame->cur.col = MIN(frame->cur.col, get_mode_line_end(
-                &frame->buf->lines[frame->cur.line]));
+    size_t end;
+
+    end = get_mode_line_end(&frame->buf->lines[frame->cur.line]);
+    frame->cur.col = MIN(frame->cur.col, end);
 }
 
 void set_cursor(struct frame *frame, const struct pos *pos)
@@ -936,6 +933,21 @@ int do_motion(struct frame *frame, int motion)
         set_message("%s [%zu/%zu]", frame->buf->search_pat, index + 1,
                 frame->buf->num_matches);
         return 1;
+
+    case MOTION_SCROLL_UP:
+        return scroll_frame(SelFrame, Core.counter, -1);
+
+    case MOTION_SCROLL_DOWN:
+        return scroll_frame(SelFrame, Core.counter, 1);
+
+    case MOTION_HALF_UP:
+        Core.counter = safe_mul(Core.counter, MAX(frame->h / 2, 1));
+        return scroll_frame(frame, Core.counter, -1);
+
+    case MOTION_HALF_DOWN:
+        Core.counter = safe_mul(Core.counter, MAX(frame->h / 2, 1));
+        return scroll_frame(frame, Core.counter, 1);
+
     }
     return 0;
 }
@@ -994,6 +1006,12 @@ int get_binded_motion(int c)
 
         ['n'] = MOTION_NEXT_OCCUR,
         ['N'] = MOTION_PREV_OCCUR,
+
+        ['K'] = MOTION_SCROLL_UP,
+        ['J'] = MOTION_SCROLL_DOWN,
+
+        [CONTROL('U')] = MOTION_HALF_UP,
+        [CONTROL('D')] = MOTION_HALF_DOWN,
     };
 
     switch (c) {
