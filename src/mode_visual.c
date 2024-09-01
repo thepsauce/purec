@@ -91,7 +91,7 @@ int visual_handle_input(int c)
         set_mode(next_mode);
         if (ev != NULL) {
             ev->cur = Core.pos;
-            yank_data(ev->data_i, ev->flags);
+            yank_data(ev->seg, ev->flags);
             set_cursor(SelFrame, &sel.beg);
             return UPDATE_UI;
         }

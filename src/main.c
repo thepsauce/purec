@@ -71,19 +71,18 @@ void set_error(const char *err, ...)
     Core.msg_state = MSG_OTHER;
 }
 
-void yank_data(size_t data_i, int flags)
+void yank_data(struct undo_seg *seg, int flags)
 {
-    struct undo_seg *seg;
     struct reg *reg;
 
     if (Core.user_reg == '+' || Core.user_reg == '*') {
-        seg = load_undo_data(data_i);
+        load_undo_data(seg);
         copy_clipboard(seg->data, seg->data_len, Core.user_reg == '*');
         unload_undo_data(seg);
     } else {
         reg = &Core.regs[Core.user_reg - '.'];
         reg->flags = flags;
-        reg->data_i = data_i;
+        reg->seg = seg;
     }
 }
 
@@ -546,6 +545,7 @@ int main(int argc, char **argv)
     size_t next_dot_i;
     int old_mode;
     struct frame *old_frame;
+    struct mark *mark;
 
     setlocale(LC_ALL, "");
 
@@ -670,6 +670,12 @@ int main(int argc, char **argv)
 
         if (Core.is_stopped) {
             break;
+        }
+
+        if (old_frame->buf->event_i > 0) {
+            mark = &Core.marks['.' - MARK_MIN];
+            mark->buf = old_frame->buf;
+            mark->pos = old_frame->buf->events[old_frame->buf->event_i - 1]->cur;
         }
 
         /* this combines events originating from a single keybind or an entire

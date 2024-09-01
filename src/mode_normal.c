@@ -196,7 +196,6 @@ int normal_handle_input(int c)
     struct raw_line *d_lines;
     size_t num_lines;
     struct reg *reg;
-    struct undo_seg *seg;
     int motion;
     struct mark *mark;
     struct file_list file_list;
@@ -304,7 +303,7 @@ int normal_handle_input(int c)
             set_cursor(SelFrame, &from);
         }
         if (ev != NULL) {
-            yank_data(ev->data_i, 0);
+            yank_data(ev->seg, 0);
             ev->cur = cur;
             r = UPDATE_UI;
         }
@@ -319,7 +318,7 @@ int normal_handle_input(int c)
         cur.col = safe_add(cur.col, Core.counter);
         ev = delete_range(buf, &SelFrame->cur, &cur);
         if (ev != NULL) {
-            yank_data(ev->data_i, 0);
+            yank_data(ev->seg, 0);
             ev->cur = SelFrame->cur;
             r = UPDATE_UI;
         }
@@ -339,7 +338,7 @@ int normal_handle_input(int c)
         (void) move_horz(SelFrame, Core.counter, -1);
         ev = delete_range(buf, &cur, &SelFrame->cur);
         if (ev != NULL) {
-            yank_data(ev->data_i, 0);
+            yank_data(ev->seg, 0);
             ev->cur = cur;
             return UPDATE_UI | DO_RECORD;
         }
@@ -738,18 +737,18 @@ int normal_handle_input(int c)
             ev = insert_lines(buf, &cur, d_lines, num_lines, Core.counter);
         } else {
             reg = &Core.regs[Core.user_reg - '.'];
-            seg = load_undo_data(reg->data_i);
-            if (seg == NULL) {
+            if (reg->seg == NULL) {
                 return 0;
             }
+            load_undo_data(reg->seg);
             if ((reg->flags & IS_BLOCK)) {
-                ev = insert_block(buf, &cur, seg->lines, seg->num_lines,
-                        Core.counter);
+                ev = insert_block(buf, &cur, reg->seg->lines,
+                        reg->seg->num_lines, Core.counter);
             } else {
-                ev = insert_lines(buf, &cur, seg->lines, seg->num_lines,
-                        Core.counter);
+                ev = insert_lines(buf, &cur, reg->seg->lines,
+                        reg->seg->num_lines, Core.counter);
             }
-            unload_undo_data(seg);
+            unload_undo_data(reg->seg);
         }
         ev->cur = SelFrame->cur;
         set_cursor(SelFrame, &ev->end);

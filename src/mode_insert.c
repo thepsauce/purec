@@ -55,7 +55,8 @@ static void repeat_last_insertion(void)
     cur = buf->events[Core.ev_from_ins]->pos;
     for (size_t i = Core.ev_from_ins; i < buf->event_i; i++) {
         ev = buf->events[i];
-        seg = load_undo_data(ev->data_i);
+        seg = ev->seg;
+        load_undo_data(seg);
         if ((ev->flags & IS_INSERTION)) {
             /* join the current and the event text */
             if (num_lines == 0) {

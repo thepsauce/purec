@@ -39,7 +39,7 @@ extern struct undo {
         fpos_t file_pos;
         /// how many times this segment was loaded without unloading
         size_t load_count;
-    } *segments;
+    } **segments;
     /// number of undo segments
     size_t num_segments;
     /// number of allocated undo segments
@@ -78,8 +78,8 @@ struct undo_event {
     struct pos end;
     /// cursor position before the event
     struct pos cur;
-    /// the data index into the undo segment array
-    size_t data_i;
+    /// the data segment
+    struct undo_seg *seg;
 };
 
 struct match {
@@ -92,6 +92,23 @@ struct match {
 /**
  * After buffer creation, it is guaranteed that `num_lines` will always be at
  * least 1 and never 0.
+ *
+ * WARNING: Using any of event returned by a buffer editing function can only be
+ * done while no other function is called in between. Example:
+ * ```C
+ * struct buf *buf = ...;
+ * struct undo_event *ev;
+ * struct pos pos = { 0, 0 };
+ * struct undo_seg *seg;
+ *
+ * ev = break_line(buf, &pos);
+ * ev->cur.line = 1; // <-- Safe
+ * ev->cur.col = 0; // <-- Safe
+ *
+ *                     //! UNSAFE !//
+ * (void) indent_line(buf, &ev->cur);
+ * seg = ev->seg; //! UNSAFE !//
+ * ```
  */
 struct buf {
     /**
@@ -526,22 +543,16 @@ bool should_join(const struct undo_event *ev1, const struct undo_event *ev2);
  * @param lines     The lines to save.
  * @param num_lines The number of lines to save.
  *
- * @return Save data index, needed to load the data.
+ * @return Allocated data segment.
  */
-size_t save_lines(struct raw_line *lines, size_t num_lines);
+struct undo_seg *save_lines(struct raw_line *lines, size_t num_lines);
 
 /**
- * Gets a undo data segment at a given data index.
+ * Loads the data of the given data segment.
  *
- * Do NOT free the returned data.
- *
- * This function returns `NULL` if the data index is invalid.
- *
- * @param data_i    The data index of the undo segment.
- *
- * @return The the data segment associated to the data index.
+ * @param seg   The data segment to load.
  */
-struct undo_seg *load_undo_data(size_t data_i);
+void load_undo_data(struct undo_seg *seg);
 
 /**
  * Cleans up after a call to `load_undo_data()`.

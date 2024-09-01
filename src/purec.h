@@ -85,7 +85,7 @@ extern struct core {
      */
     struct reg {
         int flags;
-        size_t data_i;
+        struct undo_seg *seg;
     } regs[REG_MAX - REG_MIN + 1];
 
     /// saved cursor positon (for visual mode)
@@ -189,10 +189,10 @@ void set_error(const char *err, ...);
 /**
  * Sets the current register to given data.
  *
- * @param data_i    The data index.
- * @param flags     The register flags.
+ * @param seg   The data segment.
+ * @param flags The register flags.
  */
-void yank_data(size_t data_i, int flags);
+void yank_data(struct undo_seg *seg, int flags);
 
 /**
  * Checks if a recording is currently being played. If yes, then the next call
