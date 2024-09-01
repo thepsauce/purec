@@ -1,3 +1,56 @@
+static int cmd_buffer(struct cmd_data *cd)
+{
+    struct buf *buf;
+
+    buf = get_buffer(cd->from);
+    if (buf == NULL || buf == SelFrame->buf) {
+        return -1;
+    }
+    set_frame_buffer(SelFrame, buf);
+    return 0;
+}
+
+static int cmd_bnext(struct cmd_data *cd)
+{
+    struct buf *buf;
+
+    if (cd->from == 0) {
+        cd->from = 1;
+    }
+    cd->from %= get_buffer_count();
+    if (cd->from == 0) {
+        return 0;
+    }
+    for (buf = SelFrame->buf; cd->from > 0; cd->from--) {
+        buf = buf->next;
+        if (buf == NULL) {
+            buf = FirstBuffer;
+        }
+    }
+    set_frame_buffer(SelFrame, buf);
+    return 0;
+}
+
+static int cmd_bprev(struct cmd_data *cd)
+{
+    struct buf *buf;
+
+    if (cd->from == 0) {
+        cd->from = 1;
+    }
+    cd->from %= get_buffer_count();
+    if (cd->from == 0) {
+        return 0;
+    }
+    for (buf = FirstBuffer; cd->from > 0; cd->from--) {
+        while (buf->next != NULL && buf->next != SelFrame->buf) {
+            buf = buf->next;
+        }
+    }
+    set_frame_buffer(SelFrame, buf);
+    return 0;
+}
+
 /**
  * Saves a buffer using command meta data.
  *

@@ -222,6 +222,15 @@ struct buf *get_buffer(size_t id)
     return NULL;
 }
 
+size_t get_buffer_count(void)
+{
+    size_t c = 0;
+
+    for (struct buf *buf = FirstBuffer; buf != NULL; buf = buf->next) {
+        c++;
+    }
+    return c;
+}
 
 void set_language(struct buf *buf, size_t lang)
 {

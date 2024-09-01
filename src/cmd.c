@@ -35,6 +35,16 @@ static const struct cmd {
     /// callback of the command to call
     int (*callback)(struct cmd_data *cd);
 } Commands[] = {
+    { "b", ACCEPTS_NUMBER, cmd_buffer },
+
+    { "bn", ACCEPTS_NUMBER, cmd_bnext },
+    { "bnext", ACCEPTS_NUMBER, cmd_bnext },
+
+    { "bp", ACCEPTS_NUMBER, cmd_bprev },
+    { "bprev", ACCEPTS_NUMBER, cmd_bprev },
+
+    { "buffer", ACCEPTS_NUMBER, cmd_buffer },
+
     { "cq", ACCEPTS_NUMBER, cmd_cquit },
     { "cquit", ACCEPTS_NUMBER, cmd_cquit },
 
@@ -127,7 +137,7 @@ static const struct cmd *get_command(const char *s, size_t s_m)
         if (d == 0) {
             return &Commands[c];
         }
-        if (d < 4) {
+        if (d < m) {
             if (min_cnt < (int) ARRAY_SIZE(mins)) {
                 mins[min_cnt].cmd = &Commands[c];
                 mins[min_cnt].val = d;
@@ -169,22 +179,42 @@ static const struct cmd *get_command(const char *s, size_t s_m)
 
 static bool read_number(char *s, char **p_s, size_t *p_n)
 {
-    if (s[0] == '\'') {
-        /* TODO: get mark */
+    if (s[0] == '\'' || s[0] == '`') {
         s++;
-        *p_n = SIZE_MAX;
+        switch (s[0]) {
+        case '\'':
+        case '`':
+            /* TODO: */
+            break;
+
+        case '<':
+            *p_n = MIN(SelFrame->cur.line, Core.pos.line);
+            break;
+
+        case '>':
+            *p_n = MAX(SelFrame->cur.line, Core.pos.line);
+            break;
+
+        default:
+            if (s[0] < MARK_MIN || s[0] > MARK_MAX) {
+                set_error("invalid mark: %c", s[0]);
+                return -1;
+            }
+            *p_n = Core.marks[s[0] - MARK_MIN].pos.line;
+        }
         *p_s = s + 1;
-        return true;
+        return 0;
     }
     if (!isdigit(s[0])) {
-        return false;
+        return 1;
     }
     *p_n = strtoull(s, p_s, 10);
-    return true;
+    return 0;
 }
 
 static int run_command(char *s_cmd)
 {
+    int r;
     size_t len;
     const struct cmd *cmd;
     struct cmd_data data;
@@ -199,8 +229,12 @@ static int run_command(char *s_cmd)
         data.from = 0;
         data.to = SIZE_MAX;
     } else {
-        data.has_number = read_number(s_cmd, &s_cmd, &data.from);
+        r = read_number(s_cmd, &s_cmd, &data.from);
+        if (r == -1) {
+            return -1;
+        }
 
+        data.has_number = r == 0;
         if (s_cmd[0] == ',') {
             s_cmd++;
             data.has_range = true;
@@ -208,7 +242,11 @@ static int run_command(char *s_cmd)
             if (!data.has_number) {
                 data.from = 0;
             }
-            if (!read_number(s_cmd, &s_cmd, &data.to)) {
+            r = read_number(s_cmd, &s_cmd, &data.to);
+            if (r == -1) {
+                return -1;
+            }
+            if (r != 0) {
                 data.to = SIZE_MAX;
             }
         } else {
@@ -294,11 +332,10 @@ void read_command_line(const char *beg)
     switch (beg[0]) {
     case '/':
     case '?':
-        if (search_string(SelFrame->buf, s) > 0) {
-            Core.counter = 1;
-            do_motion(SelFrame, beg[0] == '/' ? MOTION_NEXT_OCCUR :
-                    MOTION_PREV_OCCUR);
-        }
+        (void) search_string(SelFrame->buf, s);
+        Core.counter = 1;
+        do_motion(SelFrame, beg[0] == '/' ? MOTION_NEXT_OCCUR :
+                MOTION_PREV_OCCUR);
         break;
 
     case ':':
