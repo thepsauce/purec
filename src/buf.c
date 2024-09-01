@@ -294,6 +294,7 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
         }
         lines[num_lines].s = xmemdup(s_line, line_len);
         lines[num_lines].n = line_len;
+        num_lines++;
     }
 
     free(s_line);
@@ -561,7 +562,7 @@ struct raw_line *get_lines(struct buf *buf, const struct pos *from,
         if (to->line != buf->num_lines) {
             init_raw_line(&lines[num_lines - 1], buf->lines[to->line].s, to->col);
         } else {
-            init_raw_line(&lines[num_lines - 1], NULL, 0);
+            init_zero_raw_line(&lines[num_lines - 1]);
         }
     } else {
         num_lines = 1;
@@ -586,12 +587,12 @@ struct raw_line *get_block(struct buf *buf, const struct pos *from,
     for (size_t i = from->line; i <= to->line; i++) {
         line = &buf->lines[i];
         if (from->col >= line->n) {
-            init_raw_line(&lines[i - from->line], NULL, 0);
+            init_zero_raw_line(&lines[i - from->line]);
             continue;
         }
         to_col = MIN(to->col + 1, line->n);
         if (to_col == 0) {
-            init_raw_line(&lines[i - from->line], NULL, 0);
+            init_zero_raw_line(&lines[i - from->line]);
             continue;
         }
         init_raw_line(&lines[i - from->line], &line->s[from->col],
@@ -717,12 +718,12 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
     for (size_t i = from.line; i <= to.line; i++) {
         line = &buf->lines[i];
         if (from.col >= line->n) {
-            init_raw_line(&lines[i - from.line], NULL, 0);
+            init_zero_raw_line(&lines[i - from.line]);
             continue;
         }
         to_col = MIN(to.col + 1, line->n);
         if (to_col == 0) {
-            init_raw_line(&lines[i - from.line], NULL, 0);
+            init_zero_raw_line(&lines[i - from.line]);
             continue;
         }
         init_raw_line(&lines[i - from.line], &line->s[from.col],
@@ -946,7 +947,7 @@ size_t search_string(struct buf *buf, const char *s)
     n = 0;
     for (size_t i = 0; i < buf->num_lines; i++) {
         line = &buf->lines[i];
-        for (size_t j = 0; j + l < line->n; j++) {
+        for (size_t j = 0; j + l <= line->n; j++) {
             if (memcmp(&line->s[j], s, l) != 0) {
                 continue;
             }
@@ -954,7 +955,7 @@ size_t search_string(struct buf *buf, const char *s)
             matches[n].from.line = i;
             matches[n].from.col = j;
             matches[n].to.line = i;
-            matches[n].to.col = j + l;
+            matches[n].to.col = j + l - 1;
             n++;
         }
     }

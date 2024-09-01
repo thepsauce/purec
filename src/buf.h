@@ -83,9 +83,9 @@ struct undo_event {
 };
 
 struct match {
-    /* position the match starts from */
+    /// position the match starts from
     struct pos from;
-    /* end position */
+    /// end position
     struct pos to;
 };
 

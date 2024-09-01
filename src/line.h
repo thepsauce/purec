@@ -30,6 +30,12 @@ struct raw_line {
     } \
 } while (0)
 
+#define init_zero_raw_line(l) do { \
+    struct raw_line *const _l = (l); \
+    _l->n = 0; \
+    _l->s = NULL; \
+} while (0)
+
 /// if the line has a gdb breakpoint
 #define LINE_BREAKPOINT 0x1
 

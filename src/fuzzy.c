@@ -109,7 +109,7 @@ static void filter_entries(void)
     const char *s;
     size_t s_i;
     size_t pat_i;
-    size_t first_i = 0;
+    size_t first_i = 0 /* make gcc -O3 happy */;
     int score;
     int cons_score;
     struct fuzzy_entry *entry;
@@ -124,6 +124,7 @@ static void filter_entries(void)
         while (pat_i != Input.len && s[s_i] != '\0') {
             if (tolower(Input.buf[pat_i]) == tolower(s[s_i])) {
                 if (score == 0) {
+                    /* tiebreaker: position of the first matching letter */
                     first_i = s_i;
                 }
                 /* many consecutive matching letters give a bigger score */

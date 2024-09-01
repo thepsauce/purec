@@ -132,4 +132,3 @@ size_t safe_add(size_t a, size_t b);
 char *get_relative_path(const char *path);
 
 #endif
-

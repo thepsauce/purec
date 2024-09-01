@@ -332,6 +332,7 @@ int normal_handle_input(int c)
             r = UPDATE_UI;
         }
         if (c == 's') {
+            Core.counter = 1;
             set_mode(INSERT_MODE);
             r = UPDATE_UI;
         } else {
@@ -528,6 +529,7 @@ int normal_handle_input(int c)
         case 'v':
         case 'V': /* also move to it */
             frame = create_frame(SelFrame, SPLIT_RIGHT, SelFrame->buf);
+            set_cursor(frame, &SelFrame->cur);
             if (c == 'V') {
                 SelFrame = frame;
             }
@@ -538,6 +540,7 @@ int normal_handle_input(int c)
         case 's':
         case 'S': /* also move to it */
             frame = create_frame(SelFrame, SPLIT_DOWN, SelFrame->buf);
+            set_cursor(frame, &SelFrame->cur);
             if (c == 'S') {
                 SelFrame = frame;
             }

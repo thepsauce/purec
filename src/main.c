@@ -458,7 +458,7 @@ int load_last_session(void)
     time_t latest_time;
     FILE *fp;
 
-    dir = opendir("cache/sessions");
+    dir = opendir(Core.session_dir);
     if (dir == NULL) {
         return -1;
     }
@@ -469,7 +469,7 @@ int load_last_session(void)
         if (ent->d_type != DT_REG) {
             continue;
         }
-        name = xasprintf("cache/sessions/%s", ent->d_name);
+        name = xasprintf("%s/%s", Core.session_dir, ent->d_name);
         if (stat(name, &st) != 0) {
             continue;
         }

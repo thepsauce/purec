@@ -721,6 +721,12 @@ int do_motion(struct frame *frame, int motion)
         c = get_ch();
         pos = frame->cur;
         line = &frame->buf->lines[pos.line];
+        if (motion == MOTION_FIND_EXCL_NEXT) {
+            /* make sure when the cursor is right before a match already, that
+             * it is not taken again
+             */
+            pos.col++;
+        }
         while (pos.col++, pos.col < line->n) {
             if (line->s[pos.col] == c) {
                 if (Core.counter > 1) {
@@ -740,6 +746,9 @@ int do_motion(struct frame *frame, int motion)
         c = get_ch();
         pos = frame->cur;
         line = &frame->buf->lines[pos.line];
+        if (motion == MOTION_FIND_EXCL_PREV && pos.col > 0) {
+            pos.col--;
+        }
         while (pos.col > 0) {
             if (line->s[--pos.col] == c) {
                 if (Core.counter > 1) {

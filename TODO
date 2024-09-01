@@ -18,8 +18,8 @@
         [X] Add b
         [ ] Add ge
 
-[ ] Add modes
-    [ ] Add replace mode
+[?] Add modes
+    [?] Add replace mode
 
 [-] Add keybins
     [X] r for replacing current character
@@ -74,17 +74,22 @@
         [ ] Add auto indentation
     [ ] Add git syntax
 
-[-] Add color themes
+[X] Add color themes
     [X] Add simple color theme
-    [ ] Make array of color themes for easy switching
+    [X] Make array of color themes for easy switching
 
-[X] Add file opener
+[-] Add file opener
+    [X] Make option to choose file
+    [ ] Add directory switching
 
 [-] Add commands
     [X] Add :e for opening a file
     [ ] Add :s for substitute
-    [ ] Add / and ? for searching
+    [-] Add / and ? for searching...
+        [X] ...simple words
+        [ ] ...with regex
 
-[ ] Add regex
+[-] Add search and replace
+    [X] Add simple search
     [ ] Add regex engine
-    [ ] Add search and replace
+    [ ] Add replace
