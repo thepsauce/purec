@@ -1,14 +1,11 @@
 #define C_STATE_COMMENT                 2
-#define C_STATE_MULTI_COMMENT           3
+#define C_STATE_MULTI_COMMENT           (FSTATE_FORCE_MULTI|3)
 #define C_STATE_STRING                  4
-#define C_STATE_PREPROC                 5
-#define C_STATE_INCLUDE                 6
-#define C_STATE_INCLUDE_STRING          7
-#define C_STATE_INCLUDE_CORNER          8
-#define C_STATE_PREPROC_STRING          9
-#define C_STATE_PREPROC_COMMENT         10
-#define C_STATE_PREPROC_MULTI_COMMENT   11
-#define C_STATE_PREPROC_TRAIL           12
+#define C_STATE_INCLUDE                 5
+#define C_STATE_INCLUDE_STRING          6
+#define C_STATE_INCLUDE_CORNER          7
+#define C_STATE_PREPROC                 8
+#define C_STATE_PREPROC_TRAIL           9
 
 const char *c_types[] = {
     "FILE",
@@ -50,6 +47,7 @@ const char *c_identfs[] = {
     "goto",
     "if",
     "return",
+    "sizeof",
     "switch",
     "while",
 };
@@ -100,6 +98,8 @@ static size_t c_get_identf(struct state_ctx *ctx)
         } else if (bin_search(c_identfs, ARRAY_SIZE(c_identfs),
                     &ctx->s[ctx->i], n) != NULL) {
             ctx->hi = HI_IDENTIFIER;
+        } else if (ctx->i + n < ctx->n && ctx->s[ctx->i + n] == '(') {
+            ctx->hi = HI_FUNCTION;
         }
     } else {
         n = 0;
@@ -214,7 +214,7 @@ static size_t c_get_char(struct state_ctx *ctx)
     return n + 1;
 }
 
-unsigned c_state_string(struct state_ctx *ctx)
+size_t c_state_string(struct state_ctx *ctx)
 {
     size_t n;
 
@@ -227,7 +227,7 @@ unsigned c_state_string(struct state_ctx *ctx)
             }
             if (ctx->i + 1 == ctx->n) {
                 ctx->hi = HI_CHAR;
-                ctx->multi = true;
+                ctx->state |= FSTATE_MULTI;
                 return 1;
             }
 
@@ -241,8 +241,7 @@ unsigned c_state_string(struct state_ctx *ctx)
         }
 
         if (ctx->s[ctx->i + n] == '\"') {
-            ctx->state = ctx->state == C_STATE_STRING ? STATE_START :
-                C_STATE_PREPROC;
+            ctx->state >>= 8;
             n++;
             break;
         }
@@ -250,7 +249,7 @@ unsigned c_state_string(struct state_ctx *ctx)
     return n;
 }
 
-unsigned c_state_include(struct state_ctx *ctx)
+size_t c_state_include(struct state_ctx *ctx)
 {
     switch (ctx->s[ctx->i]) {
     case '\t':
@@ -274,7 +273,7 @@ unsigned c_state_include(struct state_ctx *ctx)
     }
 }
 
-unsigned c_state_include_corner(struct state_ctx *ctx)
+size_t c_state_include_corner(struct state_ctx *ctx)
 {
     size_t n;
 
@@ -286,7 +285,7 @@ unsigned c_state_include_corner(struct state_ctx *ctx)
             }
             if (ctx->i + 1 == ctx->n) {
                 ctx->hi = HI_CHAR;
-                ctx->multi = true;
+                ctx->state |= FSTATE_MULTI;
             }
             return 1;
         }
@@ -300,7 +299,7 @@ unsigned c_state_include_corner(struct state_ctx *ctx)
     return n;
 }
 
-unsigned c_state_include_string(struct state_ctx *ctx)
+size_t c_state_include_string(struct state_ctx *ctx)
 {
     size_t n;
 
@@ -312,7 +311,7 @@ unsigned c_state_include_string(struct state_ctx *ctx)
             }
             if (ctx->i + 1 == ctx->n) {
                 ctx->hi = HI_CHAR;
-                ctx->multi = true;
+                ctx->state |= FSTATE_MULTI;
             }
             return 1;
         }
@@ -326,13 +325,13 @@ unsigned c_state_include_string(struct state_ctx *ctx)
     return n;
 }
 
-unsigned c_state_preproc_trail(struct state_ctx *ctx)
+size_t c_state_preproc_trail(struct state_ctx *ctx)
 {
     ctx->hi = HI_ERROR;
     return ctx->n - ctx->i;
 }
 
-unsigned c_state_common(struct state_ctx *ctx)
+size_t c_state_common(struct state_ctx *ctx)
 {
     size_t len;
 
@@ -363,21 +362,22 @@ unsigned c_state_common(struct state_ctx *ctx)
         return len;
 
     case '\"':
-        ctx->state = ctx->state == STATE_START ? C_STATE_STRING :
-            C_STATE_PREPROC_STRING;
+        /* push state */
+        ctx->state <<= 8;
+        ctx->state |= C_STATE_STRING;
         ctx->hi = HI_STRING;
         return 1;
 
     case '/':
         if (ctx->i + 1 < ctx->n) {
             if (ctx->s[ctx->i + 1] == '/') {
-                ctx->state = ctx->state == STATE_START ?
-                    C_STATE_COMMENT : C_STATE_PREPROC_COMMENT;
+                ctx->state = C_STATE_COMMENT;
                 return 0;
             }
             if (ctx->s[ctx->i + 1] == '*') {
-                ctx->state = ctx->state == STATE_START ?
-                    C_STATE_MULTI_COMMENT : C_STATE_PREPROC_MULTI_COMMENT;
+                /* push state */
+                ctx->state <<= 8;
+                ctx->state |= C_STATE_MULTI_COMMENT;
                 return 0;
             }
         }
@@ -399,22 +399,36 @@ unsigned c_state_common(struct state_ctx *ctx)
     case '~':
         ctx->hi = HI_OPERATOR;
         return 1;
+
+    case '(':
+    case '{':
+    case '[':
+        ctx->hi = HI_NORMAL;
+        add_paren(ctx);
+        return 1;
+
+    case ')':
+    case '}':
+    case ']':
+        ctx->hi = HI_NORMAL;
+        add_paren(ctx);
+        return 1;
     }
     return 1;
 }
 
-unsigned c_state_preproc(struct state_ctx *ctx)
+size_t c_state_preproc(struct state_ctx *ctx)
 {
     if (ctx->i + 1 == ctx->n && ctx->s[ctx->i] == '\\') {
-        ctx->multi = true;
         ctx->hi = HI_PREPROC;
+        ctx->state |= FSTATE_MULTI;
         return 1;
     }
     ctx->hi = HI_PREPROC;
     return c_state_common(ctx);
 }
 
-unsigned c_state_start(struct state_ctx *ctx)
+size_t c_state_start(struct state_ctx *ctx)
 {
     size_t i;
     size_t w_i;
@@ -453,48 +467,46 @@ unsigned c_state_start(struct state_ctx *ctx)
     return c_state_common(ctx);
 }
 
-unsigned c_state_comment(struct state_ctx *ctx)
+size_t c_state_comment(struct state_ctx *ctx)
 {
     if (ctx->s[ctx->n - 1] == '\\') {
-        ctx->multi = true;
+        ctx->state |= FSTATE_MULTI;
     }
     ctx->hi = HI_COMMENT;
     return ctx->n - ctx->i;
 }
 
-unsigned c_state_multi_comment(struct state_ctx *ctx)
+size_t c_state_multi_comment(struct state_ctx *ctx)
 {
     size_t i;
 
     ctx->hi = HI_COMMENT;
     if (ctx->i + 1 < ctx->n && ctx->s[ctx->i] == '*' &&
             ctx->s[ctx->i + 1] == '/') {
-        ctx->state = ctx->state == C_STATE_COMMENT ? STATE_START :
-            C_STATE_PREPROC;
+        /* pop state */
+        ctx->state ^= FSTATE_MULTI;
+        ctx->state >>= 8;
         return 2;
     }
     if (ctx->s[ctx->i] == '@') {
         for (i = ctx->i + 1; i < ctx->n; i++) {
             if (!isalpha(ctx->s[i])) {
-                break; }
+                break;
+            }
         }
         ctx->hi = HI_JAVADOC;
         return i - ctx->i;
     }
     return 1;
 }
-
-struct lang_state c_lang_states[] = {
-    [STATE_START] = { 0, c_state_start },
-    [C_STATE_COMMENT] = { 0, c_state_comment },
-    [C_STATE_MULTI_COMMENT] = { STATE_MULTI_LINE, c_state_multi_comment },
-    [C_STATE_STRING] = { 0, c_state_string },
-    [C_STATE_PREPROC] = { 0, c_state_preproc },
-    [C_STATE_INCLUDE] = { 0, c_state_include },
-    [C_STATE_INCLUDE_STRING] = { 0, c_state_include_string },
-    [C_STATE_INCLUDE_CORNER] = { 0, c_state_include_corner },
-    [C_STATE_PREPROC_STRING] = { 0, c_state_string },
-    [C_STATE_PREPROC_COMMENT] = { 0, c_state_comment },
-    [C_STATE_PREPROC_MULTI_COMMENT] = { 0, c_state_multi_comment },
-    [C_STATE_PREPROC_TRAIL] = { 0, c_state_preproc_trail },
+state_proc_t c_lang_states[] = {
+    [STATE_START & 0xff] = c_state_start,
+    [C_STATE_COMMENT & 0xff] = c_state_comment,
+    [C_STATE_MULTI_COMMENT & 0xff] = c_state_multi_comment,
+    [C_STATE_STRING & 0xff] = c_state_string,
+    [C_STATE_INCLUDE & 0xff] = c_state_include,
+    [C_STATE_INCLUDE_STRING & 0xff] = c_state_include_string,
+    [C_STATE_INCLUDE_CORNER & 0xff] = c_state_include_corner,
+    [C_STATE_PREPROC & 0xff] = c_state_preproc,
+    [C_STATE_PREPROC_TRAIL & 0xff] = c_state_preproc_trail,
 };

@@ -36,6 +36,9 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
     } else if (buf->path == NULL) {
         buf->path = xstrdup(file);
         file = buf->path;
+        if (buf->lang == NO_LANG) {
+            buf->lang = detect_language(buf);
+        }
     }
 
     if (!cd->has_range && !cd->has_number) {
@@ -122,7 +125,7 @@ int cmd_quit(struct cmd_data *cd)
 {
     if (!cd->force && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
         set_error("buffer has changed, use  :q!  to quit");
-        return 1;
+        return -1;
     }
     destroy_frame(SelFrame);
     return 0;
@@ -137,7 +140,7 @@ int cmd_quit_all(struct cmd_data *cd)
     for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
         if (!cd->force && frame->buf->save_event_i != frame->buf->event_i) {
             set_error("buffer has changed, use  :qa!  to quit");
-            return 1;
+            return -1;
         }
     }
     Core.is_stopped = true;
@@ -160,11 +163,27 @@ int cmd_read(struct cmd_data *cd)
     }
     fp = fopen(cd->arg, "r");
     if (fp == NULL) {
-        set_error("failed opening '%s': %s\n", file, strerror(errno));
+        set_error("failed opening '%s': %s", file, strerror(errno));
         return -1;
     }
     read_file(SelFrame->buf, &SelFrame->cur, fp);
     fclose(fp);
+    return 0;
+}
+
+int cmd_syntax(struct cmd_data *cd)
+{
+    for (int i = 0; i < NUM_LANGS; i++) {
+        if (strcasecmp(Langs[i].name, cd->arg) == 0) {
+            set_language(SelFrame->buf, i);
+            return 0;
+        }
+    }
+    if (cd->arg[0] != '\0') {
+        set_error("language '%s' does not exist", cd->arg);
+        return -1;
+    }
+    set_language(SelFrame->buf, detect_language(SelFrame->buf));
     return 0;
 }
 
@@ -182,8 +201,8 @@ int cmd_write(struct cmd_data *cd)
 int cmd_write_all(struct cmd_data *cd)
 {
     for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
-        if (save_buffer(cd, frame->buf)) {
-            return 1;
+        if (save_buffer(cd, frame->buf) != 0) {
+            return -1;
         }
     }
     return 0;

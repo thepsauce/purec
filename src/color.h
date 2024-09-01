@@ -20,7 +20,11 @@
 #define HI_VERT_SPLIT   15
 #define HI_FUZZY        16
 #define HI_CMD          17
-#define HI_MAX          18
+#define HI_FUNCTION     18
+#define HI_ADDED        19
+#define HI_REMOVED      20
+#define HI_CHANGED      21
+#define HI_MAX          22
 
 extern struct theme {
     const char *name;

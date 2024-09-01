@@ -1,4 +1,4 @@
-#include "buf.h"
+#include "lang.h"
 #include "xalloc.h"
 
 #include <ctype.h>
@@ -54,6 +54,85 @@ struct buf *create_buffer(const char *path)
     return buf;
 }
 
+/**
+ * Finds given string within a null terminated string list.
+ *
+ * `s_list` is a null terminated string list, the end is marked by a double null
+ * terminator. Only if the given string begins with any of the strings in `s_list`,
+ * true is returned.
+ *
+ * @param s_list    The list of strings.
+ * @param s         The string to check.
+ * @param s_len     The length of the string to theck.
+ *
+ * @return Whether the string was found.
+ */
+static bool has_prefix(const char *s_list, const char *s, size_t s_len)
+{
+    for (size_t i = 0; i < s_len; ) {
+        if (s_list[i] != s[i]) {
+            if (s_list[i] == '\0') {
+                return true;
+            }
+            while (s_list[i] != '\0') {
+                i++;
+            }
+            i++;
+            if (s_list[i] == '\0') {
+                return false;
+            }
+            /* jump to the next item */
+            s_list = &s_list[i];
+            i = 0;
+        } else {
+            i++;
+        }
+    }
+    return true;
+}
+
+size_t detect_language(struct buf *buf)
+{
+    char *ext, *end;
+
+    for (size_t i = 0, j; i < buf->num_lines; i++) {
+        for (j = 0; j < buf->lines[i].n; j++) {
+            if (isspace(buf->lines[i].s[j])) {
+                continue;
+            }
+
+            if (buf->lines[i].s[j] == '#') {
+                return C_LANG;
+            }
+            i = buf->num_lines - 1;
+            break;
+        }
+    }
+
+    if (buf->path == NULL) {
+        return NO_LANG;
+    }
+
+    end = buf->path + strlen(buf->path);
+
+    for (ext = end; ext > buf->path; ext--) {
+        if (ext[-1] == '.' || ext[-1] == '/') {
+            break;
+        }
+    }
+
+    if (end == ext) {
+        return NO_LANG;
+    }
+
+    for (int l = 1; l < NUM_LANGS; l++) {
+        if (has_prefix(Langs[l].file_exts, ext, end - ext)) {
+            return l;
+        }
+    }
+    return NO_LANG;
+}
+
 void init_load_buffer(struct buf *buf)
 {
     FILE *fp;
@@ -66,6 +145,7 @@ void init_load_buffer(struct buf *buf)
         buf->a_lines = 1;
         buf->lines = xcalloc(buf->a_lines, sizeof(*buf->lines));
         buf->num_lines = 1;
+        buf->lang = detect_language(buf);
         return;
     }
 
@@ -97,6 +177,8 @@ void init_load_buffer(struct buf *buf)
     } else {
         buf->max_dirty_i = buf->num_lines - 1;
     }
+
+    buf->lang = detect_language(buf);
 }
 
 void destroy_buffer(struct buf *buf)
@@ -138,6 +220,20 @@ struct buf *get_buffer(size_t id)
         }
     }
     return NULL;
+}
+
+
+void set_language(struct buf *buf, size_t lang)
+{
+    if (buf->lang == lang) {
+        return;
+    }
+    buf->min_dirty_i = 0;
+    buf->max_dirty_i = buf->num_lines - 1;
+    for (size_t i = 0; i < buf->num_lines; i++) {
+        mark_dirty(&buf->lines[i]);
+    }
+    buf->lang = lang;
 }
 
 size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp)

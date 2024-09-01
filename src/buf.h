@@ -113,6 +113,9 @@ struct buf {
     /// saved scrolling
     struct pos save_scroll;
 
+    /// the index of the highlighting machine
+    size_t lang;
+
     /// the first dirty line
     size_t min_dirty_i;
     /// the last dirty line; there might also be dirty lines in the middle
@@ -159,6 +162,15 @@ extern struct buf *FirstBuffer;
 struct buf *create_buffer(const char *path);
 
 /**
+ * Tries to make a guess what language is within the buffer.
+ *
+ * @param buf   The buffer to detect the languag within.
+ *
+ * @return The detected language.
+ */
+size_t detect_language(struct buf *buf);
+
+/**
  * Sets the buffer to the file contents of the buffer file, the buffer should
  * have been initialized to 0 and the buffer file should be set at this point.
  *
@@ -184,6 +196,17 @@ void destroy_buffer(struct buf *buf);
  * @return The buffer with that id or `NULL` if none exists.
  */
 struct buf *get_buffer(size_t id);
+
+void set_language(struct buf *buf, size_t lang);
+
+/**
+ * Gets the number of buffers in the linked list.
+ *
+ * @return The number of buffers.
+ */
+size_t get_buffer_count(void);
+
+void set_language(struct buf *buf, size_t lang);
 
 /**
  * Writes lines from a buffer to a file.

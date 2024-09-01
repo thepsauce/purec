@@ -1,6 +1,6 @@
-#include "buf.h"
 #include "color.h"
 #include "frame.h"
+#include "lang.h"
 #include "util.h"
 #include "xalloc.h"
 
@@ -29,25 +29,13 @@ struct render_info {
     struct selection sel;
 };
 
-struct state_ctx {
-    /// the selected language
-    size_t lang;
-    /// the current highlight group
-    unsigned hi;
-    /// the current state
-    unsigned state;
-    /// if the current state is finished and wants to continue to the next line
-    bool multi;
-    /// the current line
-    char *s;
-    /// the index on the current line
-    size_t i;
-    /// the length of the current line
-    size_t n;
-};
-
 #define STATE_NULL      0
 #define STATE_START     1
+
+/// if the state always wants to continue to the next line
+#define FSTATE_FORCE_MULTI 0x80000000
+/// if the state wants to continue to the next line only if a condition is met
+#define FSTATE_MULTI 0x40000000
 
 static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
 {
@@ -74,62 +62,64 @@ static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
     return NULL;
 }
 
-/// if the state always wants to continue to the next line
-#define STATE_MULTI_LINE 0x1
+/**
+ * Marks the current char as paranthesis.
+ *
+ * @param ctx   The context that includes buffer and line.
+ */
+static void add_paren(struct state_ctx *ctx)
+{
+    (void) ctx;
+}
 
-struct lang_state {
-    /// flags of the state
-    int flags;
-    /// the procedure that handles this state
-    unsigned (*proc)(struct state_ctx *ctx);
-};
+#include "syntax/none.h"
+#include "syntax/c.h"
+#include "syntax/diff.h"
 
-#include "highlight_c.h"
-
-struct lang {
-    struct lang_state *states;
-    const char *file_ext;
-} langs[] = {
-    { c_lang_states, "c\0h\0cpp\0c++\0hpp\0h++\0" },
+struct lang Langs[] = {
+    { "none", none_lang_states, "\0" },
+    { "C", c_lang_states, "c\0h\0cpp\0cxx\0c++\0hpp\0hxx\0h++\0" },
+    { "diff", diff_lang_states, "diff\0patch\0" },
 };
 
 /**
  * Highlights a line with syntax highlighting.
  *
- * @param line  The line to highlight.
- * @param state The starting state.
+ * @param buf       The buffer containing the line.
+ * @param line_i    The index of the line to highlight.
+ * @param state     The starting state.
  */
-static void highlight_line(struct line *line, size_t state)
+static void highlight_line(struct buf *buf, size_t line_i, size_t state)
 {
     struct state_ctx ctx;
     size_t n;
+    struct line *line;
 
+    line = &buf->lines[line_i];
     line->attribs = xreallocarray(line->attribs, line->n,
             sizeof(*line->attribs));
     memset(line->attribs, 0, sizeof(*line->attribs) * line->n);
 
-    ctx.lang = 0;
+    ctx.buf = buf;
     ctx.state = state;
-    ctx.multi = false;
     ctx.hi = HI_NORMAL;
     ctx.s = line->s;
     ctx.i = 0;
     ctx.n = line->n;
 
     for (ctx.i = 0; ctx.i < ctx.n; ) {
-        n = (*langs[ctx.lang].states[ctx.state].proc)(&ctx);
+        n = (*Langs[buf->lang].fsm[ctx.state & 0xff])(&ctx);
         for (; n > 0; n--) {
             line->attribs[ctx.i] = ctx.hi;
             ctx.i++;
         }
     }
 
-    if (!ctx.multi && !(langs[ctx.lang].states[ctx.state].flags &
-                STATE_MULTI_LINE)) {
+    if (!(ctx.state & (FSTATE_MULTI | FSTATE_FORCE_MULTI))) {
         ctx.state = STATE_START;
     }
 
-    line->state = ctx.state;
+    line->state = ctx.state & ~FSTATE_MULTI;
 }
 
 /**
@@ -186,7 +176,7 @@ void clean_lines(struct buf *buf)
     for (size_t i = buf->min_dirty_i;; i++) {
         line = &buf->lines[i];
         if (line->state == 0) {
-            highlight_line(line, prev_state);
+            highlight_line(buf, i, prev_state);
             if ((line->state != STATE_START ||
                     line->prev_state != STATE_START) &&
                     i + 1 != buf->num_lines) {
@@ -222,8 +212,8 @@ void render_frame(struct frame *frame)
         ri.sel_exists = get_selection(&ri.sel);
     }
 
-    last_line = MIN(buf->num_lines,
-            (size_t) (frame->scroll.line + frame->h - 1));
+    last_line = frame->scroll.line + frame->h - 1;
+    last_line = MIN(last_line, frame->buf->num_lines);
 
     prev_state = buf->min_dirty_i == 0 ? STATE_START :
         buf->min_dirty_i == SIZE_MAX ? 0 :
@@ -232,14 +222,13 @@ void render_frame(struct frame *frame)
         ri.line_i = i;
         ri.line = &buf->lines[i];
         if (ri.line->state == 0) {
-            highlight_line(ri.line, prev_state);
-            if ((ri.line->state != STATE_START ||
-                    ri.line->prev_state != STATE_START) &&
-                    i + 1 != buf->num_lines) {
+            highlight_line(buf, i, prev_state);
+            if (i + 1 != buf->num_lines &&
+                    (ri.line->state != STATE_START ||
+                     ri.line->prev_state != STATE_START)) {
                 mark_dirty(&ri.line[1]);
+                buf->max_dirty_i = MAX(buf->max_dirty_i, i + 1);
             }
-        } else if (i > buf->max_dirty_i) {
-            break;
         }
         prev_state = ri.line->state;
     }

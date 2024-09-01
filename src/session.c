@@ -44,10 +44,11 @@ void save_session(FILE *fp)
     /* TODO: also store some core data */
 
     for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
-        fprintf(fp, "B%zu %c%s%c %zu,%zu %zu,%zu\n",
+        fprintf(fp, "B%zu %c%s%c %zu,%zu %zu,%zu %zu\n",
                 buf->id, '\0', buf->path == NULL ? "" : buf->path, '\0',
                 buf->save_cur.col, buf->save_cur.line,
-                buf->save_scroll.col, buf->save_scroll.line);
+                buf->save_scroll.col, buf->save_scroll.line,
+                buf->lang);
     }
 
     fputc('\n', fp);
@@ -208,7 +209,8 @@ static struct buf *load_buffer(FILE *fp)
         (void) (load_number_zu(fp, &buf->save_cur.col) != 0 ||
                 load_number_zu(fp, &buf->save_cur.line) != 0 ||
                 load_number_zu(fp, &buf->save_scroll.col) != 0 ||
-                load_number_zu(fp, &buf->save_scroll.line) != 0);
+                load_number_zu(fp, &buf->save_scroll.line) != 0 ||
+                load_number_zu(fp, &buf->lang) != 0);
     }
 
     init_load_buffer(buf);

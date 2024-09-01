@@ -4,6 +4,7 @@
 #include "frame.h"
 #include "fuzzy.h"
 #include "input.h"
+#include "lang.h"
 #include "purec.h"
 #include "xalloc.h"
 
@@ -56,6 +57,9 @@ static const struct cmd {
     { "r", 0, cmd_read },
     { "read", 0, cmd_read },
 
+    { "syn", 0, cmd_syntax },
+    { "syntax", 0, cmd_syntax },
+
     { "w", ACCEPTS_RANGE, cmd_write },
     { "wa", 0, cmd_write_all },
     { "wall", 0, cmd_write_all },
@@ -69,9 +73,9 @@ static const struct cmd {
     { "write", ACCEPTS_RANGE, cmd_write },
 
     { "x", 0, cmd_exit },
-    { "xit", 0, cmd_exit },
     { "xa", 0, cmd_exit_all },
     { "xall", 0, cmd_exit_all },
+    { "xit", 0, cmd_exit },
 };
 
 static const struct cmd *get_command(const char *s, size_t s_m)

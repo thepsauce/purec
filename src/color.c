@@ -6,22 +6,26 @@ struct theme Themes[] = {
         .name = "Term",
         .attribs = {
             [HI_NORMAL] = { 7, 0, A_NORMAL },
-            [HI_COMMENT] = { 5, 0, A_BOLD },
+            [HI_COMMENT] = { 6, 0, A_NORMAL },
             [HI_JAVADOC] = { 5, 0, A_BOLD | A_ITALIC },
             [HI_TYPE] = { 2, 0, A_BOLD },
             [HI_TYPE_MOD] = { 2, 0, A_ITALIC },
             [HI_IDENTIFIER] = { 2, 0, A_BOLD },
             [HI_NUMBER] = { 5, 0, A_NORMAL },
-            [HI_STRING] = { 5, 0, A_BOLD },
-            [HI_CHAR] = { 5, 0, A_NORMAL },
-            [HI_PREPROC] = { 3, 0, A_UNDERLINE },
+            [HI_STRING] = { 3, 0, A_BOLD },
+            [HI_CHAR] = { 3, 0, A_NORMAL },
+            [HI_PREPROC] = { 5, 0, A_BOLD | A_UNDERLINE },
             [HI_OPERATOR] = { 5, 0, A_BOLD },
             [HI_ERROR] = { 1, 0, A_REVERSE },
-            [HI_LINE_NO] = { 7, 0, A_NORMAL },
-            [HI_STATUS] = { 7, 0, A_NORMAL },
+            [HI_LINE_NO] = { 3, 0, A_NORMAL },
+            [HI_STATUS] = { 5, 0, A_NORMAL },
             [HI_VERT_SPLIT] = { 7, 0, A_NORMAL },
             [HI_FUZZY] = { 7, 4, A_NORMAL },
             [HI_CMD] = { 7, 0, A_NORMAL },
+            [HI_FUNCTION] = { 7, 0, A_BOLD },
+            [HI_ADDED] = { 2, 0, A_BOLD },
+            [HI_REMOVED] = { 1, 0, A_BOLD },
+            [HI_CHANGED] = { 6, 0, A_BOLD },
         },
         .colors_needed = 8,
     },
@@ -33,7 +37,7 @@ struct theme Themes[] = {
             "#36a3d9", "#ffee99", "#95e6cb", "#ffffff",
             "#3e4b59", "#ff3333", "#b8cc52", "#f29718",
             "#36a3d9", "#ffee99", "#95e6cb", "#5c6773",
-            "#232a36", "#feed98", "#b7cb52",
+            "#232a36", "#feed98", "#b7cb52", "#ffb454",
         },
         .attribs = {
             [HI_NORMAL] = { 7, 0, A_NORMAL },
@@ -53,6 +57,10 @@ struct theme Themes[] = {
             [HI_VERT_SPLIT] = { 8, 0, A_NORMAL },
             [HI_FUZZY] = { 4, 16, A_NORMAL },
             [HI_CMD] = { 4, 0, A_NORMAL },
+            [HI_FUNCTION] = { 19, 0, A_NORMAL },
+            [HI_ADDED] = { 2, 0, A_BOLD },
+            [HI_REMOVED] = { 1, 0, A_BOLD },
+            [HI_CHANGED] = { 6, 0, A_BOLD },
         },
         .colors_needed = 256,
     }
@@ -70,8 +78,6 @@ static void convert_hex_to_rgb(const char *hex, int *p_r, int *p_g, int *p_b)
     *p_g = g * 200 / 51;
     *p_b = b * 200 / 51;
 }
-
-#include <stdlib.h>
 
 void init_colors(void)
 {
