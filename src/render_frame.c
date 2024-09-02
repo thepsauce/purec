@@ -62,16 +62,6 @@ static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
     return NULL;
 }
 
-/**
- * Marks the current char as paranthesis.
- *
- * @param ctx   The context that includes buffer and line.
- */
-static void add_paren(struct state_ctx *ctx)
-{
-    (void) ctx;
-}
-
 #include "syntax/none.h"
 #include "syntax/c.h"
 #include "syntax/diff.h"
@@ -103,18 +93,20 @@ static void highlight_line(struct buf *buf, size_t line_i, size_t state)
     memset(line->attribs, 0, sizeof(*line->attribs) * line->n);
 
     ctx.buf = buf;
-    ctx.line_i = line_i;
+    ctx.pos.col = 0;
+    ctx.pos.line = line_i;
     ctx.state = state;
     ctx.hi = HI_NORMAL;
     ctx.s = line->s;
-    ctx.i = 0;
     ctx.n = line->n;
 
-    for (ctx.i = 0; ctx.i < ctx.n; ) {
+    clear_parens(buf, line_i);
+
+    for (ctx.pos.col = 0; ctx.pos.col < ctx.n; ) {
         n = (*Langs[buf->lang].fsm[ctx.state & 0xff])(&ctx);
         for (; n > 0; n--) {
-            line->attribs[ctx.i] = ctx.hi;
-            ctx.i++;
+            line->attribs[ctx.pos.col] = ctx.hi;
+            ctx.pos.col++;
         }
     }
 
@@ -195,6 +187,24 @@ void clean_lines(struct buf *buf)
     buf->max_dirty_i = 0;
 }
 
+/**
+ * Puts the visual position of given position into `p_x`, `p_y` and returns
+ * whether the visual position is visible.
+ */
+static inline bool translate_pos(struct frame *frame, struct pos *pos,
+        int x, int y, int w, int h, int *p_x, int *p_y)
+{
+    if (pos->col >= frame->scroll.col &&
+            pos->line >= frame->scroll.line &&
+            pos->col - frame->scroll.col < (size_t) w &&
+            pos->line - frame->scroll.line < (size_t) h) {
+        *p_x = frame->x + x + pos->col - frame->scroll.col;
+        *p_y = frame->y + y + pos->line - frame->scroll.line;
+        return true;
+    }
+    return false;
+}
+
 void render_frame(struct frame *frame)
 {
     struct buf *buf;
@@ -205,9 +215,13 @@ void render_frame(struct frame *frame)
     size_t prev_state;
     int x, y, w, h;
     int orig_x;
+    struct paren *paren;
+    struct pos match_p;
+    int p_x, p_y;
 
     buf = frame->buf;
 
+    /* get selection */
     ri.cur_line = &buf->lines[frame->cur.line];
     if (SelFrame != frame) {
         ri.sel_exists = false;
@@ -215,6 +229,9 @@ void render_frame(struct frame *frame)
         ri.sel_exists = get_selection(&ri.sel);
     }
 
+    /* highlight all visible dirty lines, this must also include those lines
+     * that are above the visible region
+     */
     last_line = frame->scroll.line + frame->h - 1;
     last_line = MIN(last_line, frame->buf->num_lines);
 
@@ -236,6 +253,7 @@ void render_frame(struct frame *frame)
         prev_state = ri.line->state;
     }
 
+    /* update dirty lines for the buffer */
     if (last_line > buf->max_dirty_i) {
         buf->min_dirty_i = SIZE_MAX;
         buf->max_dirty_i = 0;
@@ -246,24 +264,26 @@ void render_frame(struct frame *frame)
     orig_x = frame->x > 0;
     get_text_rect(frame, &x, &y, &w, &h);
 
+    /* render line number view if there is enough space */
     if (x > 2) {
         set_highlight(stdscr, HI_LINE_NO);
         line = frame->scroll.line + 1;
-        for (; y < h; y++) {
+        for (int i = y; i < h; i++) {
             if (line > buf->num_lines) {
                 set_highlight(stdscr, HI_NORMAL);
-                mvaddstr(frame->y + y, frame->x + orig_x, " ~");
-                for (int i = orig_x + 2; i < x; i++) {
+                mvaddstr(frame->y + i, frame->x + orig_x, " ~");
+                for (int j = orig_x + 2; j < x; j++) {
                     addch(' ');
                 }
             } else {
-                mvprintw(frame->y + y, frame->x + orig_x, " %*zu ",
+                mvprintw(frame->y + i, frame->x + orig_x, " %*zu ",
                         x - orig_x - 2, line);
             }
             line++;
         }
     }
 
+    /* render the lines */
     ri.x = frame->scroll.col;
     ri.w = frame->scroll.col + w;
     for (size_t i = frame->scroll.line; i < last_line; i++) {
@@ -273,12 +293,28 @@ void render_frame(struct frame *frame)
         render_line(&ri);
     }
 
+    paren = get_paren(buf, &frame->cur);
+    if (paren != NULL && get_matching_paren(buf, paren, &match_p)) {
+        set_highlight(stdscr, HI_PAREN_MATCH);
+        if (translate_pos(frame, &frame->cur, x, y, w, h, &p_x, &p_y)) {
+            mvaddch(p_y, p_x, buf->lines[paren->pos.line].s[paren->pos.col]);
+        }
+        if (translate_pos(frame, &match_p, x, y, w, h, &p_x, &p_y)) {
+            mvaddch(p_y, p_x, buf->lines[match_p.line].s[match_p.col]);
+        }
+    }
+
+    /* render vertical bar */
     if (frame->x > 0) {
         set_highlight(stdscr, HI_VERT_SPLIT);
         mvvline(frame->y, frame->x, ACS_VLINE, frame->h);
     }
     perc = 100 * (frame->cur.line + 1) / buf->num_lines;
 
+    /* render the status in two parts:
+     * 1. File name on the left
+     * 2. File position on the right
+     */
     set_highlight(stdscr, HI_STATUS);
     for (int i = orig_x; i < frame->w; i++) {
         mvaddch(frame->y + frame->h - 1, frame->x + i, ' ');

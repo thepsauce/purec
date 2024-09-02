@@ -269,6 +269,8 @@ void set_cursor(struct frame *frame, const struct pos *pos);
 #define MOTION_HALF_UP          30
 /// scroll down half the window height
 #define MOTION_HALF_DOWN        31
+/// move to the matching parenthesis
+#define MOTION_PAREN            32
 
 /**
  * Does a special cursor motion.

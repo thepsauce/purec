@@ -161,7 +161,6 @@ void init_load_buffer(struct buf *buf)
             }
         }
         line = grow_lines(buf, buf->num_lines, 1);
-        line->flags = 0;
         line->state = 0;
         line->attribs = NULL;
         line->s = xmalloc(line_len);
@@ -193,6 +192,7 @@ void destroy_buffer(struct buf *buf)
     }
     free(buf->lines);
     free(buf->events);
+    free(buf->parens);
     free(buf->matches);
     free(buf->search_pat);
 
@@ -393,7 +393,6 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
     line = grow_lines(buf, pos->line + 1, num_lines - 1);
     for (size_t i = 1; i < num_lines; i++) {
         raw_line = &lines[i];
-        line->flags = 0;
         line->state = 0;
         line->attribs = NULL;
         line->n = raw_line->n;
@@ -485,7 +484,6 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
 
     line = grow_lines(buf, pos->line + 1, 1);
     at_line = &buf->lines[pos->line];
-    line->flags = 0;
     line->state = 0;
     line->attribs = NULL;
     line->n = at_line->n - pos->col;
@@ -498,8 +496,45 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
     return add_event(buf, IS_INSERTION, pos, lines, 2);
 }
 
+/**
+ * Gets the first index of the parenthesis on the given line.
+ *
+ * @param buf       The buffer to look for a parenthesis.
+ * @param line_i    The line to look for.
+ *
+ * @return The index of the parenthesis.
+ */
+static size_t get_paren_line(const struct buf *buf, size_t line_i)
+{
+    size_t l, m, r;
+    struct paren *p;
+
+    l = 0;
+    r = buf->num_parens;
+    while (l < r) {
+        m = (l + r) / 2;
+
+        p = &buf->parens[m];
+        if (p->pos.line < line_i) {
+            l = m + 1;
+        } else if (p->pos.line > line_i) {
+            r = m;
+        } else {
+            for (; m > 0; m--) {
+                if (buf->parens[m - 1].pos.line != line_i) {
+                    return m;
+                }
+            }
+            return m;
+        }
+    }
+    return l;
+}
+
 struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines)
 {
+    size_t index;
+
     if (buf->num_lines + num_lines > buf->a_lines) {
         buf->a_lines *= 2;
         buf->a_lines += num_lines;
@@ -509,7 +544,42 @@ struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines)
     memmove(&buf->lines[line_i + num_lines], &buf->lines[line_i],
             sizeof(*buf->lines) * (buf->num_lines - line_i));
     buf->num_lines += num_lines;
+
+    index = get_paren_line(buf, line_i);
+    for (; index < buf->num_parens; index++) {
+        buf->parens[index].pos.line += num_lines;
+    }
+
     return &buf->lines[line_i];
+}
+
+void remove_lines(struct buf *buf, size_t line_i, size_t num_lines)
+{
+    size_t index;
+    size_t end;
+
+    for (size_t i = 0; i < num_lines; i++) {
+        clear_line(&buf->lines[line_i + i]);
+    }
+
+    buf->num_lines -= num_lines;
+    memmove(&buf->lines[line_i], &buf->lines[line_i + num_lines],
+            sizeof(*buf->lines) * (buf->num_lines - line_i));
+
+    index = get_paren_line(buf, line_i);
+    for (end = index; end < buf->num_parens; end++) {
+        if (buf->parens[end].pos.line >= line_i + num_lines) {
+            break;
+        }
+    }
+
+    buf->num_parens -= end - index;
+    memmove(&buf->parens[index], &buf->parens[end],
+            sizeof(*buf->parens) * (buf->num_parens - index));
+
+    for (; index < buf->num_parens; index++) {
+        buf->parens[index].pos.line -= num_lines;
+    }
 }
 
 struct undo_event *indent_line(struct buf *buf, size_t line_i)
@@ -674,6 +744,8 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
             clear_line(&buf->lines[i]);
         }
         buf->num_lines = from.line + 1;
+        /* optimisation: not using `remove_lines()` */
+        buf->num_lines = get_paren_line(buf, from.line + 1);
     } else {
         tl = &buf->lines[to.line];
         /* join the current line with the last line */
@@ -681,12 +753,7 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
         fl->s = xrealloc(fl->s, fl->n);
         memcpy(&fl->s[from.col], &tl->s[to.col], tl->n - to.col);
         /* delete the remaining lines */
-        for (size_t i = from.line + 1; i <= to.line; i++) {
-            clear_line(&buf->lines[i]);
-        }
-        memmove(&fl[1], &tl[1], sizeof(*buf->lines) *
-                (buf->num_lines - to.line - 1));
-        buf->num_lines -= to.line - from.line;
+        remove_lines(buf, from.line + 1, to.line - from.line);
         mark_dirty(fl);
     }
 }
@@ -962,4 +1029,130 @@ size_t search_string(struct buf *buf, const char *s)
     buf->matches = matches;
     buf->num_matches = n;
     return n;
+}
+
+/**
+ * Gets the index where the given position should be inserted within the
+ * paranthesis list.
+ *
+ * @param buf   The buffer whose paranthesis list to use.
+ * @param pos   The position of the not yet included parenthesis.
+ *
+ * @return The index where to insert it.
+ */
+static size_t get_next_paren_index(const struct buf *buf, const struct pos *pos)
+{
+    size_t l, m, r;
+    struct paren *p;
+
+    l = 0;
+    r = buf->num_parens;
+    while (l < r) {
+        m = (l + r) / 2;
+
+        p = &buf->parens[m];
+        if (p->pos.line < pos->line || (p->pos.line == pos->line &&
+                                        p->pos.col < pos->col)) {
+            l = m + 1;
+        } else {
+            r = m;
+        }
+    }
+    return l;
+}
+
+void add_paren(struct buf *buf, const struct pos *pos, int type)
+{
+    size_t index;
+    struct paren *paren;
+
+    if (buf->num_parens + 1 >= buf->a_parens) {
+        buf->a_parens *= 2;
+        buf->a_parens++;
+        buf->parens = xreallocarray(buf->parens, buf->a_parens,
+                sizeof(*buf->parens));
+    }
+
+    index = get_next_paren_index(buf, pos);
+    memmove(&buf->parens[index + 1], &buf->parens[index],
+        sizeof(*buf->parens) * (buf->num_parens - index));
+    buf->num_parens++;
+
+    paren = &buf->parens[index];
+    paren->pos = *pos;
+    paren->type = type;
+}
+
+struct paren *get_paren(struct buf *buf, const struct pos *pos)
+{
+    size_t index;
+
+    index = get_paren_line(buf, pos->line);
+    while (index < buf->num_parens &&
+            buf->parens[index].pos.line == pos->line) {
+        if (buf->parens[index].pos.col == pos->col) {
+            return &buf->parens[index];
+        }
+        index++;
+    }
+    /* no parenthesis there */
+    return NULL;
+}
+
+void clear_parens(struct buf *buf, size_t line_i)
+{
+    size_t first_i, index;
+
+    index = get_paren_line(buf, line_i);
+    first_i = index;
+    while (index < buf->num_parens &&
+            buf->parens[index].pos.line == line_i) {
+        index++;
+    }
+
+    memmove(&buf->parens[first_i], &buf->parens[index],
+        sizeof(*buf->parens) * (buf->num_parens - index));
+    buf->num_parens -= index - first_i;
+}
+
+bool get_matching_paren(struct buf *buf, struct paren *paren, struct pos *d_p)
+{
+    struct paren *p;
+    size_t c;
+
+    p = paren;
+    if ((paren->type & FOPEN_PAREN)) {
+        /* find the corresponding closing parenthesis */
+        for (c = 1, p++; p < buf->parens + buf->num_parens; p++) {
+            if (((paren->type ^ p->type) & 0xff) == 0) {
+                if ((p->type & FOPEN_PAREN)) {
+                    c++;
+                } else {
+                    c--;
+                    if (c == 0) {
+                        *d_p = p->pos;
+                        return true;
+                    }
+                }
+            }
+        }
+    } else {
+        /* find the corresponding opening parenthesis */
+        for (c = 1; p > buf->parens; ) {
+            p--;
+            if (((paren->type ^ p->type) & 0xff) == 0) {
+                if ((p->type & FOPEN_PAREN)) {
+                    c--;
+                    if (c == 0) {
+                        *d_p = p->pos;
+                        return true;
+                    }
+                } else {
+                    c++;
+                }
+            }
+        }
+    }
+    /* there was no matching parenthesis */
+    return false;
 }

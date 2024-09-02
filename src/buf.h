@@ -84,10 +84,22 @@ struct undo_event {
 };
 
 struct match {
-    /// position the match starts from
+    /// position within the buffer of the match start
     struct pos from;
     /// end position
     struct pos to;
+};
+
+#define FOPEN_PAREN 0x10000000
+
+struct paren {
+    /// position of the paranthesis within the buffer
+    struct pos pos;
+    /**
+     * if a parenthesis is an opening one then `FOPEN_PAREN` is toggled and if
+     * two paranthesis match, the lower bits match
+     */
+    int type;
 };
 
 /**
@@ -146,6 +158,13 @@ struct buf {
     /// number of allocated lines
     size_t a_lines;
 
+    /// all parentheses within the buffer
+    struct paren *parens;
+    /// number of parentheses
+    size_t num_parens;
+    /// number of allocated paranthesis
+    size_t a_parens;
+
     /// events that occured
     struct undo_event *events;
     /// number of ecents that occured
@@ -159,6 +178,8 @@ struct buf {
     struct match *matches;
     /// number of matches in the buffer
     size_t num_matches;
+    /// number of allocated matches
+    size_t a_matches;
     /// last search pattern
     char *search_pat;
 
@@ -362,7 +383,7 @@ void _insert_block(struct buf *buf, const struct pos *pos,
 struct undo_event *break_line(struct buf *buf, const struct pos *pos);
 
 /**
- * Insert given number of lines starting from given index.
+ * Inserts given number of lines starting from given index.
  *
  * This simply inserts uninitialized lines after given index. NO clipping and NO
  * adding of an event.
@@ -374,6 +395,17 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos);
  * @return First line that was inserted.
  */
 struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines);
+
+/**
+ * Removes the given lines from the buffer.
+ *
+ * This does NOT add an event and does NO clipping.
+ *
+ * @param buf       The buffer whose lines to delete.
+ * @param line_i    The index to the first line to remove.
+ * @param num_lines The number of lines to delete.
+ */
+void remove_lines(struct buf *buf, size_t line_i, size_t num_lines);
 
 /**
  * Indents the line at `line_i`.
@@ -625,5 +657,44 @@ struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev)
  * @return The number of matches.
  */
 size_t search_string(struct buf *buf, const char *s);
+
+/**
+ * Adds the given position as parenthesis.
+ *
+ * @param buf   The buffer to add a parenthesis to.
+ * @param pos   The position of the parenthesis.
+ * @param type  The type of the parenthesis.
+ */
+void add_paren(struct buf *buf, const struct pos *pos, int type);
+
+/**
+ * Gets the parenthesis at given position.
+ *
+ * @param buf   The buffer to get the parenthesis from.
+ * @param pos   The position of the parenthesis.
+ *
+ * @return The pointer to the parenthesis within the parenthesis list of the
+ *         buffer.
+ */
+struct paren *get_paren(struct buf *buf, const struct pos *pos);
+
+/**
+ * Removes all parentheses on a line.
+ *
+ * @param buf       The buffer whose parenthesis data to modify.
+ * @param line_i    The index of the line.
+ */
+void clear_parens(struct buf *buf, size_t line_i);
+
+/**
+ * Gets the matching parenthesis within the buffer.
+ *
+ * @param buf   The buffer to get the matching parenthesis in.
+ * @param paren The parenthesis to find a match for.
+ * @param d_p   The position of the matching parenthesis.
+ *
+ * @return Whether there is a matching parenthesis.
+ */
+bool get_matching_paren(struct buf *buf, struct paren *paren, struct pos *d_p);
 
 #endif

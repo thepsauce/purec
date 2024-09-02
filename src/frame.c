@@ -624,6 +624,7 @@ int do_motion(struct frame *frame, int motion)
     int c;
     int s, o_s;
     size_t index;
+    struct paren *paren;
 
     switch (motion) {
     case MOTION_LEFT:
@@ -948,6 +949,13 @@ int do_motion(struct frame *frame, int motion)
         Core.counter = safe_mul(Core.counter, MAX(frame->h / 2, 1));
         return scroll_frame(frame, Core.counter, 1);
 
+    case MOTION_PAREN:
+        paren = get_paren(frame->buf, &frame->cur);
+        if (paren != NULL && get_matching_paren(frame->buf, paren, &pos)) {
+            set_cursor(frame, &pos);
+            return 1;
+        }
+        break;
     }
     return 0;
 }
@@ -1006,6 +1014,8 @@ int get_binded_motion(int c)
 
         ['n'] = MOTION_NEXT_OCCUR,
         ['N'] = MOTION_PREV_OCCUR,
+
+        ['%'] = MOTION_PAREN,
 
         ['K'] = MOTION_SCROLL_UP,
         ['J'] = MOTION_SCROLL_DOWN,

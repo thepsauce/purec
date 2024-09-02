@@ -77,28 +77,28 @@ static size_t c_get_identf(struct state_ctx *ctx)
     char ch;
     size_t n;
 
-    ch = ctx->s[ctx->i];
+    ch = ctx->s[ctx->pos.col];
     if (isalpha(ch) || ch == '_') {
-        for (n = 1; ctx->i + n < ctx->n; n++) {
-            ch = ctx->s[ctx->i + n];
+        for (n = 1; ctx->pos.col + n < ctx->n; n++) {
+            ch = ctx->s[ctx->pos.col + n];
             if (!isalnum(ch) && ch != '_') {
                 break;
             }
         }
 
-        if (n > 3 && ctx->s[ctx->i + n - 2] == '_' &&
-                ctx->s[ctx->i + n - 1] == 't') {
+        if (n > 3 && ctx->s[ctx->pos.col + n - 2] == '_' &&
+                ctx->s[ctx->pos.col + n - 1] == 't') {
             ctx->hi = HI_TYPE;
         } else if (bin_search(c_types, ARRAY_SIZE(c_types),
-                    &ctx->s[ctx->i], n) != NULL) {
+                    &ctx->s[ctx->pos.col], n) != NULL) {
             ctx->hi = HI_TYPE;
         } else if (bin_search(c_type_mods, ARRAY_SIZE(c_type_mods),
-                    &ctx->s[ctx->i], n) != NULL) {
+                    &ctx->s[ctx->pos.col], n) != NULL) {
             ctx->hi = HI_TYPE_MOD;
         } else if (bin_search(c_identfs, ARRAY_SIZE(c_identfs),
-                    &ctx->s[ctx->i], n) != NULL) {
+                    &ctx->s[ctx->pos.col], n) != NULL) {
             ctx->hi = HI_IDENTIFIER;
-        } else if (ctx->i + n < ctx->n && ctx->s[ctx->i + n] == '(') {
+        } else if (ctx->pos.col + n < ctx->n && ctx->s[ctx->pos.col + n] == '(') {
             ctx->hi = HI_FUNCTION;
         }
     } else {
@@ -111,14 +111,14 @@ static size_t c_get_number(struct state_ctx *ctx)
 {
     size_t n = 0;
 
-    if (isdigit(ctx->s[ctx->i]) || (ctx->i + 1 != ctx->n &&
-                ctx->s[ctx->i] == '.' &&
-            isdigit(ctx->s[ctx->i + 1]))) {
-        for (n = 1; ctx->i + n < ctx->n; n++) {
-            if (ctx->s[ctx->i + n] == '.') {
+    if (isdigit(ctx->s[ctx->pos.col]) || (ctx->pos.col + 1 != ctx->n &&
+                ctx->s[ctx->pos.col] == '.' &&
+            isdigit(ctx->s[ctx->pos.col + 1]))) {
+        for (n = 1; ctx->pos.col + n < ctx->n; n++) {
+            if (ctx->s[ctx->pos.col + n] == '.') {
                 continue;
             }
-            if (!isalnum(ctx->s[ctx->i + n])) {
+            if (!isalnum(ctx->s[ctx->pos.col + n])) {
                 break;
             }
         }
@@ -133,7 +133,7 @@ static size_t c_read_escapist(struct state_ctx *ctx, size_t i)
 {
     size_t hex_l;
 
-    switch (ctx->s[ctx->i + i]) {
+    switch (ctx->s[ctx->pos.col + i]) {
     case 'a':
     case 'b':
     case 'f':
@@ -163,8 +163,8 @@ static size_t c_read_escapist(struct state_ctx *ctx, size_t i)
         return 0;
     }
 
-    for (i++; hex_l > 0 && ctx->i + i < ctx->n; hex_l--, i++) {
-        if (!isxdigit(ctx->s[ctx->i + i])) {
+    for (i++; hex_l > 0 && ctx->pos.col + i < ctx->n; hex_l--, i++) {
+        if (!isxdigit(ctx->s[ctx->pos.col + i])) {
             return 0;
         }
     }
@@ -179,18 +179,18 @@ static size_t c_get_char(struct state_ctx *ctx)
     size_t n;
     size_t e;
 
-    if (ctx->s[ctx->i] != '\'') {
+    if (ctx->s[ctx->pos.col] != '\'') {
         return 0;
     }
 
     n = 1;
-    if (ctx->i + n == ctx->n) {
+    if (ctx->pos.col + n == ctx->n) {
         return 1;
     }
 
-    if (ctx->s[ctx->i + n] == '\\') {
+    if (ctx->s[ctx->pos.col + n] == '\\') {
         n++;
-        if (ctx->i + n == ctx->n) {
+        if (ctx->pos.col + n == ctx->n) {
             ctx->hi = HI_NORMAL;
             return 2;
         }
@@ -205,7 +205,7 @@ static size_t c_get_char(struct state_ctx *ctx)
         n++;
     }
 
-    if (ctx->i + n == ctx->n || ctx->s[ctx->i + n] != '\'') {
+    if (ctx->pos.col + n == ctx->n || ctx->s[ctx->pos.col + n] != '\'') {
         ctx->hi = HI_NORMAL;
         return n;
     }
@@ -219,13 +219,13 @@ size_t c_state_string(struct state_ctx *ctx)
     size_t n;
 
     ctx->hi = HI_STRING;
-    for (n = 0; ctx->i + n < ctx->n; n++) {
-        if (ctx->s[ctx->i + n] == '\\') {
+    for (n = 0; ctx->pos.col + n < ctx->n; n++) {
+        if (ctx->s[ctx->pos.col + n] == '\\') {
             if (n != 0) {
                 /* return the part of the string before the \ */
                 return n;
             }
-            if (ctx->i + 1 == ctx->n) {
+            if (ctx->pos.col + 1 == ctx->n) {
                 ctx->hi = HI_CHAR;
                 ctx->state |= FSTATE_MULTI;
                 return 1;
@@ -240,7 +240,7 @@ size_t c_state_string(struct state_ctx *ctx)
             return n;
         }
 
-        if (ctx->s[ctx->i + n] == '\"') {
+        if (ctx->s[ctx->pos.col + n] == '\"') {
             ctx->state >>= 8;
             n++;
             break;
@@ -251,7 +251,7 @@ size_t c_state_string(struct state_ctx *ctx)
 
 size_t c_state_include(struct state_ctx *ctx)
 {
-    switch (ctx->s[ctx->i]) {
+    switch (ctx->s[ctx->pos.col]) {
     case '\t':
     case ' ':
         ctx->hi = HI_NORMAL;
@@ -269,7 +269,7 @@ size_t c_state_include(struct state_ctx *ctx)
 
     default:
         ctx->hi = HI_ERROR;
-        return ctx->n - ctx->i;
+        return ctx->n - ctx->pos.col;
     }
 }
 
@@ -278,19 +278,19 @@ size_t c_state_include_corner(struct state_ctx *ctx)
     size_t n;
 
     ctx->hi = HI_STRING;
-    for (n = 0; ctx->i + n < ctx->n; n++) {
-        if (ctx->s[ctx->i + n] == '\\') {
+    for (n = 0; ctx->pos.col + n < ctx->n; n++) {
+        if (ctx->s[ctx->pos.col + n] == '\\') {
             if (n != 0) {
                 return n;
             }
-            if (ctx->i + 1 == ctx->n) {
+            if (ctx->pos.col + 1 == ctx->n) {
                 ctx->hi = HI_CHAR;
                 ctx->state |= FSTATE_MULTI;
             }
             return 1;
         }
 
-        if (ctx->s[ctx->i + n] == '>') {
+        if (ctx->s[ctx->pos.col + n] == '>') {
             ctx->state = C_STATE_PREPROC_TRAIL;
             n++;
             break;
@@ -304,19 +304,19 @@ size_t c_state_include_string(struct state_ctx *ctx)
     size_t n;
 
     ctx->hi = HI_STRING;
-    for (n = 0; ctx->i + n < ctx->n; n++) {
-        if (ctx->s[ctx->i + n] == '\\') {
+    for (n = 0; ctx->pos.col + n < ctx->n; n++) {
+        if (ctx->s[ctx->pos.col + n] == '\\') {
             if (n != 0) {
                 return n;
             }
-            if (ctx->i + 1 == ctx->n) {
+            if (ctx->pos.col + 1 == ctx->n) {
                 ctx->hi = HI_CHAR;
                 ctx->state |= FSTATE_MULTI;
             }
             return 1;
         }
 
-        if (ctx->s[ctx->i + n] == '\"') {
+        if (ctx->s[ctx->pos.col + n] == '\"') {
             ctx->state = C_STATE_PREPROC_TRAIL;
             n++;
             break;
@@ -328,7 +328,7 @@ size_t c_state_include_string(struct state_ctx *ctx)
 size_t c_state_preproc_trail(struct state_ctx *ctx)
 {
     ctx->hi = HI_ERROR;
-    return ctx->n - ctx->i;
+    return ctx->n - ctx->pos.col;
 }
 
 size_t c_state_common(struct state_ctx *ctx)
@@ -350,11 +350,11 @@ size_t c_state_common(struct state_ctx *ctx)
         return len;
     }
 
-    switch (ctx->s[ctx->i]) {
+    switch (ctx->s[ctx->pos.col]) {
     case '\t':
     case ' ':
-        for (len = 1; ctx->i + len < ctx->n; len++) {
-            if (!isblank(ctx->s[ctx->i + len])) {
+        for (len = 1; ctx->pos.col + len < ctx->n; len++) {
+            if (!isblank(ctx->s[ctx->pos.col + len])) {
                 break;
             }
         }
@@ -369,12 +369,12 @@ size_t c_state_common(struct state_ctx *ctx)
         return 1;
 
     case '/':
-        if (ctx->i + 1 < ctx->n) {
-            if (ctx->s[ctx->i + 1] == '/') {
+        if (ctx->pos.col + 1 < ctx->n) {
+            if (ctx->s[ctx->pos.col + 1] == '/') {
                 ctx->state = C_STATE_COMMENT;
                 return 0;
             }
-            if (ctx->s[ctx->i + 1] == '*') {
+            if (ctx->s[ctx->pos.col + 1] == '*') {
                 /* push state */
                 ctx->state <<= 8;
                 ctx->state |= C_STATE_MULTI_COMMENT;
@@ -404,14 +404,16 @@ size_t c_state_common(struct state_ctx *ctx)
     case '{':
     case '[':
         ctx->hi = HI_NORMAL;
-        add_paren(ctx);
+        add_paren(ctx->buf, &ctx->pos, ctx->s[ctx->pos.col] | FOPEN_PAREN);
         return 1;
 
     case ')':
     case '}':
     case ']':
         ctx->hi = HI_NORMAL;
-        add_paren(ctx);
+        add_paren(ctx->buf, &ctx->pos, ctx->s[ctx->pos.col] == ')' ?
+                '(' : ctx->s[ctx->pos.col] == '}' ?
+                '{' : '[');
         return 1;
     }
     return 1;
@@ -419,7 +421,7 @@ size_t c_state_common(struct state_ctx *ctx)
 
 size_t c_state_preproc(struct state_ctx *ctx)
 {
-    if (ctx->i + 1 == ctx->n && ctx->s[ctx->i] == '\\') {
+    if (ctx->pos.col + 1 == ctx->n && ctx->s[ctx->pos.col] == '\\') {
         ctx->hi = HI_PREPROC;
         ctx->state |= FSTATE_MULTI;
         return 1;
@@ -433,9 +435,9 @@ size_t c_state_start(struct state_ctx *ctx)
     size_t i;
     size_t w_i;
 
-    if (ctx->s[ctx->i] == '#') {
+    if (ctx->s[ctx->pos.col] == '#') {
         /* skip all space after '#' */
-        for (i = ctx->i + 1; i < ctx->n; i++) {
+        for (i = ctx->pos.col + 1; i < ctx->n; i++) {
             if (!isblank(ctx->s[i])) {
                 break;
             }
@@ -461,7 +463,7 @@ size_t c_state_start(struct state_ctx *ctx)
         } else if (w_i != i) {
             ctx->hi = HI_NORMAL;
         }
-        return i - ctx->i;
+        return i - ctx->pos.col;
     }
     ctx->hi = HI_NORMAL;
     return c_state_common(ctx);
@@ -473,7 +475,7 @@ size_t c_state_comment(struct state_ctx *ctx)
         ctx->state |= FSTATE_MULTI;
     }
     ctx->hi = HI_COMMENT;
-    return ctx->n - ctx->i;
+    return ctx->n - ctx->pos.col;
 }
 
 size_t c_state_multi_comment(struct state_ctx *ctx)
@@ -481,21 +483,21 @@ size_t c_state_multi_comment(struct state_ctx *ctx)
     size_t i;
 
     ctx->hi = HI_COMMENT;
-    if (ctx->i + 1 < ctx->n && ctx->s[ctx->i] == '*' &&
-            ctx->s[ctx->i + 1] == '/') {
+    if (ctx->pos.col + 1 < ctx->n && ctx->s[ctx->pos.col] == '*' &&
+            ctx->s[ctx->pos.col + 1] == '/') {
         /* pop state */
         ctx->state ^= FSTATE_MULTI;
         ctx->state >>= 8;
         return 2;
     }
-    if (ctx->s[ctx->i] == '@') {
-        for (i = ctx->i + 1; i < ctx->n; i++) {
+    if (ctx->s[ctx->pos.col] == '@') {
+        for (i = ctx->pos.col + 1; i < ctx->n; i++) {
             if (!isalpha(ctx->s[i])) {
                 break;
             }
         }
         ctx->hi = HI_JAVADOC;
-        return i - ctx->i;
+        return i - ctx->pos.col;
     }
     return 1;
 }

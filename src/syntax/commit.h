@@ -3,7 +3,7 @@
 
 size_t commit_state_start(struct state_ctx *ctx)
 {
-    switch (ctx->line_i) {
+    switch (ctx->pos.line) {
     case 0:
         break;
 
@@ -16,9 +16,9 @@ size_t commit_state_start(struct state_ctx *ctx)
         return 0;
     }
 
-    if (ctx->i >= 50) {
+    if (ctx->pos.col >= 50) {
         ctx->hi = HI_ERROR;
-        return ctx->n - ctx->i;
+        return ctx->n - ctx->pos.col;
     }
     ctx->hi = HI_NORMAL;
     if (ctx->n <= 50) {

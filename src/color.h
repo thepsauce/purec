@@ -1,7 +1,18 @@
 #ifndef COLOR_H
 #define COLOR_H
 
+/*     *           *    *
+ * *     * *    *
+ *     C*o l o*r *     **
+ *  * *    *    *  *
+ *                     */
+
 #include <ncurses.h>
+
+/**
+ * A highlight value like `HI_NORMAL` is itself the id of the color pair within
+ * ncurses and also an index into a color theme attribute array.
+ */
 
 #define HI_NORMAL       1
 #define HI_COMMENT      2
@@ -24,7 +35,8 @@
 #define HI_ADDED        19
 #define HI_REMOVED      20
 #define HI_CHANGED      21
-#define HI_MAX          22
+#define HI_PAREN_MATCH  22
+#define HI_MAX          23
 
 extern struct theme {
     const char *name;

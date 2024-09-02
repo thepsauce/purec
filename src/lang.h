@@ -12,16 +12,14 @@
 struct state_ctx {
     /// the buffer that is being highlighted
     struct buf *buf;
-    /// the current line index
-    size_t line_i;
+    /// the current position in the buffer
+    struct pos pos;
     /// the current highlight group
     unsigned hi;
     /// the current state
     unsigned state;
     /// the current line
     char *s;
-    /// the index on the current line
-    size_t i;
     /// the length of the current line
     size_t n;
 };

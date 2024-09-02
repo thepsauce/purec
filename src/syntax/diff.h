@@ -2,9 +2,9 @@ size_t diff_state_start(struct state_ctx *ctx)
 {
     size_t n;
 
-    if (ctx->i > 0) {
+    if (ctx->pos.col > 0) {
         ctx->hi = HI_NORMAL;
-        return ctx->n - ctx->i;
+        return ctx->n - ctx->pos.col;
     }
 
     switch (ctx->s[0]) {
