@@ -1,6 +1,8 @@
 #include "color.h"
 #include "util.h"
 
+#include <string.h>
+
 struct theme Themes[] = {
     {
         .name = "Term",
@@ -26,6 +28,7 @@ struct theme Themes[] = {
             [HI_ADDED] = { 2, 0, A_BOLD },
             [HI_REMOVED] = { 1, 0, A_BOLD },
             [HI_CHANGED] = { 6, 0, A_BOLD },
+            [HI_PAREN_MATCH] = { 3, 0, A_BOLD },
         },
         .colors_needed = 8,
     },
@@ -61,12 +64,13 @@ struct theme Themes[] = {
             [HI_ADDED] = { 2, 0, A_BOLD },
             [HI_REMOVED] = { 1, 0, A_BOLD },
             [HI_CHANGED] = { 6, 0, A_BOLD },
+            [HI_PAREN_MATCH] = { 3, 0, A_BOLD },
         },
         .colors_needed = 256,
     }
 };
 
-const int Theme = 0;
+int Theme = 0;
 
 static void convert_hex_to_rgb(const char *hex, int *p_r, int *p_g, int *p_b)
 {
@@ -79,14 +83,13 @@ static void convert_hex_to_rgb(const char *hex, int *p_r, int *p_g, int *p_b)
     *p_b = b * 200 / 51;
 }
 
-void init_colors(void)
+/**
+ * Sets all colors and attributes for the current theme.
+ */
+static void init_theme(void)
 {
     struct theme *t;
     int r, g, b;
-
-    if (start_color() == ERR) {
-        return;
-    }
 
     t = &Themes[Theme];
     if (can_change_color()) {
@@ -102,6 +105,26 @@ void init_colors(void)
     for (int i = 1; i < HI_MAX; i++) {
         init_pair(i, t->attribs[i][0], t->attribs[i][1]);
     }
+}
+
+void init_colors(void)
+{
+    if (start_color() == ERR) {
+        return;
+    }
+    init_theme();
+}
+
+int set_theme(const char *name)
+{
+    for (int t = 0; t < (int) ARRAY_SIZE(Themes); t++) {
+        if (strcasecmp(Themes[t].name, name) == 0) {
+            Theme = t;
+            init_theme();
+            return 0;
+        }
+    }
+    return -1;
 }
 
 void set_highlight(WINDOW *win, int hi)

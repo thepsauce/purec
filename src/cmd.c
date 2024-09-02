@@ -25,7 +25,7 @@ struct cmd_data {
 
 #include "cmd_impl.h"
 
-#define MAX_COMMAND_NAME 8
+#define MAX_COMMAND_NAME 12
 
 static const struct cmd {
     /// name of the command
@@ -44,6 +44,9 @@ static const struct cmd {
     { "bprev", ACCEPTS_NUMBER, cmd_bprev },
 
     { "buffer", ACCEPTS_NUMBER, cmd_buffer },
+
+    { "colo", 0, cmd_colorscheme },
+    { "colorscheme", 0, cmd_colorscheme },
 
     { "cq", ACCEPTS_NUMBER, cmd_cquit },
     { "cquit", ACCEPTS_NUMBER, cmd_cquit },

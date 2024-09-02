@@ -1,4 +1,4 @@
-static int cmd_buffer(struct cmd_data *cd)
+int cmd_buffer(struct cmd_data *cd)
 {
     struct buf *buf;
 
@@ -10,7 +10,7 @@ static int cmd_buffer(struct cmd_data *cd)
     return 0;
 }
 
-static int cmd_bnext(struct cmd_data *cd)
+int cmd_bnext(struct cmd_data *cd)
 {
     struct buf *buf;
 
@@ -31,7 +31,7 @@ static int cmd_bnext(struct cmd_data *cd)
     return 0;
 }
 
-static int cmd_bprev(struct cmd_data *cd)
+int cmd_bprev(struct cmd_data *cd)
 {
     struct buf *buf;
 
@@ -48,6 +48,15 @@ static int cmd_bprev(struct cmd_data *cd)
         }
     }
     set_frame_buffer(SelFrame, buf);
+    return 0;
+}
+
+int cmd_colorscheme(struct cmd_data *cd)
+{
+    if (set_theme(cd->arg) == -1) {
+        set_error("color scheme '%s' does not exist", cd->arg);
+        return -1;
+    }
     return 0;
 }
 

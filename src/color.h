@@ -45,11 +45,30 @@ extern struct theme {
     int colors_needed;
 } Themes[];
 
-extern const int Theme;
+extern int Theme;
 
 #define get_attrib_of(hi) (Themes[Theme].attribs[hi][2])
 
+/**
+ * Initializes the colors.
+ */
 void init_colors(void);
+
+/**
+ * Sets the current theme to given theme name.
+ *
+ * @param name  The name of the theme.
+ *
+ * @return 0 if the theme was set, -1 if it does not exist.
+ */
+int set_theme(const char *name);
+
+/**
+ * Sets the attributes of given window to the highlight.
+ *
+ * @param win   The window whose attributes to set.
+ * @param hi    The highlighting to use.
+ */
 void set_highlight(WINDOW *win, int hi);
 
 #endif
