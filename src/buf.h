@@ -14,18 +14,19 @@
 #include <sys/stat.h>
 
 /// at which number of bytes to start writing to the undo file
-#define HUGE_UNDO_THRESHOLD 64
+#define HUGE_UNDO_THRESHOLD 128
 
 /**
  * This undo works by caching small text segments and writing huge text segments
  * to a file. If the `lines` variable of a segment is `NULL`, then that means
  * the contents of that segments are within the file and can be located using
- * `file_pos`. To get these lines, `load_undo_data(i)` should be used and then
- * after finished, `unload_undo_data(i)`.
+ * `file_pos`. To get these lines, `seg = load_undo_data(i)` should be used and
+ * then after finished, `unload_undo_data(seg)`.
  */
 extern struct undo {
     /// the off memory file for large text segments
     FILE *fp;
+    /// the undo data segments
     struct undo_seg {
         /// the raw string data
         char *data;
@@ -146,9 +147,11 @@ struct buf {
     size_t a_lines;
 
     /// events that occured
-    struct undo_event **events;
+    struct undo_event *events;
     /// number of ecents that occured
     size_t num_events;
+    /// number of allocated events
+    size_t a_events;
     /// current event index (1 based)
     size_t event_i;
 

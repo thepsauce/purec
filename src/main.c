@@ -675,7 +675,7 @@ int main(int argc, char **argv)
         if (old_frame->buf->event_i > 0) {
             mark = &Core.marks['.' - MARK_MIN];
             mark->buf = old_frame->buf;
-            mark->pos = old_frame->buf->events[old_frame->buf->event_i - 1]->cur;
+            mark->pos = old_frame->buf->events[old_frame->buf->event_i - 1].cur;
         }
 
         /* this combines events originating from a single keybind or an entire
@@ -683,7 +683,7 @@ int main(int argc, char **argv)
          */
         if (old_frame == SelFrame) {
             for (size_t i = first_event + 1; i < SelFrame->buf->event_i; i++) {
-                SelFrame->buf->events[i - 1]->flags |= IS_TRANSIENT;
+                SelFrame->buf->events[i - 1].flags |= IS_TRANSIENT;
             }
         }
     }

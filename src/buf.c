@@ -190,9 +190,6 @@ void destroy_buffer(struct buf *buf)
         clear_line(&buf->lines[i]);
     }
     free(buf->lines);
-    for (size_t i = 0; i < buf->num_events; i++) {
-        free(buf->events[i]);
-    }
     free(buf->events);
     free(buf->matches);
     free(buf->search_pat);

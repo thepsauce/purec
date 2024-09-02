@@ -17,8 +17,8 @@ static void attempt_join(void)
     struct undo_event *prev_ev, *ev;
 
     for (size_t i = Core.ev_from_ins + 1; i < SelFrame->buf->event_i; i++) {
-        prev_ev = SelFrame->buf->events[i - 1];
-        ev = SelFrame->buf->events[i];
+        prev_ev = &SelFrame->buf->events[i - 1];
+        ev = &SelFrame->buf->events[i];
         if (should_join(prev_ev, ev)) {
             prev_ev->flags |= IS_TRANSIENT;
         }
@@ -45,16 +45,16 @@ static void repeat_last_insertion(void)
 
     /* check if there is only a SINGLE transient chain */
     for (size_t i = Core.ev_from_ins + 1; i < buf->event_i; i++) {
-        ev = buf->events[i - 1];
+        ev = &buf->events[i - 1];
         if (!(ev->flags & IS_TRANSIENT)) {
             return;
         }
     }
 
     /* combine the events (we only expect insertion and deletion events) */
-    cur = buf->events[Core.ev_from_ins]->pos;
+    cur = buf->events[Core.ev_from_ins].pos;
     for (size_t i = Core.ev_from_ins; i < buf->event_i; i++) {
-        ev = buf->events[i];
+        ev = &buf->events[i];
         seg = ev->seg;
         load_undo_data(seg);
         if ((ev->flags & IS_INSERTION)) {
@@ -134,7 +134,7 @@ static void repeat_last_insertion(void)
         goto end;
     }
 
-    buf->events[buf->event_i - 1]->flags |= IS_TRANSIENT;
+    buf->events[buf->event_i - 1].flags |= IS_TRANSIENT;
     repeat = Core.counter - 1;
     for (size_t i = 0; i <= Core.move_down_count; i++, cur.line++) {
         if (cur.line >= SelFrame->buf->num_lines) {
@@ -253,7 +253,9 @@ int insert_handle_input(int c)
         lines[0].n = 1;
         ev = insert_lines(buf, &SelFrame->cur, lines, 1, 1);
         ev->cur = SelFrame->cur;
-        (void) move_dir(SelFrame, 1, 1);
+        SelFrame->cur.col++;
+        SelFrame->vct = SelFrame->cur.col;
+        adjust_scroll(SelFrame);
         return UPDATE_UI;
     }
     return do_motion(SelFrame, motions[c]);

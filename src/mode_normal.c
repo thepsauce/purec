@@ -240,7 +240,10 @@ int normal_handle_input(int c)
             to.line = safe_add(from.line, Core.counter - 1);
             to.col = SIZE_MAX;
             ev = delete_range(buf, &from, &to);
-            (void) indent_line(buf, from.line);
+            ev_nn = indent_line(buf, from.line);
+            if (ev_nn != NULL && ev != NULL) {
+                ev = ev_nn - 1;
+            }
             from.col = buf->lines[from.line].n;
             set_cursor(SelFrame, &from);
             break;
@@ -356,13 +359,13 @@ int normal_handle_input(int c)
             to.line++;
             to.col = get_line_indent(buf, to.line);
             ev = delete_range(buf, &from, &to);
+            ev->cur = SelFrame->cur;
             if (from.col > 0 && from.col != buf->lines[from.line].n &&
                     !isblank(buf->lines[from.line].s[from.col - 1])) {
                 init_raw_line(&lines[0], " ", 1);
                 (void) insert_lines(buf, &from, lines, 1, 1);
                 free(lines[0].s);
             }
-            ev->cur = SelFrame->cur;
         }
         return UPDATE_UI;
 
@@ -378,13 +381,11 @@ int normal_handle_input(int c)
             ev = delete_range(buf, &SelFrame->cur, &cur);
             if (ev != NULL) {
                 ev->cur = SelFrame->cur;
-                ev->flags |= IS_TRANSIENT;
             }
             ev = break_line(buf, &SelFrame->cur);
         } else {
             ConvChar = c;
             ev = change_range(buf, &SelFrame->cur, &cur, conv_to_char);
-            ev->cur = SelFrame->cur;
         }
         ev->cur = SelFrame->cur;
         set_cursor(SelFrame, &cur);
@@ -672,6 +673,7 @@ int normal_handle_input(int c)
         cur = SelFrame->cur;
         ev = NULL;
         switch (e_c) {
+        /* yank entire line */
         case 'y':
             to.line = safe_add(cur.line, Core.counter);
             if (to.line > buf->num_lines) {
@@ -690,6 +692,7 @@ int normal_handle_input(int c)
             }
             break;
 
+        /* yank till motion */
         default:
             motion = get_binded_motion(e_c);
             do_motion(SelFrame, motion);

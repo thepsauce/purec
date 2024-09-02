@@ -40,18 +40,6 @@ static int compare_segments(struct undo_seg *a, struct undo_seg *b)
     if (a->data_len < b->data_len) {
         return -1;
     }
-    if (a->num_lines > b->num_lines) {
-        return 1;
-    }
-
-    for (size_t i = 0; i < a->num_lines; i++) {
-        if (a->lines[i].n < b->lines[i].n) {
-            return -1;
-        }
-        if (a->lines[i].n > b->lines[i].n) {
-            return 1;
-        }
-    }
 
     if (a->data_len > b->data_len) {
         return 1;
@@ -191,14 +179,16 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
     struct undo_event *ev;
     size_t max_n;
 
-    /* free old events */
-    for (size_t i = buf->event_i; i < buf->num_events; i++) {
-        free(buf->events[i]);
+    if (buf->event_i + 1 >= buf->a_events) {
+        buf->a_events *= 2;
+        buf->a_events++;
+        buf->events = xreallocarray(buf->events, buf->a_events,
+                sizeof(*buf->events));
     }
 
-    buf->events = xreallocarray(buf->events, buf->event_i + 1,
-            sizeof(*buf->events));
-    ev = xmalloc(sizeof(*ev));
+    ev = &buf->events[buf->event_i++];
+    buf->num_events = buf->event_i;
+
     ev->flags = flags;
     ev->pos = *pos;
     if ((flags & IS_BLOCK)) {
@@ -271,7 +261,7 @@ struct undo_event *undo_event(struct buf *buf)
     }
 
     do {
-        ev = buf->events[--buf->event_i];
+        ev = &buf->events[--buf->event_i];
         /* reverse the insertion/deletion flags to undo */
         flags = ev->flags;
         if ((flags & (IS_INSERTION | IS_DELETION))) {
@@ -279,7 +269,7 @@ struct undo_event *undo_event(struct buf *buf)
         }
         do_event(buf, ev, flags);
     } while (buf->event_i > 0 &&
-            (buf->events[buf->event_i - 1]->flags & IS_TRANSIENT));
+            (buf->events[buf->event_i - 1].flags & IS_TRANSIENT));
     return ev;
 }
 
@@ -292,7 +282,7 @@ struct undo_event *redo_event(struct buf *buf)
     }
 
     do {
-        ev = buf->events[buf->event_i++];
+        ev = &buf->events[buf->event_i++];
         do_event(buf, ev, ev->flags);
     } while ((ev->flags & IS_TRANSIENT) && buf->event_i != buf->num_events);
     return ev;
