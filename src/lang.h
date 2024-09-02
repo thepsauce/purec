@@ -6,11 +6,14 @@
 #define NO_LANG     0
 #define C_LANG      1
 #define DIFF_LANG   2
-#define NUM_LANGS   3
+#define COMMIT_LANG 3
+#define NUM_LANGS   4
 
 struct state_ctx {
     /// the buffer that is being highlighted
     struct buf *buf;
+    /// the current line index
+    size_t line_i;
     /// the current highlight group
     unsigned hi;
     /// the current state
@@ -30,6 +33,9 @@ struct state_ctx {
  */
 typedef size_t (*state_proc_t)(struct state_ctx *ctx);
 
+/**
+ * Defined in "render_frame.c".
+ */
 extern struct lang {
     /// name of the language
     const char *name;

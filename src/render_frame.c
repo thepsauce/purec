@@ -75,11 +75,13 @@ static void add_paren(struct state_ctx *ctx)
 #include "syntax/none.h"
 #include "syntax/c.h"
 #include "syntax/diff.h"
+#include "syntax/commit.h"
 
 struct lang Langs[] = {
-    { "none", none_lang_states, "\0" },
-    { "C", c_lang_states, "c\0h\0cpp\0cxx\0c++\0hpp\0hxx\0h++\0" },
-    { "diff", diff_lang_states, "diff\0patch\0" },
+    [NO_LANG] = { "none", none_lang_states, "\0" },
+    [C_LANG] = { "C", c_lang_states, "c\0h\0cpp\0cxx\0c++\0hpp\0hxx\0h++\0" },
+    [DIFF_LANG] = { "diff", diff_lang_states, "diff\0patch\0" },
+    [COMMIT_LANG] = { "commit", commit_lang_states, "commit*\0" },
 };
 
 /**
@@ -101,6 +103,7 @@ static void highlight_line(struct buf *buf, size_t line_i, size_t state)
     memset(line->attribs, 0, sizeof(*line->attribs) * line->n);
 
     ctx.buf = buf;
+    ctx.line_i = line_i;
     ctx.state = state;
     ctx.hi = HI_NORMAL;
     ctx.s = line->s;

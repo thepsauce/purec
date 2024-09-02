@@ -1,0 +1,62 @@
+#define COMMIT_STATE_SECOND 2
+#define COMMIT_STATE_REST   3
+
+size_t commit_state_start(struct state_ctx *ctx)
+{
+    switch (ctx->line_i) {
+    case 0:
+        break;
+
+    case 1:
+        ctx->state = COMMIT_STATE_SECOND;
+        return 0;
+
+    default:
+        ctx->state = COMMIT_STATE_REST;
+        return 0;
+    }
+
+    if (ctx->i >= 50) {
+        ctx->hi = HI_ERROR;
+        return ctx->n - ctx->i;
+    }
+    ctx->hi = HI_NORMAL;
+    if (ctx->n <= 50) {
+        return ctx->n;
+    }
+    return 50;
+}
+
+size_t commit_state_second(struct state_ctx *ctx)
+{
+    if (ctx->s[0] == '#') {
+        ctx->state = COMMIT_STATE_REST;
+        return 0;
+    }
+    ctx->hi = HI_ERROR;
+    return ctx->n;
+}
+
+size_t commit_state_rest(struct state_ctx *ctx)
+{
+    size_t n;
+
+    for (n = 0; n < ctx->n; n++) {
+        if (!isblank(ctx->s[n])) {
+            break;
+        }
+    }
+    if (n == ctx->n || ctx->s[n] != '#') {
+        ctx->hi = HI_NORMAL;
+        return ctx->n;
+    }
+
+    ctx->hi = HI_COMMENT;
+    return ctx->n;
+}
+
+state_proc_t commit_lang_states[] = {
+    [STATE_START] = commit_state_start,
+    [COMMIT_STATE_SECOND] = commit_state_second,
+    [COMMIT_STATE_REST] = commit_state_rest,
+};

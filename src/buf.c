@@ -58,8 +58,8 @@ struct buf *create_buffer(const char *path)
  * Finds given string within a null terminated string list.
  *
  * `s_list` is a null terminated string list, the end is marked by a double null
- * terminator. Only if the given string begins with any of the strings in `s_list`,
- * true is returned.
+ * terminator. Only if the given string is equal to any of the strings in `s_list`,
+ * or the first mismatcing character is an asterisk, then true is returned.
  *
  * @param s_list    The list of strings.
  * @param s         The string to check.
@@ -67,11 +67,13 @@ struct buf *create_buffer(const char *path)
  *
  * @return Whether the string was found.
  */
-static bool has_prefix(const char *s_list, const char *s, size_t s_len)
+static bool find_string_in_list(const char *s_list, const char *s, size_t s_len)
 {
-    for (size_t i = 0; i < s_len; ) {
-        if (s_list[i] != s[i]) {
-            if (s_list[i] == '\0') {
+    size_t i;
+
+    for (i = 0; i < s_len; ) {
+        if (tolower(s_list[i]) != tolower(s[i])) {
+            if (s_list[i] == '*') {
                 return true;
             }
             while (s_list[i] != '\0') {
@@ -88,7 +90,7 @@ static bool has_prefix(const char *s_list, const char *s, size_t s_len)
             i++;
         }
     }
-    return true;
+    return s_list[i] == '\0' || s_list[i] == '*';
 }
 
 size_t detect_language(struct buf *buf)
@@ -126,7 +128,7 @@ size_t detect_language(struct buf *buf)
     }
 
     for (int l = 1; l < NUM_LANGS; l++) {
-        if (has_prefix(Langs[l].file_exts, ext, end - ext)) {
+        if (find_string_in_list(Langs[l].file_exts, ext, end - ext)) {
             return l;
         }
     }

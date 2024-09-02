@@ -1,6 +1,6 @@
 size_t diff_state_start(struct state_ctx *ctx)
 {
-    unsigned n;
+    size_t n;
 
     if (ctx->i > 0) {
         ctx->hi = HI_NORMAL;
