@@ -1,3 +1,4 @@
+#include "color.h"
 #include "lang.h"
 #include "xalloc.h"
 
@@ -724,15 +725,13 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
     from = *pfrom;
     to = *pto;
 
-    update_dirty_lines(buf, from.line, from.line == to.line ? from.line :
-            from.line + 1);
-
     fl = &buf->lines[from.line];
     if (from.line == to.line) {
         fl->n -= to.col;
         memmove(&fl->s[from.col], &fl->s[to.col], fl->n);
         fl->n += from.col;
         mark_dirty(fl);
+        update_dirty_lines(buf, from.line, from.line);
     } else if (to.line >= buf->num_lines) {
         /* trim the line */
         fl->n = from.col;
@@ -745,7 +744,8 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
         }
         buf->num_lines = from.line + 1;
         /* optimisation: not using `remove_lines()` */
-        buf->num_lines = get_paren_line(buf, from.line + 1);
+        buf->num_parens = get_paren_line(buf, from.line + 1);
+        update_dirty_lines(buf, from.line, from.line);
     } else {
         tl = &buf->lines[to.line];
         /* join the current line with the last line */
@@ -755,6 +755,8 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
         /* delete the remaining lines */
         remove_lines(buf, from.line + 1, to.line - from.line);
         mark_dirty(fl);
+        mark_dirty(&fl[1]);
+        update_dirty_lines(buf, from.line, from.line + 1);
     }
 }
 
@@ -1032,6 +1034,80 @@ size_t search_string(struct buf *buf, const char *s)
 }
 
 /**
+ * Highlights a line with syntax highlighting.
+ *
+ * @param buf       The buffer containing the line.
+ * @param line_i    The index of the line to highlight.
+ * @param state     The starting state.
+ */
+static void highlight_line(struct buf *buf, size_t line_i, size_t state)
+{
+    struct state_ctx ctx;
+    size_t n;
+    struct line *line;
+
+    line = &buf->lines[line_i];
+    line->attribs = xreallocarray(line->attribs, line->n,
+            sizeof(*line->attribs));
+    memset(line->attribs, 0, sizeof(*line->attribs) * line->n);
+
+    ctx.buf = buf;
+    ctx.pos.col = 0;
+    ctx.pos.line = line_i;
+    ctx.state = state;
+    ctx.hi = HI_NORMAL;
+    ctx.s = line->s;
+    ctx.n = line->n;
+
+    clear_parens(buf, line_i);
+
+    for (ctx.pos.col = 0; ctx.pos.col < ctx.n; ) {
+        n = (*Langs[buf->lang].fsm[ctx.state & 0xff])(&ctx);
+        for (; n > 0; n--) {
+            line->attribs[ctx.pos.col] = ctx.hi;
+            ctx.pos.col++;
+        }
+    }
+
+    if (!(ctx.state & (FSTATE_MULTI | FSTATE_FORCE_MULTI))) {
+        ctx.state = STATE_START;
+    }
+
+    line->state = ctx.state & ~FSTATE_MULTI;
+}
+
+void clean_lines(struct buf *buf, size_t last_line)
+{
+    unsigned prev_state;
+    struct line *line;
+
+    prev_state = buf->min_dirty_i == 0 ? STATE_START :
+        buf->min_dirty_i == SIZE_MAX ? 0 :
+        buf->lines[buf->min_dirty_i - 1].state;
+    for (size_t i = buf->min_dirty_i; i < last_line; i++) {
+        line = &buf->lines[i];
+        if (line->state == 0) {
+            highlight_line(buf, i, prev_state);
+            if (i + 1 != buf->num_lines &&
+                    (line->state != STATE_START ||
+                     line->prev_state != STATE_START)) {
+                mark_dirty(&line[1]);
+                buf->max_dirty_i = MAX(buf->max_dirty_i, i + 1);
+            }
+        }
+        prev_state = line->state;
+    }
+
+    /* update dirty lines for the buffer */
+    if (last_line > buf->max_dirty_i) {
+        buf->min_dirty_i = SIZE_MAX;
+        buf->max_dirty_i = 0;
+    } else {
+        buf->min_dirty_i = MAX(buf->min_dirty_i, last_line);
+    }
+}
+
+/**
  * Gets the index where the given position should be inserted within the
  * paranthesis list.
  *
@@ -1083,20 +1159,30 @@ void add_paren(struct buf *buf, const struct pos *pos, int type)
     paren->type = type;
 }
 
-struct paren *get_paren(struct buf *buf, const struct pos *pos)
+size_t get_paren(struct buf *buf, const struct pos *pos)
 {
-    size_t index;
+    size_t first_i, index;
 
-    index = get_paren_line(buf, pos->line);
+    clean_lines(buf, pos->line + 1);
+
+    first_i = get_paren_line(buf, pos->line);
+    index = first_i;
     while (index < buf->num_parens &&
             buf->parens[index].pos.line == pos->line) {
+        if (buf->parens[index].pos.col > pos->col) {
+            break;
+        }
         if (buf->parens[index].pos.col == pos->col) {
-            return &buf->parens[index];
+            return index;
         }
         index++;
     }
+    if (index > first_i &&
+           buf->parens[index - 1].pos.col + 1 == pos->col) {
+       return index - 1;
+    }
     /* no parenthesis there */
-    return NULL;
+    return SIZE_MAX;
 }
 
 void clear_parens(struct buf *buf, size_t line_i)
@@ -1115,16 +1201,19 @@ void clear_parens(struct buf *buf, size_t line_i)
     buf->num_parens -= index - first_i;
 }
 
-bool get_matching_paren(struct buf *buf, struct paren *paren, struct pos *d_p)
+bool get_matching_paren(struct buf *buf, size_t paren_i, struct pos *d_p)
 {
-    struct paren *p;
+    struct paren *paren, *p;
     size_t c;
 
-    p = paren;
+    paren = &buf->parens[paren_i];
     if ((paren->type & FOPEN_PAREN)) {
+        clean_lines(buf, buf->num_lines);
+        /* set it again because the base pointer might have changed */
+        paren = &buf->parens[paren_i];
         /* find the corresponding closing parenthesis */
-        for (c = 1, p++; p < buf->parens + buf->num_parens; p++) {
-            if (((paren->type ^ p->type) & 0xff) == 0) {
+        for (p = paren, c = 1, p++; p < buf->parens + buf->num_parens; p++) {
+            if (((paren->type ^ p->type) & ~FOPEN_PAREN) == 0) {
                 if ((p->type & FOPEN_PAREN)) {
                     c++;
                 } else {
@@ -1137,10 +1226,13 @@ bool get_matching_paren(struct buf *buf, struct paren *paren, struct pos *d_p)
             }
         }
     } else {
+        clean_lines(buf, paren->pos.line + 1);
+        /* set it again because the base pointer might have changed */
+        paren = &buf->parens[paren_i];
         /* find the corresponding opening parenthesis */
-        for (c = 1; p > buf->parens; ) {
+        for (p = paren, c = 1; p > buf->parens; ) {
             p--;
-            if (((paren->type ^ p->type) & 0xff) == 0) {
+            if (((paren->type ^ p->type) & ~FOPEN_PAREN) == 0) {
                 if ((p->type & FOPEN_PAREN)) {
                     c--;
                     if (c == 0) {

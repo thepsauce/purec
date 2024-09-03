@@ -624,7 +624,6 @@ int do_motion(struct frame *frame, int motion)
     int c;
     int s, o_s;
     size_t index;
-    struct paren *paren;
 
     switch (motion) {
     case MOTION_LEFT:
@@ -950,8 +949,8 @@ int do_motion(struct frame *frame, int motion)
         return scroll_frame(frame, Core.counter, 1);
 
     case MOTION_PAREN:
-        paren = get_paren(frame->buf, &frame->cur);
-        if (paren != NULL && get_matching_paren(frame->buf, paren, &pos)) {
+        index = get_paren(frame->buf, &frame->cur);
+        if (index != SIZE_MAX && get_matching_paren(frame->buf, index, &pos)) {
             set_cursor(frame, &pos);
             return 1;
         }

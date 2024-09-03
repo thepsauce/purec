@@ -68,9 +68,9 @@
     [?] Add jump list to each frame (or buffer?)
 
 [-] Add syntax highlighting
+    [X] Add paran matching
     [-] Add C syntax
         [X] Add core syntax
-        [ ] Add paran matching
         [ ] Add auto indentation
     [ ] Add git syntax
 

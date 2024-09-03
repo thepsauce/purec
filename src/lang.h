@@ -9,6 +9,14 @@
 #define COMMIT_LANG 3
 #define NUM_LANGS   4
 
+#define STATE_NULL      0
+#define STATE_START     1
+
+/// if the state always wants to continue to the next line
+#define FSTATE_FORCE_MULTI 0x80000000
+/// if the state wants to continue to the next line only if a condition is met
+#define FSTATE_MULTI 0x40000000
+
 struct state_ctx {
     /// the buffer that is being highlighted
     struct buf *buf;

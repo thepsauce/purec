@@ -5,7 +5,7 @@
  * *     * *    *
  *     C*o l o*r *     **
  *  * *    *    *  *
- *                     */
+ *       *       *     */
 
 #include <ncurses.h>
 

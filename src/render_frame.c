@@ -29,14 +29,6 @@ struct render_info {
     struct selection sel;
 };
 
-#define STATE_NULL      0
-#define STATE_START     1
-
-/// if the state always wants to continue to the next line
-#define FSTATE_FORCE_MULTI 0x80000000
-/// if the state wants to continue to the next line only if a condition is met
-#define FSTATE_MULTI 0x40000000
-
 static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
 {
     size_t l, m, r;
@@ -73,49 +65,6 @@ struct lang Langs[] = {
     [DIFF_LANG] = { "diff", diff_lang_states, "diff\0patch\0" },
     [COMMIT_LANG] = { "commit", commit_lang_states, "commit*\0" },
 };
-
-/**
- * Highlights a line with syntax highlighting.
- *
- * @param buf       The buffer containing the line.
- * @param line_i    The index of the line to highlight.
- * @param state     The starting state.
- */
-static void highlight_line(struct buf *buf, size_t line_i, size_t state)
-{
-    struct state_ctx ctx;
-    size_t n;
-    struct line *line;
-
-    line = &buf->lines[line_i];
-    line->attribs = xreallocarray(line->attribs, line->n,
-            sizeof(*line->attribs));
-    memset(line->attribs, 0, sizeof(*line->attribs) * line->n);
-
-    ctx.buf = buf;
-    ctx.pos.col = 0;
-    ctx.pos.line = line_i;
-    ctx.state = state;
-    ctx.hi = HI_NORMAL;
-    ctx.s = line->s;
-    ctx.n = line->n;
-
-    clear_parens(buf, line_i);
-
-    for (ctx.pos.col = 0; ctx.pos.col < ctx.n; ) {
-        n = (*Langs[buf->lang].fsm[ctx.state & 0xff])(&ctx);
-        for (; n > 0; n--) {
-            line->attribs[ctx.pos.col] = ctx.hi;
-            ctx.pos.col++;
-        }
-    }
-
-    if (!(ctx.state & (FSTATE_MULTI | FSTATE_FORCE_MULTI))) {
-        ctx.state = STATE_START;
-    }
-
-    line->state = ctx.state & ~FSTATE_MULTI;
-}
 
 /**
  * Renders a line using its cached attribute data.
@@ -160,33 +109,6 @@ static void render_line(struct render_info *ri)
     }
 }
 
-void clean_lines(struct buf *buf)
-{
-    struct line *line;
-    size_t prev_state;
-
-    prev_state = buf->min_dirty_i == 0 ? STATE_START :
-        buf->min_dirty_i == SIZE_MAX ? 0 :
-        buf->lines[buf->min_dirty_i - 1].state;
-    for (size_t i = buf->min_dirty_i;; i++) {
-        line = &buf->lines[i];
-        if (line->state == 0) {
-            highlight_line(buf, i, prev_state);
-            if ((line->state != STATE_START ||
-                    line->prev_state != STATE_START) &&
-                    i + 1 != buf->num_lines) {
-                mark_dirty(&line[1]);
-            }
-        } else if (i > buf->max_dirty_i) {
-            break;
-        }
-        prev_state = line->state;
-    }
-
-    buf->min_dirty_i = SIZE_MAX;
-    buf->max_dirty_i = 0;
-}
-
 /**
  * Puts the visual position of given position into `p_x`, `p_y` and returns
  * whether the visual position is visible.
@@ -212,11 +134,10 @@ void render_frame(struct frame *frame)
     struct render_info ri;
     size_t line;
     size_t last_line;
-    size_t prev_state;
     int x, y, w, h;
     int orig_x;
-    struct paren *paren;
-    struct pos match_p;
+    size_t paren_i;
+    struct pos p, match_p;
     int p_x, p_y;
 
     buf = frame->buf;
@@ -229,37 +150,10 @@ void render_frame(struct frame *frame)
         ri.sel_exists = get_selection(&ri.sel);
     }
 
-    /* highlight all visible dirty lines, this must also include those lines
-     * that are above the visible region
-     */
     last_line = frame->scroll.line + frame->h - 1;
     last_line = MIN(last_line, frame->buf->num_lines);
 
-    prev_state = buf->min_dirty_i == 0 ? STATE_START :
-        buf->min_dirty_i == SIZE_MAX ? 0 :
-        buf->lines[buf->min_dirty_i - 1].state;
-    for (size_t i = buf->min_dirty_i; i < last_line; i++) {
-        ri.line_i = i;
-        ri.line = &buf->lines[i];
-        if (ri.line->state == 0) {
-            highlight_line(buf, i, prev_state);
-            if (i + 1 != buf->num_lines &&
-                    (ri.line->state != STATE_START ||
-                     ri.line->prev_state != STATE_START)) {
-                mark_dirty(&ri.line[1]);
-                buf->max_dirty_i = MAX(buf->max_dirty_i, i + 1);
-            }
-        }
-        prev_state = ri.line->state;
-    }
-
-    /* update dirty lines for the buffer */
-    if (last_line > buf->max_dirty_i) {
-        buf->min_dirty_i = SIZE_MAX;
-        buf->max_dirty_i = 0;
-    } else {
-        buf->min_dirty_i = MAX(buf->min_dirty_i, last_line);
-    }
+    clean_lines(buf, last_line);
 
     orig_x = frame->x > 0;
     get_text_rect(frame, &x, &y, &w, &h);
@@ -293,11 +187,13 @@ void render_frame(struct frame *frame)
         render_line(&ri);
     }
 
-    paren = get_paren(buf, &frame->cur);
-    if (paren != NULL && get_matching_paren(buf, paren, &match_p)) {
+    /* highlight matching parentheses */
+    paren_i = get_paren(buf, &frame->cur);
+    if (paren_i != SIZE_MAX && get_matching_paren(buf, paren_i, &match_p)) {
         set_highlight(stdscr, HI_PAREN_MATCH);
-        if (translate_pos(frame, &frame->cur, x, y, w, h, &p_x, &p_y)) {
-            mvaddch(p_y, p_x, buf->lines[paren->pos.line].s[paren->pos.col]);
+        p = buf->parens[paren_i].pos;
+        if (translate_pos(frame, &p, x, y, w, h, &p_x, &p_y)) {
+            mvaddch(p_y, p_x, buf->lines[p.line].s[p.col]);
         }
         if (translate_pos(frame, &match_p, x, y, w, h, &p_x, &p_y)) {
             mvaddch(p_y, p_x, buf->lines[match_p.line].s[match_p.col]);

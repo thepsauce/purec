@@ -28,7 +28,7 @@ struct theme Themes[] = {
             [HI_ADDED] = { 2, 0, A_BOLD },
             [HI_REMOVED] = { 1, 0, A_BOLD },
             [HI_CHANGED] = { 6, 0, A_BOLD },
-            [HI_PAREN_MATCH] = { 3, 0, A_BOLD },
+            [HI_PAREN_MATCH] = { 3, 0, A_BOLD | A_UNDERLINE },
         },
         .colors_needed = 8,
     },
@@ -64,7 +64,7 @@ struct theme Themes[] = {
             [HI_ADDED] = { 2, 0, A_BOLD },
             [HI_REMOVED] = { 1, 0, A_BOLD },
             [HI_CHANGED] = { 6, 0, A_BOLD },
-            [HI_PAREN_MATCH] = { 3, 0, A_BOLD },
+            [HI_PAREN_MATCH] = { 3, 0, A_BOLD | A_UNDERLINE },
         },
         .colors_needed = 256,
     }

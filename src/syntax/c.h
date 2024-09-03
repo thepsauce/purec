@@ -7,6 +7,9 @@
 #define C_STATE_PREPROC                 8
 #define C_STATE_PREPROC_TRAIL           9
 
+#define C_PAREN_STRING_MASK     0x100
+#define C_PAREN_COMMENT_MASK    0x200
+
 const char *c_types[] = {
     "FILE",
     "bool",
@@ -214,6 +217,30 @@ static size_t c_get_char(struct state_ctx *ctx)
     return n + 1;
 }
 
+static inline void check_paren(struct state_ctx *ctx, size_t i, int flags)
+{
+    struct pos pos;
+
+    switch (ctx->s[i]) {
+    case '(':
+    case '{':
+    case '[':
+        pos.col = i;
+        pos.line = ctx->pos.line;
+        add_paren(ctx->buf, &pos, FOPEN_PAREN | flags | ctx->s[i]);
+        break;;
+
+    case ')':
+    case '}':
+    case ']':
+        pos.col = i;
+        pos.line = ctx->pos.line;
+        add_paren(ctx->buf, &pos, flags | (ctx->s[i] == ')' ? '(' :
+                ctx->s[i] == '}' ? '{' : '['));
+        break;
+    }
+}
+
 size_t c_state_string(struct state_ctx *ctx)
 {
     size_t n;
@@ -245,6 +272,8 @@ size_t c_state_string(struct state_ctx *ctx)
             n++;
             break;
         }
+
+        check_paren(ctx, ctx->pos.col + n, C_PAREN_STRING_MASK);
     }
     return n;
 }
@@ -378,6 +407,7 @@ size_t c_state_common(struct state_ctx *ctx)
                 /* push state */
                 ctx->state <<= 8;
                 ctx->state |= C_STATE_MULTI_COMMENT;
+                add_paren(ctx->buf, &ctx->pos, FOPEN_PAREN | '*');
                 return 0;
             }
         }
@@ -400,22 +430,10 @@ size_t c_state_common(struct state_ctx *ctx)
         ctx->hi = HI_OPERATOR;
         return 1;
 
-    case '(':
-    case '{':
-    case '[':
-        ctx->hi = HI_NORMAL;
-        add_paren(ctx->buf, &ctx->pos, ctx->s[ctx->pos.col] | FOPEN_PAREN);
-        return 1;
-
-    case ')':
-    case '}':
-    case ']':
-        ctx->hi = HI_NORMAL;
-        add_paren(ctx->buf, &ctx->pos, ctx->s[ctx->pos.col] == ')' ?
-                '(' : ctx->s[ctx->pos.col] == '}' ?
-                '{' : '[');
-        return 1;
+    default:
+        check_paren(ctx, ctx->pos.col, 0);
     }
+    ctx->hi = HI_NORMAL;
     return 1;
 }
 
@@ -483,14 +501,18 @@ size_t c_state_multi_comment(struct state_ctx *ctx)
     size_t i;
 
     ctx->hi = HI_COMMENT;
-    if (ctx->pos.col + 1 < ctx->n && ctx->s[ctx->pos.col] == '*' &&
-            ctx->s[ctx->pos.col + 1] == '/') {
+    switch (ctx->s[ctx->pos.col]) {
+    case '/':
+        if (ctx->pos.col == 0 || ctx->s[ctx->pos.col - 1] != '*') {
+            break;
+        }
         /* pop state */
-        ctx->state ^= FSTATE_MULTI;
+        ctx->state ^= FSTATE_MULTI | FSTATE_FORCE_MULTI;
         ctx->state >>= 8;
-        return 2;
-    }
-    if (ctx->s[ctx->pos.col] == '@') {
+        add_paren(ctx->buf, &ctx->pos, '*');
+        break;
+
+    case '@':
         for (i = ctx->pos.col + 1; i < ctx->n; i++) {
             if (!isalpha(ctx->s[i])) {
                 break;
@@ -498,9 +520,13 @@ size_t c_state_multi_comment(struct state_ctx *ctx)
         }
         ctx->hi = HI_JAVADOC;
         return i - ctx->pos.col;
+
+    default:
+        check_paren(ctx, ctx->pos.col, C_PAREN_COMMENT_MASK);
     }
     return 1;
 }
+
 state_proc_t c_lang_states[] = {
     [STATE_START & 0xff] = c_state_start,
     [C_STATE_COMMENT & 0xff] = c_state_comment,

@@ -659,6 +659,14 @@ struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev)
 size_t search_string(struct buf *buf, const char *s);
 
 /**
+ * Rehighlights all lines until `last_line`.
+ *
+ * @param buf       The buffer containing the lines.
+ * @param last_line The line at which to stop highlighting.
+ */
+void clean_lines(struct buf *buf, size_t last_line);
+
+/**
  * Adds the given position as parenthesis.
  *
  * @param buf   The buffer to add a parenthesis to.
@@ -673,10 +681,10 @@ void add_paren(struct buf *buf, const struct pos *pos, int type);
  * @param buf   The buffer to get the parenthesis from.
  * @param pos   The position of the parenthesis.
  *
- * @return The pointer to the parenthesis within the parenthesis list of the
- *         buffer.
+ * @return The index of the parenthesis within the buffer parenthesis list or
+ *         `SIZE_MAX` on failure.
  */
-struct paren *get_paren(struct buf *buf, const struct pos *pos);
+size_t get_paren(struct buf *buf, const struct pos *pos);
 
 /**
  * Removes all parentheses on a line.
@@ -689,12 +697,12 @@ void clear_parens(struct buf *buf, size_t line_i);
 /**
  * Gets the matching parenthesis within the buffer.
  *
- * @param buf   The buffer to get the matching parenthesis in.
- * @param paren The parenthesis to find a match for.
- * @param d_p   The position of the matching parenthesis.
+ * @param buf       The buffer to get the matching parenthesis in.
+ * @param paren_i   The index of the parenthesis to find a match for.
+ * @param d_p       The position of the matching parenthesis.
  *
  * @return Whether there is a matching parenthesis.
  */
-bool get_matching_paren(struct buf *buf, struct paren *paren, struct pos *d_p);
+bool get_matching_paren(struct buf *buf, size_t, struct pos *d_p);
 
 #endif
