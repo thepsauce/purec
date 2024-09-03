@@ -182,29 +182,16 @@ static const struct cmd *get_command(const char *s, size_t s_m)
 
 static bool read_number(char *s, char **p_s, size_t *p_n)
 {
+    struct mark *mark;
+
     if (s[0] == '\'' || s[0] == '`') {
         s++;
-        switch (s[0]) {
-        case '\'':
-        case '`':
-            /* TODO: */
-            break;
-
-        case '<':
-            *p_n = MIN(SelFrame->cur.line, Core.pos.line);
-            break;
-
-        case '>':
-            *p_n = MAX(SelFrame->cur.line, Core.pos.line);
-            break;
-
-        default:
-            if (s[0] < MARK_MIN || s[0] > MARK_MAX) {
-                set_error("invalid mark: %c", s[0]);
-                return -1;
-            }
-            *p_n = Core.marks[s[0] - MARK_MIN].pos.line;
+        mark = get_mark(SelFrame, s[0]);
+        if (mark == NULL) {
+            set_error("invalid mark: %c", s[0]);
+            return -1;
         }
+        *p_n = mark->pos.line;
         *p_s = s + 1;
         return 0;
     }

@@ -42,8 +42,9 @@ extern WINDOW *OffScreen;
 
 #define IS_REG_CHAR(r) (((r)>=REG_MIN&&(r)<=REG_MAX)||(r)=='+'||(r)=='*')
 
-#define MARK_MIN '.'
-#define MARK_MAX '^'
+/* note that there are special mark outside this range, see `get_mark()` */
+#define MARK_MIN 'A'
+#define MARK_MAX 'Z'
 
 #define USER_REC_MIN 'A'
 #define USER_REC_MAX 'Z'
@@ -100,7 +101,7 @@ extern struct core {
     struct mark {
         struct buf *buf;
         struct pos pos;
-    } marks[MARK_MAX - MARK_MIN + 1];
+    } marks[MARK_MAX - MARK_MIN + 1], last_insert;
 
     /* All variables below here shall NOT be modified while a recording is
      * playing. To check if a recording is playing, do
@@ -185,6 +186,19 @@ void set_message(const char *msg, ...);
  * @param ...   The format string arguments
  */
 void set_error(const char *err, ...);
+
+/* forward declare the frame struct */
+struct frame;
+
+/**
+ * Gets the mark associated to given character.
+ *
+ * @param frame The frame to consider for special marks.
+ * @param ch    The identifier of the mark.
+ *
+ * @return A pointer to static memory containing the mark or `NULL`.
+ */
+struct mark *get_mark(struct frame *frame, char ch);
 
 /**
  * Sets the current register to given data.

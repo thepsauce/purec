@@ -184,7 +184,6 @@ int insert_handle_input(int c)
     int r = 0;
     struct buf *buf;
     char ch;
-    struct mark *mark;
     struct undo_event *ev;
     size_t n;
     struct pos old_cur;
@@ -196,9 +195,8 @@ int insert_handle_input(int c)
     case '\x1b':
         attempt_join();
         repeat_last_insertion();
-        mark = &Core.marks['^' - MARK_MIN];
-        mark->buf = buf;
-        mark->pos = SelFrame->cur;
+        Core.last_insert.buf = buf;
+        Core.last_insert.pos = SelFrame->cur;
         move_horz(SelFrame, 1, -1);
         set_mode(NORMAL_MODE);
         return UPDATE_UI;

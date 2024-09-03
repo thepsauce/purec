@@ -71,6 +71,57 @@ void set_error(const char *err, ...)
     Core.msg_state = MSG_OTHER;
 }
 
+struct mark *get_mark(struct frame *frame, char ch)
+{
+    static struct mark m;
+    struct selection sel;
+
+    if (ch >= 'A' && ch <= 'Z') {
+        m = Core.marks[ch - 'A'];
+    } else {
+        switch (ch) {
+        case '\'':
+        case '`':
+            /* TODO: */
+            break;
+
+        case '.':
+        case '[':
+        case ']':
+            if (frame->buf->event_i == 0) {
+                return NULL;
+            }
+            m.buf = frame->buf;
+            if (ch != ']') {
+                m.pos = frame->buf->events[frame->buf->event_i].pos;
+            } else {
+                m.pos = frame->buf->events[frame->buf->event_i].end;
+            }
+            break;
+
+        case '^':
+            m = Core.last_insert;
+            break;
+
+        case '<':
+        case '>':
+            (void) get_selection(&sel);
+            m.buf = SelFrame->buf;
+            m.pos = ch == '<' ? sel.beg : sel.end;
+            break;
+
+        default:
+            return NULL;
+        }
+    }
+
+    if (m.buf == NULL) {
+        return NULL;
+    }
+
+    return &m;
+}
+
 void yank_data(struct undo_seg *seg, int flags)
 {
     struct reg *reg;

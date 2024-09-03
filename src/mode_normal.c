@@ -783,12 +783,8 @@ int normal_handle_input(int c)
             /* TODO: show window with all marks */
             return 0;
         }
-        if (c < MARK_MIN || c > MARK_MAX) {
-            set_error("invalid mark");
-            return UPDATE_UI;
-        }
-        mark = &Core.marks[c - MARK_MIN];
-        if (mark->buf == NULL) {
+        mark = get_mark(SelFrame, c);
+        if (mark == NULL) {
             set_error("invalid mark");
             return UPDATE_UI;
         }
