@@ -25,6 +25,8 @@ struct frame {
     struct buf *buf;
     /// cursor position within the buffer
     struct pos cur;
+    /// cursor position before a big jump
+    struct pos prev_cur;
     /// offset of the text origin
     struct pos scroll;
     /// vertical column tracking

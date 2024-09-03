@@ -419,6 +419,7 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
     memcpy(&at_line->s[pos->col], &lines[0].s[0], lines[0].n);
 
     mark_dirty(at_line);
+    mark_dirty(line);
 }
 
 struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
@@ -541,6 +542,15 @@ struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines)
         buf->a_lines += num_lines;
         buf->lines = xreallocarray(buf->lines, buf->a_lines, sizeof(*buf->lines));
     }
+
+    if (line_i != buf->num_lines) {
+        /* This line will come after the inserted lines. If there was a multi
+         * line highlighting, this might be needed.
+          */
+        update_dirty_lines(buf, line_i + num_lines, line_i + num_lines);
+        mark_dirty(&buf->lines[line_i]);
+    }
+
     /* move tail of the line list to form a gap */
     memmove(&buf->lines[line_i + num_lines], &buf->lines[line_i],
             sizeof(*buf->lines) * (buf->num_lines - line_i));

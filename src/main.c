@@ -82,7 +82,8 @@ struct mark *get_mark(struct frame *frame, char ch)
         switch (ch) {
         case '\'':
         case '`':
-            /* TODO: */
+            m.buf = frame->buf;
+            m.pos = frame->prev_cur;
             break;
 
         case '.':

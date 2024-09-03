@@ -557,6 +557,7 @@ void set_cursor(struct frame *frame, const struct pos *pos)
     /* set vct */
     frame->vct = new_cur.col;
 
+    frame->prev_cur = frame->cur;
     frame->cur = new_cur;
 
     /* adjust scrolling */
@@ -1102,28 +1103,31 @@ int move_vert(struct frame *frame, size_t dist, int dir)
 {
     int r = 0;
     struct buf *buf;
-    size_t old_line;
+    struct pos prev_cur;
 
     buf = frame->buf;
-    old_line = frame->cur.line;
+    prev_cur = frame->cur;
     if (dir < 0) {
         if (dist > frame->cur.line) {
-            frame->cur.line = 0;
-        } else {
-            frame->cur.line -= dist;
+            dist = frame->cur.line;
         }
+        frame->cur.line -= dist;
     } else {
         /* check for overflow */
-        if (SIZE_MAX - dist < frame->cur.line) {
-            frame->cur.line = buf->num_lines - 1;
-        } else {
-            frame->cur.line = MIN(dist + frame->cur.line, buf->num_lines - 1);
+        if (SIZE_MAX - dist < frame->cur.line ||
+                dist + frame->cur.line >= buf->num_lines) {
+            dist = buf->num_lines - 1 - frame->cur.line;
         }
+        frame->cur.line += dist;
     }
 
-    if (old_line != frame->cur.line) {
+    if (prev_cur.line != frame->cur.line) {
         adjust_cursor(frame);
         r = 1;
+    }
+    /* set the previous cursor if a significant jump was made */
+    if (dist > (size_t) MAX(frame->h / 2, 3)) {
+        frame->prev_cur = prev_cur;
     }
     return r | adjust_scroll(frame);
 }
