@@ -75,6 +75,46 @@ const char *c_preproc[] = {
     "warning",
 };
 
+size_t c_indentor(struct buf *buf, size_t line_i)
+{
+    struct pos p;
+    size_t index;
+    size_t c;
+    struct paren *par;
+
+    if (line_i == 0) {
+        return 0;
+    }
+    clean_lines(buf, line_i);
+    p.col = 0;
+    p.line = line_i;
+    index = get_next_paren_index(buf, &p);
+
+    for (c = 0; index > 0; index--) {
+        par = &buf->parens[index - 1];
+        if ((par->type & FOPEN_PAREN)) {
+            if (c == 0) {
+                break;
+            }
+            c--;
+        } else {
+            c++;
+        }
+    }
+
+    if (index == 0) {
+        return 0;
+    }
+
+    c = get_line_indent(buf, par->pos.line);
+    if (par->pos.col + 1 == buf->lines[par->pos.line].n) {
+        c += TABSIZE;
+    } else {
+        c++;
+    }
+    return c;
+}
+
 static size_t c_get_identf(struct state_ctx *ctx)
 {
     char ch;

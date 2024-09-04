@@ -40,6 +40,11 @@ struct state_ctx {
 typedef size_t (*state_proc_t)(struct state_ctx *ctx);
 
 /**
+ * An indentor for a language computes the indentation given line would need.
+ */
+typedef size_t (*indentor_t)(struct buf *buf, size_t line_i);
+
+/**
  * Defined in "render_frame.c".
  */
 extern struct lang {
@@ -47,6 +52,8 @@ extern struct lang {
     const char *name;
     /// state machine of the language
     state_proc_t *fsm;
+    /// indentation computer
+    indentor_t indentor;
     /// extensions a file for this language as null terminated list
     const char *file_exts;
 } Langs[NUM_LANGS];

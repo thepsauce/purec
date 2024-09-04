@@ -481,6 +481,7 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
 {
     struct line *line, *at_line;
     struct raw_line *lines;
+    size_t indent;
 
     update_dirty_lines(buf, pos->line, pos->line + 1);
 
@@ -494,7 +495,18 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
 
     mark_dirty(at_line);
 
-    lines = xcalloc(2, sizeof(*lines));
+    indent = Langs[buf->lang].indentor(buf, pos->line + 1);
+    line->s = xrealloc(line->s, line->n + indent);
+    memmove(&line->s[indent], &line->s[0], line->n);
+    memset(line->s, ' ', indent);
+    line->n += indent;
+
+    lines = xmalloc(sizeof(*lines) * 2);
+    lines[0].s = NULL;
+    lines[0].n = 0;
+    lines[1].s = xmalloc(indent);
+    lines[1].n = indent;
+    memset(lines[1].s, ' ', indent);
     return add_event(buf, IS_INSERTION, pos, lines, 2);
 }
 
@@ -1117,16 +1129,7 @@ void clean_lines(struct buf *buf, size_t last_line)
     }
 }
 
-/**
- * Gets the index where the given position should be inserted within the
- * paranthesis list.
- *
- * @param buf   The buffer whose paranthesis list to use.
- * @param pos   The position of the not yet included parenthesis.
- *
- * @return The index where to insert it.
- */
-static size_t get_next_paren_index(const struct buf *buf, const struct pos *pos)
+size_t get_next_paren_index(const struct buf *buf, const struct pos *pos)
 {
     size_t l, m, r;
     struct paren *p;

@@ -667,6 +667,17 @@ size_t search_string(struct buf *buf, const char *s);
 void clean_lines(struct buf *buf, size_t last_line);
 
 /**
+ * Gets the index where the given position should be inserted within the
+ * paranthesis list.
+ *
+ * @param buf   The buffer whose paranthesis list to use.
+ * @param pos   The position of the not yet included parenthesis.
+ *
+ * @return The index where to insert it.
+ */
+size_t get_next_paren_index(const struct buf *buf, const struct pos *pos);
+
+/**
  * Adds the given position as parenthesis.
  *
  * @param buf   The buffer to add a parenthesis to.
