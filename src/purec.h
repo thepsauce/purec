@@ -151,15 +151,14 @@ struct selection {
 void init_clipboard(void);
 
 /**
- * Copies given lines to the clipboard.
+ * Copies given data segment into the clipboard.
  *
- * @param data      The data to copy to the clipboard.
- * @param data_len  The length of the data.
+ * @param seg       The data segment to copy.
  * @param primary   For X11, if the primary clipboard should be used.
  *
  * @return 0 if the clipboard could be accessed, -1 otherwise.
  */
-int copy_clipboard(char *data, size_t data_len, int primary);
+int copy_clipboard(struct undo_seg *seg, int primary);
 
 /**
  * Reads lines from the clipboard.

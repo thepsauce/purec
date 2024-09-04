@@ -129,8 +129,10 @@ void yank_data(struct undo_seg *seg, int flags)
 
     if (Core.user_reg == '+' || Core.user_reg == '*') {
         load_undo_data(seg);
-        copy_clipboard(seg->data, seg->data_len, Core.user_reg == '*');
-        unload_undo_data(seg);
+        if (copy_clipboard(seg, Core.user_reg == '*') == -1) {
+            unload_undo_data(seg);
+        }
+        /* else do not unload, copy will do that later */
     } else {
         reg = &Core.regs[Core.user_reg - '.'];
         reg->flags = flags;

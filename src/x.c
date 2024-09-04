@@ -21,13 +21,11 @@ static struct x_data {
     pthread_t thread;
     /// lock for synchronising `thread` with the main thread
     pthread_mutex_t sel_lock;
-    /// text to send to requestors
-    char *sel_text;
-    /// length of `sel_text`
-    size_t sel_len;
+    /// segment to send to requestors
+    struct undo_seg *seg;
     /// the lines currently being worked on by paste
     struct raw_line *lines;
-    /// the number of lines in `lines`
+    /// the number of lines
     size_t num_lines;
 } X;
 
@@ -93,7 +91,7 @@ static void *x_thread(void *_unused)
     return _unused;
 }
 
-int copy_clipboard(char *data, size_t data_len, int primary)
+int copy_clipboard(struct undo_seg *seg, int primary)
 {
     Atom clipboard;
 
@@ -103,8 +101,10 @@ int copy_clipboard(char *data, size_t data_len, int primary)
 
     pthread_mutex_lock(&X.sel_lock);
 
-    X.sel_text = data;
-    X.sel_len = data_len;
+    if (X.seg != NULL) {
+        unload_undo_data(X.seg);
+    }
+    X.seg = seg;
 
     if (primary == 0) {
         clipboard = XInternAtom(X.dpy_copy, "CLIPBOARD", False);
@@ -158,7 +158,7 @@ static void handle_sel_request(XEvent *e)
         (void) XChangeProperty(xsre->display, xsre->requestor,
                 xsre->property, xsre->target,
                 8, PropModeReplace,
-                (unsigned char*) X.sel_text, X.sel_len);
+                (unsigned char*) X.seg->data, X.seg->data_len);
         xev.property = xsre->property;
     }
 
