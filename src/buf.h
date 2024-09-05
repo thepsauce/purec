@@ -710,10 +710,9 @@ void clear_parens(struct buf *buf, size_t line_i);
  *
  * @param buf       The buffer to get the matching parenthesis in.
  * @param paren_i   The index of the parenthesis to find a match for.
- * @param d_p       The position of the matching parenthesis.
  *
- * @return Whether there is a matching parenthesis.
+ * @return The matching parenthesis or `SIZE_MAX` if none was found.
  */
-bool get_matching_paren(struct buf *buf, size_t, struct pos *d_p);
+size_t get_matching_paren(struct buf *buf, size_t paren_i);
 
 #endif

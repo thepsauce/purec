@@ -1214,7 +1214,7 @@ void clear_parens(struct buf *buf, size_t line_i)
     buf->num_parens -= index - first_i;
 }
 
-bool get_matching_paren(struct buf *buf, size_t paren_i, struct pos *d_p)
+size_t get_matching_paren(struct buf *buf, size_t paren_i)
 {
     struct paren *paren, *p;
     size_t c;
@@ -1232,8 +1232,7 @@ bool get_matching_paren(struct buf *buf, size_t paren_i, struct pos *d_p)
                 } else {
                     c--;
                     if (c == 0) {
-                        *d_p = p->pos;
-                        return true;
+                        return p - buf->parens;
                     }
                 }
             }
@@ -1249,8 +1248,7 @@ bool get_matching_paren(struct buf *buf, size_t paren_i, struct pos *d_p)
                 if ((p->type & FOPEN_PAREN)) {
                     c--;
                     if (c == 0) {
-                        *d_p = p->pos;
-                        return true;
+                        return p - buf->parens;
                     }
                 } else {
                     c++;
@@ -1259,5 +1257,5 @@ bool get_matching_paren(struct buf *buf, size_t paren_i, struct pos *d_p)
         }
     }
     /* there was no matching parenthesis */
-    return false;
+    return SIZE_MAX;
 }

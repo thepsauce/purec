@@ -951,9 +951,12 @@ int do_motion(struct frame *frame, int motion)
 
     case MOTION_PAREN:
         index = get_paren(frame->buf, &frame->cur);
-        if (index != SIZE_MAX && get_matching_paren(frame->buf, index, &pos)) {
-            set_cursor(frame, &pos);
-            return 1;
+        if (index != SIZE_MAX) {
+            index = get_matching_paren(frame->buf, index);
+            if (index != SIZE_MAX) {
+                set_cursor(frame, &frame->buf->parens[index].pos);
+                return 1;
+            }
         }
         break;
     }

@@ -141,8 +141,8 @@ void render_frame(struct frame *frame)
     size_t last_line;
     int x, y, w, h;
     int orig_x;
-    size_t paren_i;
-    struct pos p, match_p;
+    size_t paren_i, match_i;
+    struct pos p;
     int p_x, p_y;
 
     buf = frame->buf;
@@ -193,15 +193,22 @@ void render_frame(struct frame *frame)
     }
 
     /* highlight matching parentheses */
-    paren_i = get_paren(buf, &frame->cur);
-    if (paren_i != SIZE_MAX && get_matching_paren(buf, paren_i, &match_p)) {
-        set_highlight(stdscr, HI_PAREN_MATCH);
-        p = buf->parens[paren_i].pos;
-        if (translate_pos(frame, &p, x, y, w, h, &p_x, &p_y)) {
-            mvaddch(p_y, p_x, buf->lines[p.line].s[p.col]);
-        }
-        if (translate_pos(frame, &match_p, x, y, w, h, &p_x, &p_y)) {
-            mvaddch(p_y, p_x, buf->lines[match_p.line].s[match_p.col]);
+    if (frame == SelFrame) {
+        paren_i = get_paren(buf, &frame->cur);
+        if (paren_i != SIZE_MAX) {
+            match_i = get_matching_paren(buf, paren_i);
+            set_highlight(stdscr, match_i == SIZE_MAX ? HI_ERROR :
+                          HI_PAREN_MATCH);
+            p = buf->parens[paren_i].pos;
+            if (translate_pos(frame, &p, x, y, w, h, &p_x, &p_y)) {
+                mvaddch(p_y, p_x, buf->lines[p.line].s[p.col]);
+            }
+            if (match_i != SIZE_MAX) {
+                p = buf->parens[match_i].pos;
+                if (translate_pos(frame, &p, x, y, w, h, &p_x, &p_y)) {
+                    mvaddch(p_y, p_x, buf->lines[p.line].s[p.col]);
+                }
+            }
         }
     }
 

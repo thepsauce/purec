@@ -106,13 +106,24 @@ size_t c_indentor(struct buf *buf, size_t line_i)
         return 0;
     }
 
-    c = get_line_indent(buf, par->pos.line);
-    if (par->pos.col + 1 == buf->lines[par->pos.line].n) {
-        c += TABSIZE;
-    } else {
-        c++;
+    if (par->pos.col + 1 != buf->lines[par->pos.line].n) {
+        return par->pos.col + 1;
     }
-    return c;
+
+    switch ((par->type & 0xff)) {
+    case '{':
+        if (index <= 1 || (par[-1].type & (FOPEN_PAREN | '(')) != '(') {
+            break;
+        }
+        index = get_matching_paren(buf, index - 2);
+        if (index == SIZE_MAX) {
+            break;
+        }
+        par = &buf->parens[index];
+        break;
+    }
+
+    return Core.tab_size + get_line_indent(buf, par->pos.line);
 }
 
 static size_t c_get_identf(struct state_ctx *ctx)
