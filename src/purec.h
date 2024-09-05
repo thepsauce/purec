@@ -54,6 +54,8 @@ extern WINDOW *OffScreen;
  * editor.
  */
 extern struct core {
+    /// size of a tab in spaces
+    int tab_size;
     /**
      * Message that is rendered at the bottom of the screen.
      *

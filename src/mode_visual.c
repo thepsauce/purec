@@ -14,7 +14,7 @@ int visual_handle_input(int c)
     struct pos cur;
     int next_mode = NORMAL_MODE;
     struct selection sel;
-    struct undo_event *ev, *ev_o;
+    struct undo_event *ev;
     bool line_based;
     struct raw_line *lines;
     size_t num_lines;
@@ -79,13 +79,8 @@ int visual_handle_input(int c)
         }
 
         if ((c == 'C' || c == 'c') && line_based) {
-            ev_o = indent_line(buf, sel.beg.line);
-            if (ev_o != NULL) {
-                ev->flags |= IS_TRANSIENT;
-            }
+            (void) indent_line(buf, sel.beg.line);
             sel.beg.col = get_line_indent(buf, sel.beg.line);
-        } else {
-            ev_o = NULL;
         }
 
         set_mode(next_mode);

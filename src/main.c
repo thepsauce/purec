@@ -593,13 +593,10 @@ int main(int argc, char **argv)
 
     const char *home;
     int cur_x, cur_y;
-    size_t first_event;
     int c;
     int r;
     size_t next_dot_i;
     int old_mode;
-    struct frame *old_frame;
-    struct mark *mark;
 
     setlocale(LC_ALL, "");
 
@@ -626,7 +623,7 @@ int main(int argc, char **argv)
     if (mkdir(Core.session_dir, 0755) == -1 && errno != EEXIST) {
         Core.session_dir = xstrdup("/tmp");
         fprintf(stderr, "could not create session directory,"
-                "using /tmp instead\n");
+                        "using /tmp instead\n");
     }
 
     initscr();
@@ -634,12 +631,12 @@ int main(int argc, char **argv)
     keypad(stdscr, true);
     noecho();
 
-    set_tabsize(4);
-
     set_escdelay(0);
 
     init_colors();
     init_clipboard();
+
+    Core.tab_size = 4;
 
     Core.msg_win = newpad(1, 128);
     OffScreen = newpad(1, 512);
@@ -691,9 +688,6 @@ int main(int argc, char **argv)
             curs_set(1);
         }
 
-        old_frame = SelFrame;
-        first_event = SelFrame->buf->event_i;
-
         do {
             next_dot_i = Core.rec_len;
             if (Core.mode == INSERT_MODE) {
@@ -726,17 +720,10 @@ int main(int argc, char **argv)
             break;
         }
 
-        if (old_frame == SelFrame) {
-            if (old_frame->buf->event_i > 0) {
-                mark = &Core.marks['.' - MARK_MIN];
-                mark->buf = old_frame->buf;
-                mark->pos = old_frame->buf->events[old_frame->buf->event_i - 1].cur;
-            }
-            /* this combines events originating from a single keybind or an
-             * entire recording playback
-             */
-            for (size_t i = first_event + 1; i < SelFrame->buf->event_i; i++) {
-                SelFrame->buf->events[i - 1].flags |= IS_TRANSIENT;
+        /* make all events at the end of the event list of a buffer non transient */
+        for (struct buf *buf = FirstBuffer; buf != NULL; buf = buf->next) {
+            if (buf->num_events > 0) {
+                buf->events[buf->num_events - 1].flags &= ~IS_TRANSIENT;
             }
         }
     }
@@ -750,5 +737,6 @@ int main(int argc, char **argv)
     free_session();
     free(Input.buf);
     free(Input.remember);
+
     return Core.exit_code;
 }

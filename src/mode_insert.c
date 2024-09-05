@@ -188,6 +188,8 @@ int insert_handle_input(int c)
     size_t n;
     struct pos old_cur;
     struct raw_line lines[2];
+    struct line *line;
+    int amount;
 
     buf = SelFrame->buf;
     ch = c;
@@ -215,12 +217,12 @@ int insert_handle_input(int c)
 
     case '\t':
         ch = ' ';
-        n = TABSIZE - SelFrame->cur.col % TABSIZE;
+        n = Core.tab_size - SelFrame->cur.col % Core.tab_size;
         lines[0].s = &ch;
         lines[0].n = 1;
         ev = insert_lines(buf, &SelFrame->cur, lines, 1, n);
         ev->cur = SelFrame->cur;
-        (void) move_dir(SelFrame, n, 1);
+        (void) move_horz(SelFrame, n, 1);
         return UPDATE_UI;
 
     case KEY_DC:
@@ -236,9 +238,20 @@ int insert_handle_input(int c)
     case 0x7f:
     case KEY_BACKSPACE:
     case '\b':
-        /* TODO: add handling for indentation deletion */
         old_cur = SelFrame->cur;
-        r = move_dir(SelFrame, 1, -1);
+        if (old_cur.col % Core.tab_size == 0) {
+            amount = Core.tab_size;
+            line = &SelFrame->buf->lines[old_cur.line];
+            for (size_t i = 0; i < old_cur.col; i++) {
+                if (line->s[i] != ' ') {
+                    amount = 1;
+                    break;
+                }
+            }
+        } else {
+            amount = 1;
+        }
+        r = move_dir(SelFrame, amount, -1);
         ev = delete_range(buf, &old_cur, &SelFrame->cur);
         if (ev != NULL) {
             ev->cur = old_cur;
