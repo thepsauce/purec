@@ -9,7 +9,6 @@
 
 int visual_handle_input(int c)
 {
-    int r = 0;
     struct buf *buf;
     struct pos cur;
     int next_mode = NORMAL_MODE;
@@ -90,7 +89,7 @@ int visual_handle_input(int c)
             set_cursor(SelFrame, &sel.beg);
             return UPDATE_UI;
         }
-        break;
+        return 0;
 
     case 'Y':
     case 'y':
@@ -177,7 +176,9 @@ int visual_handle_input(int c)
             set_cursor(SelFrame, &sel.beg);
             Core.move_down_count = sel.end.line - sel.beg.line;
             if (c == 'A') {
-                move_horz(SelFrame, 1, 1);
+                if (SelFrame->cur.col != buf->lines[SelFrame->cur.col].n) {
+                    SelFrame->cur.col++;
+                }
             }
         } else {
             if (c == 'A') {
@@ -189,8 +190,5 @@ int visual_handle_input(int c)
         }
         return UPDATE_UI;
     }
-    if (r == 0) {
-        return do_motion(SelFrame, get_binded_motion(c));
-    }
-    return r;
+    return do_motion(SelFrame, c);
 }

@@ -51,6 +51,7 @@ static void repeat_last_insertion(void)
         }
     }
 
+    /* TODO: re write this!! it crashes!! */
     /* combine the events (we only expect insertion and deletion events) */
     cur = buf->events[Core.ev_from_ins].pos;
     for (size_t i = Core.ev_from_ins; i < buf->event_i; i++) {
@@ -168,19 +169,6 @@ end:
 
 int insert_handle_input(int c)
 {
-    static int motions[KEY_MAX] = {
-        [KEY_LEFT] = MOTION_LEFT,
-        [KEY_RIGHT] = MOTION_RIGHT,
-        [KEY_UP] = MOTION_UP,
-        [KEY_DOWN] = MOTION_DOWN,
-
-        [KEY_HOME] = MOTION_HOME,
-        [KEY_END] = MOTION_END,
-
-        [KEY_PPAGE] = MOTION_PAGE_UP,
-        [KEY_NPAGE] = MOTION_PAGE_DOWN,
-    };
-
     int r = 0;
     struct buf *buf;
     char ch;
@@ -189,7 +177,7 @@ int insert_handle_input(int c)
     struct pos old_cur;
     struct raw_line lines[2];
     struct line *line;
-    int amount;
+    size_t amount;
 
     buf = SelFrame->buf;
     ch = c;
@@ -199,13 +187,21 @@ int insert_handle_input(int c)
         repeat_last_insertion();
         Core.last_insert.buf = buf;
         Core.last_insert.pos = SelFrame->cur;
-        move_horz(SelFrame, 1, -1);
+        if (SelFrame->cur.col > 0) {
+            SelFrame->cur.col--;
+            (void) adjust_scroll(SelFrame);
+        }
+        SelFrame->vct = SelFrame->cur.col;
         set_mode(NORMAL_MODE);
         return UPDATE_UI;
 
     case CONTROL('C'):
         attempt_join();
-        move_horz(SelFrame, 1, -1);
+        if (SelFrame->cur.col > 0) {
+            SelFrame->cur.col--;
+            (void) adjust_scroll(SelFrame);
+        }
+        SelFrame->vct = SelFrame->cur.col;
         set_mode(NORMAL_MODE);
         return UPDATE_UI;
 
@@ -222,52 +218,74 @@ int insert_handle_input(int c)
         lines[0].n = 1;
         ev = insert_lines(buf, &SelFrame->cur, lines, 1, n);
         ev->cur = SelFrame->cur;
-        (void) move_horz(SelFrame, n, 1);
+        SelFrame->cur.col += n;
+        SelFrame->vct = SelFrame->cur.col;
+        (void) adjust_scroll(SelFrame);
         return UPDATE_UI;
 
     case KEY_DC:
         old_cur = SelFrame->cur;
-        r = move_dir(SelFrame, 1, 1);
-        ev = delete_range(buf, &old_cur, &SelFrame->cur);
-        if (ev != NULL) {
-            ev->cur = old_cur;
+        if (old_cur.col == buf->lines[old_cur.line].n) {
+            if (old_cur.line == buf->num_lines - 1) {
+                return 0;
+            }
+            SelFrame->cur.line++;
+            SelFrame->cur.col = 0;
+        } else {
+            SelFrame->cur.col++;
         }
-        SelFrame->cur = old_cur;
+        ev = delete_range(buf, &old_cur, &SelFrame->cur);
+        ev->cur = old_cur;
+        SelFrame->vct = SelFrame->cur.col;
         return r;
 
     case 0x7f:
     case KEY_BACKSPACE:
     case '\b':
         old_cur = SelFrame->cur;
-        if (old_cur.col % Core.tab_size == 0) {
-            amount = Core.tab_size;
-            line = &SelFrame->buf->lines[old_cur.line];
-            for (size_t i = 0; i < old_cur.col; i++) {
-                if (line->s[i] != ' ') {
-                    amount = 1;
-                    break;
-                }
+        if (old_cur.col == 0) {
+            if (old_cur.line == 0) {
+                return 0;
             }
+            SelFrame->cur.line--;
+            SelFrame->cur.col = buf->lines[SelFrame->cur.line].n;
         } else {
-            amount = 1;
+            if (old_cur.col % Core.tab_size == 0) {
+                amount = Core.tab_size;
+                line = &buf->lines[old_cur.line];
+                for (size_t i = 0; i < old_cur.col; i++) {
+                    if (line->s[i] != ' ') {
+                        amount = 1;
+                        break;
+                    }
+                }
+            } else {
+                amount = 1;
+            }
+            SelFrame->cur.col -= amount;
         }
-        r = move_dir(SelFrame, amount, -1);
-        ev = delete_range(buf, &old_cur, &SelFrame->cur);
-        if (ev != NULL) {
-            ev->cur = old_cur;
-        }
-        return r;
+        ev = delete_range(buf, &SelFrame->cur, &old_cur);
+        ev->cur = old_cur;
+        SelFrame->vct = SelFrame->cur.col;
+        return UPDATE_UI;
     }
 
-    if (c < 0x100 && (ch >= ' ' || ch < 0) && motions[c] == 0) {
+    if (c < 0x100 && (ch >= ' ' || ch < 0)) {
         lines[0].s = &ch;
         lines[0].n = 1;
         ev = insert_lines(buf, &SelFrame->cur, lines, 1, 1);
         ev->cur = SelFrame->cur;
         SelFrame->cur.col++;
+        if (SelFrame->cur.col == buf->lines[SelFrame->cur.line].n) {
+            ev = indent_line(buf, SelFrame->cur.line);
+            if (ev != NULL) {
+                ev->cur = SelFrame->cur;
+            }
+            SelFrame->cur.col = buf->lines[SelFrame->cur.line].n;
+        }
         SelFrame->vct = SelFrame->cur.col;
-        adjust_scroll(SelFrame);
+        (void) adjust_scroll(SelFrame);
         return UPDATE_UI;
     }
-    return do_motion(SelFrame, motions[c]);
+    return do_motion(SelFrame, c);
 }

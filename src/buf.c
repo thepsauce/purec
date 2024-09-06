@@ -501,6 +501,10 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
     memset(line->s, ' ', indent);
     line->n += indent;
 
+    /* hardcode: redirtying the line */
+    update_dirty_lines(buf, pos->line + 1, pos->line + 1);
+    mark_dirty(line);
+
     lines = xmalloc(sizeof(*lines) * 2);
     lines[0].s = NULL;
     lines[0].n = 0;
@@ -607,18 +611,12 @@ void remove_lines(struct buf *buf, size_t line_i, size_t num_lines)
 
 struct undo_event *indent_line(struct buf *buf, size_t line_i)
 {
-    /* first naive approach: match indentation of previous line */
-
-    size_t cur_indent, new_indent = 0;
+    size_t cur_indent, new_indent;
     struct pos pos, to;
     struct raw_line line;
     struct undo_event *ev;
 
-    if (line_i == 0) {
-        new_indent = 0;
-    } else {
-        new_indent = get_line_indent(buf, line_i - 1);
-    }
+    new_indent = Langs[buf->lang].indentor(buf, line_i);
     cur_indent = get_line_indent(buf, line_i);
     pos.line = line_i;
     pos.col = 0;

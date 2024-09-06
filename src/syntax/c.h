@@ -81,11 +81,12 @@ size_t c_indentor(struct buf *buf, size_t line_i)
     size_t index;
     size_t c;
     struct paren *par;
+    struct line *line;
 
     if (line_i == 0) {
         return 0;
     }
-    clean_lines(buf, line_i);
+    clean_lines(buf, line_i + 1);
     p.col = 0;
     p.line = line_i;
     index = get_next_paren_index(buf, &p);
@@ -106,7 +107,8 @@ size_t c_indentor(struct buf *buf, size_t line_i)
         return 0;
     }
 
-    if (par->pos.col + 1 != buf->lines[par->pos.line].n) {
+    line = &buf->lines[par->pos.line];
+    if (par->pos.col + 1 != line->n) {
         return par->pos.col + 1;
     }
 
@@ -123,7 +125,19 @@ size_t c_indentor(struct buf *buf, size_t line_i)
         break;
     }
 
-    return Core.tab_size + get_line_indent(buf, par->pos.line);
+    line = &buf->lines[line_i];
+    if (line->n > 0 && line->s[line->n - 1] == ':' &&
+            (line->attribs[line->n - 1] == HI_OPERATOR)) {
+        c = 0;
+    } else {
+        c = get_line_indent(buf, line_i);
+        if (c == line->n || line->s[c] != '}') {
+            c = 1;
+        } else {
+            c = 0;
+        }
+    }
+    return Core.tab_size * c + get_line_indent(buf, par->pos.line);
 }
 
 static size_t c_get_identf(struct state_ctx *ctx)

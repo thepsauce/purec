@@ -182,6 +182,58 @@ static struct frame *do_binded_frame_movement(int c)
     return SelFrame;
 }
 
+static inline int indent_to_motion(void)
+{
+    int c;
+    struct undo_event *ev;
+    struct buf *buf;
+    size_t min_line, max_line;
+
+    c = get_extra_char();
+    buf = SelFrame->buf;
+    switch (c) {
+    case '=':
+        min_line = SelFrame->cur.line;
+        max_line = min_line;
+        break;
+
+    default:
+        if (prepare_motion(SelFrame, c) == 0) {
+            min_line = SelFrame->cur.line;
+            max_line = min_line;
+        } else if (SelFrame->cur.line < SelFrame->next_cur.line) {
+            min_line = SelFrame->cur.line;
+            max_line = SelFrame->next_cur.line;
+        } else {
+            min_line = SelFrame->next_cur.line;
+            max_line = SelFrame->cur.line;
+        }
+    }
+    for (; min_line <= max_line; min_line++) {
+        ev = indent_line(buf, min_line);
+        if (ev != NULL) {
+            ev->cur = SelFrame->cur;
+            if (min_line == SelFrame->cur.line) {
+                if ((ev->flags & IS_DELETION)) {
+                    if (ev->seg->data_len > SelFrame->cur.col) {
+                        SelFrame->cur.col = 0;
+                    } else {
+                        SelFrame->cur.col -= ev->seg->data_len;
+                    }
+                } else {
+                    SelFrame->cur.col += ev->seg->data_len;
+                }
+                SelFrame->vct = SelFrame->cur.col;
+                adjust_scroll(SelFrame);
+            }
+        }
+    }
+    if (ev != NULL) {
+        return UPDATE_UI;
+    }
+    return 0;
+}
+
 int normal_handle_input(int c)
 {
     int r = 0;
@@ -196,7 +248,6 @@ int normal_handle_input(int c)
     struct raw_line *d_lines;
     size_t num_lines;
     struct reg *reg;
-    int motion;
     struct mark *mark;
     struct file_list file_list;
     char ch[2];
@@ -271,37 +322,20 @@ int normal_handle_input(int c)
 
             ev = delete_range(buf, &from, &to);
             if (SelFrame->cur.line == buf->num_lines) {
-                move_vert(SelFrame, 1, -1);
+                SelFrame->cur.line--;
+                clip_column(SelFrame);
+                (void) adjust_scroll(SelFrame);
             } else {
                 clip_column(SelFrame);
             }
             break;
 
         default:
-            motion = get_binded_motion(e_c);
-            do_motion(SelFrame, motion);
-            from = SelFrame->cur;
-            to = cur;
-            sort_positions(&from, &to);
-            /* some motions do not want increment, this is to make some motions
-             * seem more natural
-             */
-            switch (motion) {
-            case MOTION_NEXT_WORD:
-            case MOTION_PREV_WORD:
-            case MOTION_UP:
-            case MOTION_DOWN:
-            case MOTION_LEFT:
-            case MOTION_RIGHT:
-            case MOTION_PREV:
-            case MOTION_NEXT:
-            case MOTION_FILE_BEG:
-            case MOTION_FILE_END:
-                break;
-
-            default:
-                to.col++;
+            if (prepare_motion(SelFrame, e_c) == 0) {
+                return 0;
             }
+            from = SelFrame->cur;
+            to = SelFrame->next_cur;
             ev = delete_range(buf, &from, &to);
             set_cursor(SelFrame, &from);
         }
@@ -332,20 +366,27 @@ int normal_handle_input(int c)
         } else {
             clip_column(SelFrame);
         }
+        SelFrame->vct = cur.col;
         r |= DO_RECORD;
         return r;
 
     /* delete the previous character on the current line */
     case 'X':
         cur = SelFrame->cur;
-        (void) move_horz(SelFrame, Core.counter, -1);
-        ev = delete_range(buf, &cur, &SelFrame->cur);
-        if (ev != NULL) {
-            yank_data(ev->seg, 0);
-            ev->cur = cur;
-            return UPDATE_UI | DO_RECORD;
+        if (cur.col == 0) {
+            return 0;
         }
-        return 0;
+        if (cur.col < Core.counter) {
+            SelFrame->cur.col = 0;
+        } else {
+            SelFrame->cur.col -= Core.counter;
+        }
+        ev = delete_range(buf, &SelFrame->cur, &cur);
+        yank_data(ev->seg, 0);
+        ev->cur = cur;
+        SelFrame->vct = SelFrame->cur.col;
+        (void) adjust_scroll(SelFrame);
+        return UPDATE_UI | DO_RECORD;
 
     /* join lines */
     case CONTROL('J'):
@@ -443,7 +484,7 @@ int normal_handle_input(int c)
             cur.col = buf->lines[cur.line].n;
             ev = break_line(buf, &cur);
             ev->cur = SelFrame->cur;
-            set_cursor(SelFrame, &SelFrame->cur);
+            set_cursor(SelFrame, &ev->end);
         }
         return UPDATE_UI | DO_RECORD;
 
@@ -612,19 +653,16 @@ int normal_handle_input(int c)
         Core.repeat_count = Core.counter;
         return 0;
 
+    case '=':
+        return indent_to_motion();
+
     /* enter insert mode and ... */
     case 'A': /* ...go to the end of the line */
     case 'a': /* ...go one to the right */
     case 'I': /* ...go to the start of the line and skip space */
     case 'i': /* ...do nothing */
         set_mode(INSERT_MODE);
-        if (c == 'A') {
-            move_horz(SelFrame, SIZE_MAX, 1);
-        } else if (c == 'a') {
-            move_horz(SelFrame, 1, 1);
-        } else if (c == 'I') {
-            do_motion(SelFrame, MOTION_HOME_SP);
-        }
+        (void) (prepare_motion(SelFrame, c) && apply_motion(SelFrame));
         return UPDATE_UI | DO_RECORD;
 
     /* start a recording or end the current recording */
@@ -694,30 +732,12 @@ int normal_handle_input(int c)
 
         /* yank till motion */
         default:
-            motion = get_binded_motion(e_c);
-            do_motion(SelFrame, motion);
-            from = SelFrame->cur;
-            to = cur;
-            sort_positions(&from, &to);
-            /* some motions do not want increment, this is to make some motions
-             * seem more natural
-             */
-            switch (motion) {
-            case MOTION_NEXT_WORD:
-            case MOTION_PREV_WORD:
-            case MOTION_UP:
-            case MOTION_DOWN:
-            case MOTION_LEFT:
-            case MOTION_RIGHT:
-            case MOTION_PREV:
-            case MOTION_NEXT:
-            case MOTION_FILE_BEG:
-            case MOTION_FILE_END:
-                break;
-
-            default:
-                to.col++;
+            if (prepare_motion(SelFrame, e_c) == 0) {
+                return 0;
             }
+            from = SelFrame->cur;
+            to = SelFrame->next_cur;
+            sort_positions(&from, &to);
         }
         d_lines = get_lines(buf, &from, &to, &num_lines);
         yank_data(save_lines(d_lines, num_lines), 0);
@@ -805,6 +825,24 @@ int normal_handle_input(int c)
         set_cursor(SelFrame, &mark->pos);
         return 0;
 
+    /* scroll up {counter} times */
+    case 'K':
+        return scroll_frame(SelFrame, Core.counter, -1);
+
+    /* scroll down {counter} times */
+    case 'J':
+        return scroll_frame(SelFrame, Core.counter, 1);
+
+    /* scroll up half the frame {counter} times */
+    case CONTROL('U'):
+        Core.counter = safe_mul(Core.counter, MAX(SelFrame->h / 2, 1));
+        return scroll_frame(SelFrame, Core.counter, -1);
+
+    /* scroll down half the frame {counter} times */
+    case CONTROL('D'):
+        Core.counter = safe_mul(Core.counter, MAX(SelFrame->h / 2, 1));
+        return scroll_frame(SelFrame, Core.counter, 1);
+
     /* open a file in the fuzzy file dialog */
     case 'Z':
         init_file_list(&file_list, ".");
@@ -819,5 +857,5 @@ int normal_handle_input(int c)
         return UPDATE_UI;
     }
     /* do a motion, see `get_binded_motion()` */
-    return do_motion(SelFrame, get_binded_motion(c));
+    return prepare_motion(SelFrame, c) && apply_motion(SelFrame);
 }

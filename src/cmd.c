@@ -324,8 +324,7 @@ void read_command_line(const char *beg)
     case '?':
         (void) search_string(SelFrame->buf, s);
         Core.counter = 1;
-        do_motion(SelFrame, beg[0] == '/' ? MOTION_NEXT_OCCUR :
-                MOTION_PREV_OCCUR);
+        (void) do_motion(SelFrame, beg[0] == '/' ? 'n' : 'p');
         break;
 
     case ':':

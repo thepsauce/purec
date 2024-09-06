@@ -25,12 +25,19 @@ struct frame {
     struct buf *buf;
     /// cursor position within the buffer
     struct pos cur;
+    /**
+     * the next value the cursor position should take one,
+     * the column might be out of bounds
+     */
+    struct pos next_cur;
     /// cursor position before a big jump
     struct pos prev_cur;
     /// offset of the text origin
     struct pos scroll;
     /// vertical column tracking
     size_t vct;
+    /// the next value for `vct`
+    size_t next_vct;
     /// next frame in the linked list
     struct frame *next;
 };
@@ -206,83 +213,30 @@ void clip_column(struct frame *frame);
 void set_cursor(struct frame *frame, const struct pos *pos);
 
 /**
- * All motions use the counter to perform the operation count times.
+ * Computes the position the given motion implies.
+ *
+ * Note: If this function returns 0, then `apply_motion()` cannot be called.
+ *
+ * @param frame         Frame to perform the motion within.
+ * @param motion_key    The input key.
+ *
+ * @return 0 if the cursor would not move, 1 otherwise
  */
-
-/// move to the left
-#define MOTION_LEFT             1
-/// move to the right
-#define MOTION_RIGHT            2
-/// move up
-#define MOTION_UP               3
-/// move down
-#define MOTION_DOWN             4
-/// move to the beginning of the line
-#define MOTION_HOME             5
-/// move to the end of the line
-#define MOTION_END              6
-/// move to the next character
-#define MOTION_NEXT             7
-/// move to the previous character
-#define MOTION_PREV             8
-/// move to the start of the frame
-#define MOTION_BEG_FRAME        9
-/// move to he middle of the frame
-#define MOTION_MIDDLE_FRAME     10
-/// move to he end of the frame
-#define MOTION_END_FRAME        11
-/// move to the beginning of the line but skip white space
-#define MOTION_HOME_SP          12
-/// move to the beginning of the file
-#define MOTION_FILE_BEG         13
-/// move to the end of the file
-#define MOTION_FILE_END         14
-/// move a page up
-#define MOTION_PAGE_UP          15
-/// move a page down
-#define MOTION_PAGE_DOWN        16
-/// move up a paragraph
-#define MOTION_PARA_UP          17
-/// move down a paragraph
-#define MOTION_PARA_DOWN        18
-/// finds a next character, it uses `get_ch()`
-#define MOTION_FIND_NEXT        19
-/// finds a previous character, it uses `get_ch()`
-#define MOTION_FIND_PREV        20
-/// same as `MOTION_FIND_NEXT` but jump before match
-#define MOTION_FIND_EXCL_NEXT   21
-/// same as `MOTION_FIND_PREV` but jump after match
-#define MOTION_FIND_EXCL_PREV   22
-/// move to next word
-#define MOTION_NEXT_WORD        23
-/// move to the end of the next word
-#define MOTION_END_WORD         24
-/// move to previous word
-#define MOTION_PREV_WORD        25
-/// jump to the next occurence of a search
-#define MOTION_NEXT_OCCUR       26
-/// jump to the previous occurence of a search
-#define MOTION_PREV_OCCUR       27
-/// scroll up
-#define MOTION_SCROLL_UP        28
-/// scroll down
-#define MOTION_SCROLL_DOWN      29
-/// scroll up half the window height
-#define MOTION_HALF_UP          30
-/// scroll down half the window height
-#define MOTION_HALF_DOWN        31
-/// move to the matching parenthesis
-#define MOTION_PAREN            32
+int prepare_motion(struct frame *frame, int motion_key);
 
 /**
- * Does a special cursor motion.
+ * Sets the cursor to the new position computed by `prepare_motion()`.
  *
- * @param frame     Frame to perform the motion within.
- * @param motion    Motion to perform (`MOTION_*`).
+ * Note: This function should be called after a call to `prepare_motion()`.
  *
- * @return 0 if the cursor stayed unchanged, 1 otherwise
+ * @param frame The frame to apply the motion to.
+ *
+ * @return This function always returns 1.
  */
-int do_motion(struct frame *frame, int motion);
+int apply_motion(struct frame *frame);
+
+#define do_motion(frame, key) (prepare_motion(frame, (key)) && \
+                               apply_motion(frame))
 
 /**
  * Gets a motion from a keybind.
