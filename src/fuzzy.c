@@ -1,6 +1,7 @@
 #include "color.h"
 #include "fuzzy.h"
 #include "input.h"
+#include "purec.h"
 #include "util.h"
 #include "xalloc.h"
 
@@ -193,7 +194,7 @@ size_t choose_fuzzy(const char **entries, size_t num_entries)
 
         render_entries();
         render_input();
-        c = getch();
+        c = get_ch();
         switch (c) {
         case KEY_UP:
             if (Fuzzy.selected > 0) {

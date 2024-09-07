@@ -108,6 +108,7 @@ char *send_to_input(int c)
 
     case KEY_BACKSPACE:
     case '\x7f':
+    case '\b':
         if (Input.index == Input.prefix) {
             break;
         }

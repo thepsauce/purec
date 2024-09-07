@@ -56,6 +56,7 @@ extern WINDOW *OffScreen;
 extern struct core {
     /// size of a tab in spaces
     int tab_size;
+
     /**
      * Message that is rendered at the bottom of the screen.
      *
@@ -77,9 +78,9 @@ extern struct core {
 
     /// type of the mode (`*_MODE`)
     int mode;
-    /// counter
+    /// current counter (number before a command)
     size_t counter;
-    /// user register
+    /// selected user register
     char user_reg;
 
     /**
@@ -112,30 +113,39 @@ extern struct core {
 
     /**
      * Series of key presses. Keys larger than 0xff, for example `KEY_LEFT` are
-     * encoded with (in binary) 1111111X XXXXXXXX, so this encodes the range from
+     * encoded with (in binary) 11111111 XXXXXXXX, so this encodes the range from
      * 256 to 511 (0777 is the maximum ncurses key value) (inclusive).
-     * This works because even in UTF-8, 11111110 or 11111111 mean nothing.
+     * This works because even in UTF-8 11111111 means nothing.
      */
     char *rec;
     /// the amount of inputted characters
     size_t rec_len;
     /// number of allocated bytes for `rec`
     size_t a_rec;
-    /// how many times to play the recording from `dot_i`
-    size_t repeat_count;
-    /// the start of the dot recording segment
-    size_t dot_i;
-    /// the end of the dot recording segment
-    size_t dot_e;
-    /// the index within the current playback
-    size_t play_i;
-    /// user created recordings 'A' to 'Z'
-    struct {
+    /// the current recording stack
+    struct play_rec {
+        /// start of the playback; index within `rec`
         size_t from;
+        /// end of the playback (exclusive); index within `rec`
+        size_t to;
+        /// current index of the playback; index within `rec`
+        size_t index;
+        /// how many times to replay before popping
+        size_t repeat_count;
+    } rec_stack[32];
+    /// the number of recordings on the stack
+    unsigned rec_stack_n;
+    /// user created recordings 'A' to 'Z'
+    struct rec {
+        /// start of the recording; index within `rec`
+        size_t from;
+        /// end of the recording (exclusive); index within `rec`
         size_t to;
     } user_recs[USER_REC_MAX - USER_REC_MIN + 1];
     /// current user recording (upper case), '\0' signals nothing being recorded
     char user_rec_ch;
+    /// the dot recording
+    struct rec dot;
 } Core;
 
 struct selection {
@@ -210,12 +220,14 @@ struct mark *get_mark(struct frame *frame, char ch);
 void yank_data(struct undo_seg *seg, int flags);
 
 /**
- * Checks if a recording is currently being played. If yes, then the next call
- * to `get_ch()` will NOT be interactive user input but a playback.
+ * Checks if a recording is currently being played.
  *
- * @return If a recording is played.
+ * If yes, then the next call to `get_ch()` will NOT be interactive user input
+ * but a playback.
+ *
+ * @return The currently playing recording.
  */
-bool is_playback(void);
+struct play_rec *get_playback(void);
 
 /**
  * Get input from the user or the playback record.
@@ -285,8 +297,8 @@ bool get_selection(struct selection *sel);
  */
 bool is_in_selection(const struct selection *sel, const struct pos *pos);
 
-#define UPDATE_UI 0x1
-#define DO_RECORD 0x2
+#define UPDATE_UI   0x1
+#define DO_RECORD   0x2
 
 /**
  * Handles a key input for the normal mode.
@@ -333,5 +345,27 @@ void save_session(FILE *fp);
  * @return -1 if the file had any mistakes, 0 otherwise.
  */
 int load_session(FILE *fp);
+
+/**
+ * Initialize the core.
+ *
+ * @param argc  The number of program arguments.
+ * @param argv  The program arguments.
+ *
+ * @return 0 if initializing was successful, -1 otherwise.
+ */
+int init_purec(int argc, char **argv);
+
+/**
+ * Renders all frames and places the cursor
+ */
+void render_all(void);
+
+/**
+ * Frees all resources, saves the last session.
+ *
+ * @return The exit code of purec.
+ */
+int leave_purec(void);
 
 #endif

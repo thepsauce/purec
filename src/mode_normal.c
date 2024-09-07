@@ -249,6 +249,7 @@ int normal_handle_input(int c)
     size_t num_lines;
     struct reg *reg;
     struct mark *mark;
+    struct play_rec *rec;
     struct file_list file_list;
     char ch[2];
 
@@ -293,10 +294,12 @@ int normal_handle_input(int c)
             ev = delete_range(buf, &from, &to);
             ev_nn = indent_line(buf, from.line);
             if (ev_nn != NULL && ev != NULL) {
+                /* since the base pointer might change, this is to correct for
+                 * that
+                 */
                 ev = ev_nn - 1;
             }
-            from.col = buf->lines[from.line].n;
-            set_cursor(SelFrame, &from);
+            SelFrame->cur.col = buf->lines[from.line].n;
             break;
 
         case 'd':
@@ -323,11 +326,8 @@ int normal_handle_input(int c)
             ev = delete_range(buf, &from, &to);
             if (SelFrame->cur.line == buf->num_lines) {
                 SelFrame->cur.line--;
-                clip_column(SelFrame);
-                (void) adjust_scroll(SelFrame);
-            } else {
-                clip_column(SelFrame);
             }
+            /* `set_mode()` clips the column */
             break;
 
         default:
@@ -337,16 +337,19 @@ int normal_handle_input(int c)
             from = SelFrame->cur;
             to = SelFrame->next_cur;
             ev = delete_range(buf, &from, &to);
-            set_cursor(SelFrame, &from);
+            if (to.line < SelFrame->cur.line ||
+                (to.line == SelFrame->cur.line &&
+                 to.col < SelFrame->cur.col)) {
+                SelFrame->cur = to;
+            }
         }
         if (ev != NULL) {
             yank_data(ev->seg, 0);
             ev->cur = cur;
-            r = UPDATE_UI;
         }
-        r |= DO_RECORD;
+        (void) adjust_scroll(SelFrame);
         set_mode(next_mode);
-        return r;
+        return UPDATE_UI | DO_RECORD;
 
     /* delete current character on the current line */
     case 'x':
@@ -367,8 +370,7 @@ int normal_handle_input(int c)
             clip_column(SelFrame);
         }
         SelFrame->vct = cur.col;
-        r |= DO_RECORD;
-        return r;
+        return r | DO_RECORD;
 
     /* delete the previous character on the current line */
     case 'X':
@@ -408,7 +410,7 @@ int normal_handle_input(int c)
                 free(lines[0].s);
             }
         }
-        return UPDATE_UI;
+        return UPDATE_UI | DO_RECORD;
 
     /* replace current character */
     case 'r':
@@ -424,12 +426,12 @@ int normal_handle_input(int c)
                 ev->cur = SelFrame->cur;
             }
             ev = break_line(buf, &SelFrame->cur);
+            clip_column(SelFrame);
         } else {
             ConvChar = c;
             ev = change_range(buf, &SelFrame->cur, &cur, conv_to_char);
         }
         ev->cur = SelFrame->cur;
-        set_cursor(SelFrame, &cur);
         return UPDATE_UI | DO_RECORD;
 
     /* undo last event in current frame */
@@ -519,17 +521,17 @@ int normal_handle_input(int c)
     /* enter visual mode */
     case 'v':
         set_mode(VISUAL_MODE);
-        return UPDATE_UI | DO_RECORD;
+        return UPDATE_UI;
 
     /* enter visual line mode */
     case 'V':
         set_mode(VISUAL_LINE_MODE);
-        return UPDATE_UI | DO_RECORD;
+        return UPDATE_UI;
 
     /* enter visual block mode */
     case CONTROL('V'):
         set_mode(VISUAL_BLOCK_MODE);
-        return UPDATE_UI | DO_RECORD;
+        return UPDATE_UI;
 
     /* do a frame command */
     case CONTROL('W'):
@@ -643,14 +645,11 @@ int normal_handle_input(int c)
 
     /* repeat last action */
     case '.':
-        if (Core.dot_i >= Core.rec_len - 1) {
-            return 0;
-        }
-        if (Core.dot_e == Core.rec_len) {
-            /* exclude the '.' itself */
-            Core.dot_e--;
-        }
-        Core.repeat_count = Core.counter;
+        rec = &Core.rec_stack[Core.rec_stack_n++];
+        rec->from = Core.dot.from;
+        rec->to = Core.dot.to;
+        rec->index = rec->from;
+        rec->repeat_count = Core.counter - 1;
         return 0;
 
     case '=':
@@ -662,7 +661,7 @@ int normal_handle_input(int c)
     case 'I': /* ...go to the start of the line and skip space */
     case 'i': /* ...do nothing */
         set_mode(INSERT_MODE);
-        (void) (prepare_motion(SelFrame, c) && apply_motion(SelFrame));
+        (void) do_motion(SelFrame, c);
         return UPDATE_UI | DO_RECORD;
 
     /* start a recording or end the current recording */
@@ -695,9 +694,16 @@ int normal_handle_input(int c)
             set_error("recording %c is empty", c);
             return UPDATE_UI;
         }
-        Core.dot_i = Core.user_recs[c - USER_REC_MIN].from;
-        Core.dot_e = Core.user_recs[c - USER_REC_MIN].to;
-        Core.repeat_count = Core.counter;
+        if (Core.rec_stack_n == ARRAY_SIZE(Core.rec_stack)) {
+            set_error("overflow error on recording stack, playback is stopped");
+            Core.rec_stack_n = 0;
+            return UPDATE_UI;
+        }
+        rec = &Core.rec_stack[Core.rec_stack_n++];
+        rec->from = Core.user_recs[c - USER_REC_MIN].from;
+        rec->to = Core.user_recs[c - USER_REC_MIN].to;
+        rec->index = rec->from;
+        rec->repeat_count = Core.counter - 1;
         return UPDATE_UI;
 
     /* yank text to a register */

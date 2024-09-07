@@ -712,19 +712,19 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_vct = SIZE_MAX;
         break;
 
-    /* move back {count} characters, where a line end counts as one character */
+    /* move back {count} characters, a line end counts as one character */
     case KEY_BACKSPACE:
         if (new_cur.col == 0 && new_cur.line == 0) {
             return 0;
         }
 
-        while (new_cur.col >= Core.counter) {
+        while (new_cur.col < Core.counter) {
             Core.counter -= new_cur.col + 1;
             if (new_cur.line == 0) {
                 break;
             }
             new_cur.line--;
-            new_cur.col = buf->lines[new_cur.line].n;
+            new_cur.col = get_mode_line_end(&buf->lines[new_cur.line]);
         }
         if (new_cur.col < Core.counter) {
             new_cur.col = 0;
@@ -734,15 +734,15 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_vct = new_cur.col;
         break;
 
-    /* move forward {count} characters */
+    /* move forward {count} characters, a line end counts as one character */
     case ' ':
         while (new_cur.line != buf->num_lines - 1) {
-            n = buf->lines[new_cur.line].n;
+            n = get_mode_line_end(&buf->lines[new_cur.line]);
             n -= new_cur.col;
-            if (Core.counter >= n) {
+            if (Core.counter <= n) {
                 break;
             }
-            Core.counter -= n;
+            Core.counter -= n + 1;
             new_cur.col = 0;
             new_cur.line++;
         }
@@ -796,8 +796,10 @@ int prepare_motion(struct frame *frame, int motion_key)
 
     /* go to ... */
     case 'g':
-        c = get_extra_char();
-        switch (c) {
+        motion_key = get_extra_char();
+        /* fall through */
+    case 'G':
+        switch (motion_key) {
         /* ...the line at {counter} */
         case 'g':
             Core.counter--;
@@ -825,6 +827,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         }
         break;
 
+    /* move up {count} pages where a page is 2/3 of the frame height */
     case KEY_PPAGE:
         if (new_cur.line == 0) {
             return 0;
@@ -839,6 +842,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         }
         break;
 
+    /* move down {count} pages where a page is 2/3 of the frame height */
     case KEY_NPAGE:
         n = frame->h * 2 / 3;
         n = MAX(n, 1);
@@ -854,6 +858,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         }
         break;
 
+    /* move up {count} paragraphs */
     case '{':
         if (frame->cur.line == 0) {
             return 0;
@@ -870,6 +875,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         }
         break;
 
+    /* move down {count} paragraphs */
     case '}':
         if (new_cur.line + 1 == buf->num_lines) {
             return 0;
@@ -886,8 +892,9 @@ int prepare_motion(struct frame *frame, int motion_key)
         }
         break;
 
+    /* find the {count}'th character */
     case 'f':
-    case 't':
+    case 't': /* this moves in an exclusive way */
         /* the character to look for */
         c = get_ch();
         col = new_cur.col;
@@ -916,8 +923,9 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_vct = new_cur.col;
         break;
 
+    /* find the {count}'th character backwards */
     case 'F':
-    case 'T':
+    case 'T': /* this moves in an exclusive way */
         /* the character to look for */
         c = get_ch();
         col = new_cur.col;
@@ -944,6 +952,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_vct = new_cur.col;
         break;
 
+    /* move forward {count} words, skip space after a word */
     case 'W':
     case 'w':
         line = &frame->buf->lines[new_cur.line];
@@ -984,6 +993,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_vct = new_cur.col;
         break;
 
+    /* move forward {count} words, skip space before a word */
     case 'E':
     case 'e':
         new_cur = frame->cur;
@@ -1036,6 +1046,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_vct = new_cur.col;
         break;
 
+    /* move back {count} words */
     case 'B':
     case 'b':
         line = &frame->buf->lines[new_cur.line];
@@ -1082,6 +1093,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_vct = new_cur.col;
         break;
 
+    /* go forward {count} matches */
     case 'n':
         if (buf->num_matches == 0) {
             set_message("no matches");
@@ -1096,6 +1108,7 @@ int prepare_motion(struct frame *frame, int motion_key)
                 buf->num_matches);
         break;
 
+    /* go backwards {count} matches */
     case 'N':
         if (buf->num_matches == 0) {
             return 0;
@@ -1118,6 +1131,7 @@ int prepare_motion(struct frame *frame, int motion_key)
                 buf->num_matches);
         break;
 
+    /* go to the matching parenthesis */
     case '%':
         index = get_paren(frame->buf, &new_cur);
         if (index == SIZE_MAX) {
@@ -1130,6 +1144,9 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_cur = buf->parens[index].pos;
         new_vct = new_cur.col;
         break;
+
+    default:
+        return 0;
     }
     frame->next_cur = new_cur;
     frame->next_vct = new_vct;

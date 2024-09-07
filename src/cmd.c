@@ -307,8 +307,8 @@ void read_command_line(const char *beg)
 
     set_input(0, LINES - 1, COLS, beg, 1, history, num_history);
 
-    set_highlight(stdscr, HI_CMD);
-    while (render_input(), s = send_to_input(get_ch()), s == NULL) {
+    while (set_highlight(stdscr, HI_CMD), render_input(),
+           s = send_to_input(get_ch()), s == NULL) {
         (void) 0;
     }
 
