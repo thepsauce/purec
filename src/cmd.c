@@ -305,12 +305,16 @@ void read_command_line(const char *beg)
 
     Core.msg_state = MSG_TO_DEFAULT;
 
-    set_input(0, LINES - 1, COLS, beg, 1, history, num_history);
-
-    while (set_highlight(stdscr, HI_CMD), render_input(),
-           s = send_to_input(get_ch()), s == NULL) {
-        (void) 0;
-    }
+    set_input_text(beg, 1);
+    set_input_history(history, num_history);
+    do {
+        Input.x = 0;
+        Input.y = LINES - 1;
+        Input.max_w = COLS;
+        set_highlight(stdscr, HI_CMD);
+        render_input();
+        s = send_to_input(get_ch());
+    } while (s == NULL);
 
     if (s[0] == '\n') {
         return;

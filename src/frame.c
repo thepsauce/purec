@@ -915,6 +915,7 @@ int prepare_motion(struct frame *frame, int motion_key)
                 if (motion_key == 't') {
                     new_cur.col--;
                 }
+                break;
             }
         }
         if (new_cur.col == frame->cur.col) {
@@ -944,6 +945,7 @@ int prepare_motion(struct frame *frame, int motion_key)
                 if (motion_key == 'T') {
                     new_cur.col++;
                 }
+                break;
             }
         }
         if (new_cur.col == frame->cur.col) {

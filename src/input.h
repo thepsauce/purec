@@ -55,17 +55,17 @@ extern struct input {
     int max_w;
     /// size of the unmodifiable prefix
     size_t prefix;
-    /// current command line content
-    char *buf;
-    /// number of allocated bytes for `buf`
+    /// current input line content
+    char *s;
+    /// number of allocated bytes for `s`
     size_t a;
-    /// length of the buffer
-    size_t len;
-    /// index within the buffer
+    /// length of the input line
+    size_t n;
+    /// index within the input line
     size_t index;
     /// horizontal scrolling
     size_t scroll;
-    /// history of all entered linees
+    /// history of all entered lines
     char **history;
     /// number of lines in the history
     size_t num_history;
@@ -81,21 +81,32 @@ extern struct input {
 } Input;
 
 /**
- * Sets up an input.
+ * Sets the text of the input line.
+ * 
+ * @param text          The text to set it to including the prefix.
+ * @param prefix_len    Size of the text segment in front of the input.
+ */
+void set_input_text(const char *text, size_t prefix_len);
+
+/**
+ * Sets the history of the input line.
  *
- * The given `hist` pointer will be modified after a successful command line was
- * entered.
- *
- * @param x         X position of the input box.
- * @param y         Y position of the input box.
- * @param max_w     Width of the input box.
- * @param inp       Initial input.
- * @param prefix    Size of the text segment in front of the input.
- * @param hist      History entries.
+ * @param hist      History entries, may be `NULL` (no history).
  * @param num_hist  Number of entries in the history.
  */
-void set_input(int x, int y, int max_w, const char *inp, size_t prefix,
-        char **hist, size_t num_hist);
+void set_input_history(char **history, size_t num_hist);
+
+/**
+ * This clears the text after the prefix and appends given text.
+ *
+ * @param text  The text to append to the prefix.
+ */
+void append_input_prefix(const char *text);
+
+/**
+ * Adds a null terminator to the end of the input line.
+ */
+void terminate_input(void);
 
 /**
  * Let the input box handle user input.

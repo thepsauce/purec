@@ -140,19 +140,14 @@ int cmd_cquit(struct cmd_data *cd)
 
 int cmd_edit(struct cmd_data *cd)
 {
-    struct file_list list;
-    size_t entry;
+    char *entry;
     struct buf *buf = NULL;
 
     if (cd->arg[0] == '\0') {
-        init_file_list(&list, ".");
-        if (get_deep_files(&list) == 0) {
-            entry = choose_fuzzy((const char**) list.paths, list.num);
-            if (entry != SIZE_MAX) {
-                buf = create_buffer(list.paths[entry]);
-            }
+        entry = choose_fuzzy(NULL);
+        if (entry != NULL) {
+            buf = create_buffer(entry);
         }
-        clear_file_list(&list);
     } else {
         buf = create_buffer(cd->arg);
     }

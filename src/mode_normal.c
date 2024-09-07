@@ -243,14 +243,13 @@ int normal_handle_input(int c)
     struct undo_event *ev, *ev_nn;
     struct raw_line lines[2];
     struct frame *frame;
-    size_t entry;
+    char *entry;
     int next_mode = NORMAL_MODE;
     struct raw_line *d_lines;
     size_t num_lines;
     struct reg *reg;
     struct mark *mark;
     struct play_rec *rec;
-    struct file_list file_list;
     char ch[2];
 
     buf = SelFrame->buf;
@@ -851,15 +850,11 @@ int normal_handle_input(int c)
 
     /* open a file in the fuzzy file dialog */
     case 'Z':
-        init_file_list(&file_list, ".");
-        if (get_deep_files(&file_list) == 0) {
-            entry = choose_fuzzy((const char**) file_list.paths, file_list.num);
-            if (entry != SIZE_MAX) {
-                buf = create_buffer(file_list.paths[entry]);
-                set_frame_buffer(SelFrame, buf);
-            }
+        entry = choose_fuzzy(NULL);
+        if (entry != NULL) {
+            buf = create_buffer(entry);
+            set_frame_buffer(SelFrame, buf);
         }
-        clear_file_list(&file_list);
         return UPDATE_UI;
     }
     /* do a motion, see `get_binded_motion()` */

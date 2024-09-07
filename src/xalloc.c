@@ -54,11 +54,18 @@ void *xrealloc(void *ptr, size_t size)
 
 void *xreallocarray(void *ptr, size_t nmemb, size_t size)
 {
+    size_t n_bytes;
+
     if (nmemb == 0 || size == 0) {
         free(ptr);
         return NULL;
     }
-    ptr = reallocarray(ptr, nmemb, size);
+    if (__builtin_mul_overflow(nmemb, size, &n_bytes)) {
+        fprintf(stderr, "reallocarray(%p, %zu, %zu): integer overflow\n",
+                ptr, nmemb, size);
+        exit(EXIT_FAILURE);
+    }
+    ptr = realloc(ptr, n_bytes);
     if (ptr == NULL) {
         fprintf(stderr, "reallocarray(%p, %zu, %zu): %s\n",
                 ptr, nmemb, size, strerror(errno));

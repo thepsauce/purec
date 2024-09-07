@@ -15,34 +15,29 @@ struct file_chooser {
     int x, y, w, h;
     struct pos scroll;
     size_t selected;
-    const char **s_entries;
-    size_t num_s_entries;
-    struct fuzzy_entry *entries;
+    struct entry {
+        int type;
+        int score;
+        char *name;
+    } *entries;
     size_t num_entries;
+    size_t a_entries;
+    char *last_dir;
 } Fuzzy;
-
-struct fuzzy_entry {
-    /// index within `s_entries` (entry name)
-    size_t index;
-    /// what the beginning of the fuzzy pattern matched against
-    size_t first_match_i;
-    /// fuzzy matching score
-    int score;
-};
 
 static int compare_entries(const void *v_a, const void *v_b)
 {
-    const struct fuzzy_entry *a, *b;
+    const struct entry *a, *b;
 
     a = v_a;
     b = v_b;
     if (a->score != b->score) {
         return b->score - a->score;
     }
-    if (a->first_match_i != b->first_match_i) {
-        return a->first_match_i - b->first_match_i;
+    if (a->type != b->type) {
+        return a->type - b->type;
     }
-    return strcasecmp(Fuzzy.s_entries[a->index], Fuzzy.s_entries[b->index]);
+    return strcasecmp(a->name, b->name);
 }
 
 /**
@@ -51,7 +46,7 @@ static int compare_entries(const void *v_a, const void *v_b)
 static void render_entries(void)
 {
     size_t i, e;
-    const char *s;
+    struct entry *entry;
     int x;
     size_t s_i;
     size_t pat_i;
@@ -67,26 +62,33 @@ static void render_entries(void)
         } else {
             attr_off(A_REVERSE, NULL);
         }
-        s = Fuzzy.s_entries[Fuzzy.entries[i].index];
+ 
+        entry = &Fuzzy.entries[i];
         x = 0;
         s_i = 0;
         pat_i = Input.prefix;
-        while (s[s_i] != '\0' && x + 1 < Fuzzy.w) {
-            if (pat_i != Input.len &&
-                        tolower(s[s_i]) == tolower(Input.buf[pat_i])) {
+        while (entry->name[s_i] != '\0' && x < Fuzzy.w) {
+            if (entry->score > 0 && pat_i != Input.n &&
+                    tolower(entry->name[s_i]) ==
+                        tolower(Input.s[pat_i])) {
                 attr_on(A_BOLD, NULL);
-                addch(s[s_i]);
+                addch(entry->name[s_i]);
                 attr_off(A_BOLD, NULL);
                 pat_i++;
-                x++;
             } else {
-                addch(s[s_i]);
+                addch(entry->name[s_i]);
             }
+            x++;
             s_i++;
         }
 
+        if (entry->type == DT_DIR && x < Fuzzy.w) {
+            addch('/');
+            x++;
+        }
+
         /* erase to end of line */
-        while (getcurx(stdscr) < Fuzzy.x + Fuzzy.w) {
+        for (; x < Fuzzy.w; x++) {
             addch(' ');
         }
     }
@@ -102,36 +104,34 @@ static void render_entries(void)
 }
 
 /**
- * Matches the entries in `s_entries` against the search pattern in the input
- * and sets (`entries`, `num_entries`) to all matching entries.
+ * Matches the entries in `entries` against the search pattern in the input
+ * and sorts the entries such that the matching elements come first.
  */
-static void filter_entries(void)
+static void sort_entries(void)
 {
-    const char *s;
     size_t s_i;
     size_t pat_i;
-    size_t first_i = 0 /* make gcc -O3 happy */;
     int score;
     int cons_score;
-    struct fuzzy_entry *entry;
+    struct entry *entry;
 
-    Fuzzy.num_entries = 0;
-    for (size_t i = 0; i < Fuzzy.num_s_entries; i++) {
-        s = Fuzzy.s_entries[i];
+    if (Fuzzy.num_entries == 0) {
+        Fuzzy.selected = 0;
+        return;
+    }
+
+    for (size_t i = 0; i < Fuzzy.num_entries; i++) {
+        entry = &Fuzzy.entries[i];
         s_i = 0;
         score = 0;
         cons_score = 1;
         pat_i = Input.prefix;
-        while (pat_i != Input.len && s[s_i] != '\0') {
-            if (tolower(Input.buf[pat_i]) == tolower(s[s_i])) {
-                if (score == 0) {
-                    /* tiebreaker: position of the first matching letter */
-                    first_i = s_i;
-                }
+        while (pat_i != Input.n && entry->name[s_i] != '\0') {
+            if (tolower(Input.s[pat_i]) == tolower(entry->name[s_i])) {
                 /* many consecutive matching letters give a bigger score */
                 score += cons_score;
                 /* additional point if the case matches */
-                if (Input.buf[pat_i] == s[s_i]) {
+                if (Input.s[pat_i] == entry->name[s_i]) {
                     score++;
                 }
                 cons_score++;
@@ -142,50 +142,99 @@ static void filter_entries(void)
             s_i++;
         }
 
-        if (pat_i == Input.len) {
-            entry = &Fuzzy.entries[Fuzzy.num_entries++];
-            entry->index = i;
-            entry->first_match_i = first_i;
+        if (pat_i == Input.n) {
             entry->score = score;
+        } else {
+            entry->score = 0;
         }
     }
 
-    if (Fuzzy.num_entries == 0) {
-        Fuzzy.selected = 0;
-        return;
-    }
-
-    qsort(Fuzzy.entries, Fuzzy.num_entries, sizeof(*Fuzzy.entries),
-            compare_entries);
+    qsort(Fuzzy.entries, Fuzzy.num_entries,
+          sizeof(*Fuzzy.entries), compare_entries);
     Fuzzy.selected = MIN(Fuzzy.num_entries - 1, Fuzzy.selected);
 }
 
-size_t choose_fuzzy(const char **entries, size_t num_entries)
+int update_files(void)
+{
+    DIR *dir;
+    struct dirent *ent;
+
+    Input.s[Input.prefix - 1] = '\0';
+    dir = opendir(Input.s);
+    Input.s[Input.prefix - 1] = '/';
+    if (dir == NULL) {
+        return -1;
+    }
+ 
+    for (size_t i = 0; i < Fuzzy.num_entries; i++) {
+        free(Fuzzy.entries[i].name);
+    }
+    Fuzzy.num_entries = 0;
+    while (ent = readdir(dir), ent != NULL) {
+        /* ignore hidden directories */
+        if (ent->d_type == DT_DIR && ent->d_name[0] == '.') {
+            continue;
+        }
+        if (Fuzzy.num_entries == Fuzzy.a_entries) {
+            Fuzzy.a_entries *= 2;
+            Fuzzy.a_entries++;
+            Fuzzy.entries = xreallocarray(Fuzzy.entries, Fuzzy.a_entries,
+                    sizeof(*Fuzzy.entries));
+        }
+        Fuzzy.entries[Fuzzy.num_entries].type = ent->d_type;
+        Fuzzy.entries[Fuzzy.num_entries].name = xstrdup(ent->d_name);
+        Fuzzy.num_entries++;
+    }
+    closedir(dir);
+    return 0;
+}
+
+char *choose_fuzzy(const char *dir)
 {
     int c;
     char *s = NULL;
-
-    Fuzzy.x = COLS / 6;
-    Fuzzy.y = LINES / 6;
-    Fuzzy.w = COLS == 1 ? 1 : COLS * 2 / 3;
-    Fuzzy.h = LINES <= 2 ? LINES : LINES * 2 / 3;
+    struct entry *entry;
+    size_t dir_len;
 
     Fuzzy.selected = 0;
+    
+    if (Input.a < 1024) {
+        Input.a = 1024;
+        Input.s = xrealloc(Input.s, Input.a);
+    }
+ 
+    if (dir == NULL) {
+        if (Fuzzy.last_dir == NULL) {
+            set_input_text("./", 2);
+        } else {
+            set_input_text(Fuzzy.last_dir, strlen(Fuzzy.last_dir));
+        }
+    } else {
+        set_input_text(dir, strlen(dir));
+        append_input_prefix("/");
+    }
+    
+    /* do not use a history */
+    set_input_history(NULL, 0);
 
-    Fuzzy.s_entries = entries;
-    Fuzzy.num_s_entries = num_entries;
+    (void) update_files();
 
-    Fuzzy.entries = xreallocarray(Fuzzy.entries, num_entries,
-            sizeof(*Fuzzy.entries));
-
-    set_input(Fuzzy.x, Fuzzy.y, Fuzzy.w, "> ", 2, NULL, 0);
     do {
-        filter_entries();
+        Fuzzy.x = COLS / 6;
+        Fuzzy.y = LINES / 6;
+        Fuzzy.w = COLS == 1 ? 1 : COLS * 2 / 3;
+        Fuzzy.h = LINES <= 2 ? LINES : LINES * 2 / 3;
+
+        Input.x = Fuzzy.x;
+        Input.y = Fuzzy.y;
+        Input.max_w = Fuzzy.w;
+
+        sort_entries();
 
         if (Fuzzy.selected < Fuzzy.scroll.line) {
             Fuzzy.scroll.line = Fuzzy.selected;
-        } else if (Fuzzy.selected + 2 >= Fuzzy.scroll.line + Fuzzy.h) {
-            Fuzzy.scroll.line = Fuzzy.selected - Fuzzy.h + 3;
+        } else if (Fuzzy.selected >= Fuzzy.scroll.line + Fuzzy.h) {
+            Fuzzy.scroll.line = Fuzzy.selected - Fuzzy.h + 1;
         }
 
         if ((size_t) Fuzzy.h >= Fuzzy.num_entries) {
@@ -203,16 +252,35 @@ size_t choose_fuzzy(const char **entries, size_t num_entries)
             break;
 
         case KEY_DOWN:
-            if (Fuzzy.selected + 1 < num_entries) {
+            if (Fuzzy.selected + 1 < Fuzzy.num_entries) {
                 Fuzzy.selected++;
             }
             break;
 
         case '\t':
-            if (Fuzzy.selected + 1 >= num_entries) {
+            if (Fuzzy.selected + 1 >= Fuzzy.num_entries) {
                 Fuzzy.selected = 0;
             } else {
                 Fuzzy.selected++;
+            }
+            break;
+
+        case '\n':
+            if (Fuzzy.num_entries == 0) {
+                return NULL;
+            }
+            entry = &Fuzzy.entries[Fuzzy.selected];
+            dir_len = Input.prefix;
+            append_input_prefix(entry->name);
+            if (entry->type == DT_DIR) {
+                append_input_prefix("/");
+                (void) update_files();
+            } else {
+                terminate_input();
+                free(Fuzzy.last_dir);
+                Fuzzy.last_dir = xmemdup(Input.s, dir_len + 1);
+                Fuzzy.last_dir[dir_len] = '\0';
+                return Input.s;
             }
             break;
 
@@ -227,93 +295,44 @@ size_t choose_fuzzy(const char **entries, size_t num_entries)
             }
             break;
 
+        case '/':
+            if (Fuzzy.num_entries == 0) {
+                break;
+            }
+            entry = &Fuzzy.entries[0];
+            if (entry->type != DT_DIR || entry->score == 0) {
+                break;
+            }
+            append_input_prefix(entry->name);
+            append_input_prefix("/");
+            (void) update_files();
+            break;
+
+        case KEY_BACKSPACE:
+        case '\x7f':
+        case '\b':
+            if (Input.n == Input.prefix) {
+                Input.prefix--;
+                while (Input.prefix > 0) {
+                    if (Input.s[Input.prefix - 1] == '/') {
+                        break;
+                    }
+                    Input.prefix--;
+                }
+                if (Input.prefix == 0) {
+                    Input.prefix += 2;
+                    break;
+                }
+                Input.n = Input.prefix;
+                Input.index = Input.n;
+                (void) update_files();
+                break;
+            }
+            /* fall through */
         default:
             s = send_to_input(c);
+            Fuzzy.selected = 0;
         }
     } while (s == NULL);
-
-    if (s[0] == '\n' || Fuzzy.num_entries == 0) {
-        return SIZE_MAX;
-    }
-
-    return Fuzzy.entries[Fuzzy.selected].index;
-}
-
-void init_file_list(struct file_list *list, const char *root)
-{
-    list->paths = NULL;
-    list->a = 0;
-    list->num = 0;
-
-    list->root = get_relative_path(root);
-    list->root_len = strlen(list->root);
-    list->root = xrealloc(list->root, list->root_len + 2);
-    list->root[list->root_len++] = '/';
-    list->root[list->root_len] = '\0';
-
-    list->path = xstrdup(list->root);
-    list->path_len = list->root_len;
-    /* +1 for the null terminator */
-    list->a_path = list->path_len + 1;
-}
-
-int get_deep_files(struct file_list *list)
-{
-    DIR *dir;
-    struct dirent *ent;
-    size_t name_len;
-    char *path;
-    size_t len;
-
-    dir = opendir(list->path);
-    if (dir == NULL) {
-        return -1;
-    }
-    while (ent = readdir(dir), ent != NULL) {
-        /* ignore hidden directories */
-        if (ent->d_type == DT_DIR && ent->d_name[0] == '.') {
-            continue;
-        }
-        name_len = strlen(ent->d_name);
-        if (ent->d_type == DT_REG) {
-            if (list->num == list->a) {
-                list->a *= 2;
-                list->a++;
-                list->paths = xreallocarray(list->paths, list->a,
-                        sizeof(*list->paths));
-            }
-
-            len = list->path_len - list->root_len;
-            path = xmalloc(len + name_len + 1);
-            memcpy(&path[0], &list->path[list->root_len], len);
-            strcpy(&path[len], ent->d_name);
-
-            list->paths[list->num++] = path;
-        } else if (ent->d_type == DT_DIR) {
-            if (list->path_len + name_len + 1 >= list->a_path) {
-                list->a_path *= 2;
-                list->a_path += name_len + 1;
-                list->path = xrealloc(list->path, list->a_path);
-            }
-            memcpy(&list->path[list->path_len], ent->d_name, name_len);
-            list->path[list->path_len + name_len] = '/';
-            list->path[list->path_len + name_len + 1] = '\0';
-
-            list->path_len += name_len + 1;
-            (void) get_deep_files(list);
-            list->path_len -= name_len + 1;
-        }
-    }
-    closedir(dir);
-    return 0;
-}
-
-void clear_file_list(struct file_list *list)
-{
-    free(list->root);
-    for (size_t i = 0; i < list->num; i++) {
-        free(list->paths[i]);
-    }
-    free(list->paths);
-    free(list->path);
+    return NULL;
 }
