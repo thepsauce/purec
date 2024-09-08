@@ -6,6 +6,10 @@
 struct theme Themes[] = {
     {
         .name = "Term",
+        .term_colors = {
+            "#000000", "#ff0000", "#00ff00", "#ffff00",
+            "#0000ff", "#ff00ff", "#00ffff", "#ffffff"
+        },
         .attribs = {
             [HI_NORMAL] = { 7, 0, A_NORMAL },
             [HI_COMMENT] = { 6, 0, A_NORMAL },

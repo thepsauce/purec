@@ -199,3 +199,57 @@ char *get_relative_path(const char *path)
     free(cwd);
     return s;
 }
+
+int wcwidth(wchar_t c);
+
+int get_glyph(const char *s, size_t n, struct glyph *g)
+{
+    int c;
+    wchar_t wc;
+
+    c = mbtowc(&wc, &s[0], n);
+    if (c == -1) {
+        return -1;
+    }
+
+    if (g == NULL) {
+        return c;
+    }
+
+    g->n = c;
+    g->wc = wc;
+    g->w = wcwidth(wc);
+    return c;
+}
+
+bool compute_string_fit(const char *s, size_t n, size_t max,
+                        struct fitting *fit)
+{
+    size_t om;
+    struct glyph g;
+    bool f = true;
+
+    om = max;
+    fit->s = (char*) s;
+    while (n > 0) {
+        if (s[0] == '\n') {
+            break;
+        }
+
+        if (get_glyph(s, n, &g) == -1) {
+            g.w = 1;
+            g.n = 1;
+        }
+        if ((size_t) g.w > max) {
+            f = false;
+            break;
+        }
+        max -= g.w;
+
+        s += g.n;
+        n -= g.n;
+    }
+    fit->w = om - max;
+    fit->e = (char*) s;
+    return f;
+}

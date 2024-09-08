@@ -2,6 +2,7 @@
 #include "util.h"
 #include "xalloc.h"
 
+#include <limits.h>
 #include <ncurses.h>
 #include <string.h>
 
@@ -58,6 +59,33 @@ void terminate_input(void)
     Input.s[Input.n] = '\0';
 }
 
+static void move_over_utf8(int dir)
+{
+    if (dir > 0) {
+        if (Input.index == Input.n) {
+            return;
+        }
+        if (!(Input.s[Input.index] & 0x80)) {
+            Input.index++;
+            return;
+        }
+        while (Input.index++, Input.index < Input.n) {
+            if ((Input.s[Input.index] & 0xc0) != 0x80) {
+                break;
+            }
+        }
+    } else {
+        if (Input.index == Input.prefix) {
+            return;
+        }
+        while (Input.index--, Input.index > Input.prefix) {
+            if ((Input.s[Input.index] & 0xc0) != 0x80) {
+                return;
+            }
+        }
+    }
+}
+
 char *send_to_input(int c)
 {
     char ch;
@@ -77,14 +105,14 @@ char *send_to_input(int c)
         if (Input.index == Input.prefix) {
             break;
         }
-        Input.index--;
+        move_over_utf8(-1);
         break;
 
     case KEY_RIGHT:
         if (Input.index == Input.n) {
             break;
         }
-        Input.index++;
+        move_over_utf8(1);
         break;
 
     case KEY_UP:
@@ -137,21 +165,25 @@ char *send_to_input(int c)
         if (Input.index == Input.prefix) {
             break;
         }
-        memmove(&Input.s[Input.index - 1],
-                &Input.s[Input.index],
-                Input.n - Input.index);
-        Input.n--;
-        Input.index--;
+        index = Input.index;
+        move_over_utf8(-1);
+        memmove(&Input.s[Input.index],
+                &Input.s[index],
+                Input.n - index);
+        Input.n -= index - Input.index;
         break;
 
     case KEY_DC:
         if (Input.index == Input.n) {
             break;
         }
-        Input.n--;
-        memmove(&Input.s[Input.index],
-                &Input.s[Input.index + 1],
+        index = Input.index;
+        move_over_utf8(1);
+        memmove(&Input.s[index],
+                &Input.s[Input.index],
                 Input.n - Input.index);
+        Input.n -= Input.index - index;
+        Input.index = index;
         break;
 
     case '\x1b':
@@ -161,7 +193,7 @@ char *send_to_input(int c)
 
     default:
         ch = c;
-        if (c >= 0x100 || ch < ' ') {
+        if (c >= 0x100 || (ch >= 0 && ch < ' ')) {
             break;
         }
         if (Input.n == Input.a) {
@@ -175,17 +207,6 @@ char *send_to_input(int c)
         Input.n++;
     }
 
-    if (Input.index < Input.scroll) {
-        Input.scroll = Input.index;
-        if (Input.scroll <= Input.prefix + 1) {
-            Input.scroll = 0;
-        } else {
-            Input.scroll -= 5;
-        }
-    } else if (Input.index >= Input.scroll + Input.max_w) {
-        Input.scroll = Input.index - Input.max_w + 6;
-    }
-
     if (c != '\n') {
         return NULL;
     }
@@ -195,12 +216,31 @@ char *send_to_input(int c)
 
 void render_input(void)
 {
+    struct fitting fit_scroll, fit_index, fit;
+
+    (void) compute_string_fit(Input.s, Input.n, Input.scroll, &fit_scroll);
+    (void) compute_string_fit(Input.s, Input.index, INT_MAX, &fit_index);
+
+    if (fit_index.w < fit_scroll.w) {
+        Input.scroll = fit_index.w;
+        if (Input.scroll <= 5) {
+            Input.scroll = 0;
+        } else {
+            Input.scroll -= 5;
+        }
+    } else if (fit_index.w >= fit_scroll.w + Input.max_w) {
+        Input.scroll = fit_index.w - Input.max_w + 6;
+    }
+    
+    (void) compute_string_fit(Input.s, Input.n, Input.scroll, &fit_scroll);
+    (void) compute_string_fit(fit_scroll.e, Input.n - (fit_scroll.e - Input.s),
+                              Input.max_w, &fit);
+
     move(Input.y, Input.x);
-    addnstr(&Input.s[Input.scroll],
-            MIN((size_t) Input.max_w, Input.n - Input.scroll));
+    addnstr(fit_scroll.e, fit.e - fit.s);
     /* erase to end of line */
     for (int x = getcurx(stdscr); x < Input.x + Input.max_w; x++) {
         addch(' ');
     }
-    move(Input.y, Input.x + Input.index - Input.scroll);
+    move(Input.y, Input.x + fit_index.w - fit_scroll.w);
 }

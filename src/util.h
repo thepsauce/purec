@@ -131,4 +131,46 @@ size_t safe_add(size_t a, size_t b);
  */
 char *get_relative_path(const char *path);
 
+struct glyph {
+    /// the wide char representation of this glyph
+    wchar_t wc;
+    /// number of bytes when this glyph is represented as multi byte string
+    int n;
+    /// the width this glyph occupies
+    int w;
+};
+
+/**
+ * Gets the first glyph of the multi byte string `s`.
+ *
+ * @param s The multi byte string, the firs byte is used to determine the nob.
+ * @param n The length of the multi byte string.
+ * @param g The pointer to store the glyph data in, may be `NULL`.
+ *
+ * @return -1 if the multi byte sequence is invalid, 0 otherwise.
+ */
+int get_glyph(const char *s, size_t n, struct glyph *g);
+
+struct fitting {
+    /// the width occupied by the fitting text
+    size_t w;
+    /// the start of the fitting text
+    char *s;
+    /// the pointer to the first character that does not fit
+    char *e;
+};
+
+/**
+ * Computes the amount of a string that fits into a space.
+ *
+ * @param s     The string to fit.
+ * @param n     The length of the string.
+ * @param max   The maximum extent of the text.
+ * @param fit   The result.
+ *
+ * @return True if the text fits, false otherwise.
+ */
+bool compute_string_fit(const char *s, size_t n, size_t max,
+                        struct fitting *fit);
+
 #endif

@@ -5,7 +5,7 @@
 #include "util.h"
 #include "xalloc.h"
 
-#include <ctype.h>
+#include <wctype.h>
 #include <errno.h>
 #include <string.h>
 
@@ -41,6 +41,68 @@ static int compare_entries(const void *v_a, const void *v_b)
 }
 
 /**
+ * Matches the entries in `entries` against the search pattern in the input
+ * and sorts the entries such that the matching elements come first.
+ */
+static void sort_entries(void)
+{
+    size_t s_i;
+    size_t pat_i;
+    int score;
+    int cons_score;
+    struct entry *entry;
+    struct glyph g_p, g_n;
+
+    if (Fuzzy.num_entries == 0) {
+        Fuzzy.selected = 0;
+        return;
+    }
+
+    for (size_t i = 0; i < Fuzzy.num_entries; i++) {
+        entry = &Fuzzy.entries[i];
+        s_i = 0;
+        score = 0;
+        cons_score = 1;
+        pat_i = Input.prefix;
+        while (pat_i != Input.n && entry->name[s_i] != '\0') {
+            if (get_glyph(&Input.s[pat_i], Input.n - pat_i, &g_p) == -1) {
+                g_p.wc = Input.s[pat_i];
+            }
+            if (get_glyph(&entry->name[s_i], SIZE_MAX, &g_n) == -1) {
+                g_n.wc = entry->name[s_i];
+            }
+            if (towlower(g_n.wc) == towlower(g_p.wc)) {
+                /* additional point if the first matches */
+                if (s_i == 0) {
+                    score++;
+                }
+                /* many consecutive matching letters give a bigger score */
+                score += cons_score;
+                /* additional point if the case matches */
+                if (g_n.wc == g_p.wc) {
+                    score++;
+                }
+                cons_score++;
+                pat_i++;
+            } else {
+                cons_score = 1;
+            }
+            s_i++;
+        }
+
+        if (pat_i == Input.n) {
+            entry->score = score;
+        } else {
+            entry->score = 0;
+        }
+    }
+
+    qsort(Fuzzy.entries, Fuzzy.num_entries,
+          sizeof(*Fuzzy.entries), compare_entries);
+    Fuzzy.selected = MIN(Fuzzy.num_entries - 1, Fuzzy.selected);
+}
+
+/**
  * Render all entries, this also clears the fuzzy window.
  */
 static void render_entries(void)
@@ -50,6 +112,8 @@ static void render_entries(void)
     int x;
     size_t s_i;
     size_t pat_i;
+    struct glyph g_n, g_p;
+    bool broken;
 
     set_highlight(stdscr, HI_FUZZY);
 
@@ -67,19 +131,41 @@ static void render_entries(void)
         x = 0;
         s_i = 0;
         pat_i = Input.prefix;
-        while (entry->name[s_i] != '\0' && x < Fuzzy.w) {
-            if (entry->score > 0 && pat_i != Input.n &&
-                    tolower(entry->name[s_i]) ==
-                        tolower(Input.s[pat_i])) {
-                attr_on(A_BOLD, NULL);
-                addch(entry->name[s_i]);
-                attr_off(A_BOLD, NULL);
-                pat_i++;
+        while (entry->name[s_i] != '\0') {
+            if (get_glyph(&entry->name[s_i], SIZE_MAX, &g_n) == -1) {
+                g_n.n = 1;
+                g_n.w = 1;
+                broken = true;
             } else {
-                addch(entry->name[s_i]);
+                broken = false;
             }
-            x++;
-            s_i++;
+            if (x + g_n.w >= Fuzzy.w) {
+                break;
+            }
+
+            if (get_glyph(&Input.s[pat_i], Input.n - pat_i, &g_p) == -1) {
+                g_p.n = 1;
+                g_p.w = 1;
+            }
+            if (entry->score > 0 && pat_i != Input.n &&
+                    towlower(g_n.wc) == towlower(g_p.wc)) {
+                attr_on(A_BOLD, NULL);
+                if (broken) {
+                    addch('?' | A_REVERSE);
+                } else {
+                    addnstr(&entry->name[s_i], g_n.n);
+                }
+                attr_off(A_BOLD, NULL);
+                pat_i += g_p.n;
+            } else {
+                if (broken) {
+                    addch('?' | A_REVERSE);
+                } else {
+                    addnstr(&entry->name[s_i], g_n.n);
+                }
+            }
+            x += g_n.w;
+            s_i += g_n.n;
         }
 
         if (entry->type == DT_DIR && x < Fuzzy.w) {
@@ -101,57 +187,6 @@ static void render_entries(void)
             addch(' ');
         }
     }
-}
-
-/**
- * Matches the entries in `entries` against the search pattern in the input
- * and sorts the entries such that the matching elements come first.
- */
-static void sort_entries(void)
-{
-    size_t s_i;
-    size_t pat_i;
-    int score;
-    int cons_score;
-    struct entry *entry;
-
-    if (Fuzzy.num_entries == 0) {
-        Fuzzy.selected = 0;
-        return;
-    }
-
-    for (size_t i = 0; i < Fuzzy.num_entries; i++) {
-        entry = &Fuzzy.entries[i];
-        s_i = 0;
-        score = 0;
-        cons_score = 1;
-        pat_i = Input.prefix;
-        while (pat_i != Input.n && entry->name[s_i] != '\0') {
-            if (tolower(Input.s[pat_i]) == tolower(entry->name[s_i])) {
-                /* many consecutive matching letters give a bigger score */
-                score += cons_score;
-                /* additional point if the case matches */
-                if (Input.s[pat_i] == entry->name[s_i]) {
-                    score++;
-                }
-                cons_score++;
-                pat_i++;
-            } else {
-                cons_score = 1;
-            }
-            s_i++;
-        }
-
-        if (pat_i == Input.n) {
-            entry->score = score;
-        } else {
-            entry->score = 0;
-        }
-    }
-
-    qsort(Fuzzy.entries, Fuzzy.num_entries,
-          sizeof(*Fuzzy.entries), compare_entries);
-    Fuzzy.selected = MIN(Fuzzy.num_entries - 1, Fuzzy.selected);
 }
 
 int update_files(void)
