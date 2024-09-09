@@ -88,7 +88,6 @@ static void move_over_utf8(int dir)
 
 char *send_to_input(int c)
 {
-    char ch;
     char *h;
     size_t index;
 
@@ -192,8 +191,7 @@ char *send_to_input(int c)
         return Input.s;
 
     default:
-        ch = c;
-        if (c >= 0x100 || (ch >= 0 && ch < ' ')) {
+        if (c < ' ' || c >= 0x100) {
             break;
         }
         if (Input.n == Input.a) {
@@ -203,7 +201,7 @@ char *send_to_input(int c)
         }
         memmove(&Input.s[Input.index + 1],
                 &Input.s[Input.index], Input.n - Input.index);
-        Input.s[Input.index++] = ch;
+        Input.s[Input.index++] = c;
         Input.n++;
     }
 
@@ -216,31 +214,62 @@ char *send_to_input(int c)
 
 void render_input(void)
 {
-    struct fitting fit_scroll, fit_index, fit;
+    size_t cur_x = 0;
+    size_t w;
+    struct glyph g;
+    bool broken;
 
-    (void) compute_string_fit(Input.s, Input.n, Input.scroll, &fit_scroll);
-    (void) compute_string_fit(Input.s, Input.index, INT_MAX, &fit_index);
-
-    if (fit_index.w < fit_scroll.w) {
-        Input.scroll = fit_index.w;
-        if (Input.scroll <= 5) {
-            Input.scroll = 0;
-        } else {
-            Input.scroll -= 5;
+    /* measure out the cursor x position */
+    w = 0;
+    for (size_t i = 0;; ) {
+        if (i == Input.index) {
+            cur_x = w;
+            break;
         }
-    } else if (fit_index.w >= fit_scroll.w + Input.max_w) {
-        Input.scroll = fit_index.w - Input.max_w + 6;
+        (void) get_glyph(&Input.s[i], Input.n - i, &g);
+        w += g.w;
+        i += g.n;
     }
     
-    (void) compute_string_fit(Input.s, Input.n, Input.scroll, &fit_scroll);
-    (void) compute_string_fit(fit_scroll.e, Input.n - (fit_scroll.e - Input.s),
-                              Input.max_w, &fit);
+    /* show the prefix */
+    if (Input.index == Input.prefix) {
+        Input.scroll = 0;
+    }
 
+    /* adjust the scrolling so that the cursor is visible */
+    if (cur_x < Input.scroll) {
+        Input.scroll = cur_x;
+    } else if (cur_x >= Input.scroll + Input.max_w) {
+        Input.scroll = cur_x - Input.max_w + 1;
+    }
+
+    /* render the text */
     move(Input.y, Input.x);
-    addnstr(fit_scroll.e, fit.e - fit.s);
+    w = 0;
+    for (size_t i = 0; i < Input.n; ) {
+        broken = get_glyph(&Input.s[i], Input.n - i, &g) == -1;
+        if (w + g.w > Input.scroll + Input.max_w) {
+            break;
+        }
+        if (w >= Input.scroll) {
+            if (broken) {
+                addch('?' | A_REVERSE);
+            } else {
+                addnstr(&Input.s[i], g.n);
+            }
+        }
+        i += g.n;
+        /* adjust for the case a multi width glyph is only half visible */
+        if (w < Input.scroll && w + g.w > Input.scroll) {
+            Input.scroll = w + g.w;
+        }
+        w += g.w;
+    }
     /* erase to end of line */
-    for (int x = getcurx(stdscr); x < Input.x + Input.max_w; x++) {
+    for (; w < Input.scroll + Input.max_w; w++) {
         addch(' ');
     }
-    move(Input.y, Input.x + fit_index.w - fit_scroll.w);
+
+    /* set the visual cursor position */
+    move(Input.y, Input.x + cur_x - Input.scroll);
 }

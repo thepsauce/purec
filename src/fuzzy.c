@@ -64,13 +64,9 @@ static void sort_entries(void)
         score = 0;
         cons_score = 1;
         pat_i = Input.prefix;
-        while (pat_i != Input.n && entry->name[s_i] != '\0') {
-            if (get_glyph(&Input.s[pat_i], Input.n - pat_i, &g_p) == -1) {
-                g_p.wc = Input.s[pat_i];
-            }
-            if (get_glyph(&entry->name[s_i], SIZE_MAX, &g_n) == -1) {
-                g_n.wc = entry->name[s_i];
-            }
+        while (pat_i < Input.n && entry->name[s_i] != '\0') {
+            (void) get_glyph(&Input.s[pat_i], Input.n - pat_i, &g_p);
+            (void) get_glyph(&entry->name[s_i], SIZE_MAX, &g_n);
             if (towlower(g_n.wc) == towlower(g_p.wc)) {
                 /* additional point if the first matches */
                 if (s_i == 0) {
@@ -83,11 +79,11 @@ static void sort_entries(void)
                     score++;
                 }
                 cons_score++;
-                pat_i++;
+                pat_i += g_p.n;
             } else {
                 cons_score = 1;
             }
-            s_i++;
+            s_i += g_n.n;
         }
 
         if (pat_i == Input.n) {
@@ -132,38 +128,24 @@ static void render_entries(void)
         s_i = 0;
         pat_i = Input.prefix;
         while (entry->name[s_i] != '\0') {
-            if (get_glyph(&entry->name[s_i], SIZE_MAX, &g_n) == -1) {
-                g_n.n = 1;
-                g_n.w = 1;
-                broken = true;
-            } else {
-                broken = false;
-            }
+            broken = get_glyph(&entry->name[s_i], SIZE_MAX, &g_n) == -1;
             if (x + g_n.w >= Fuzzy.w) {
                 break;
             }
 
-            if (get_glyph(&Input.s[pat_i], Input.n - pat_i, &g_p) == -1) {
-                g_p.n = 1;
-                g_p.w = 1;
-            }
-            if (entry->score > 0 && pat_i != Input.n &&
-                    towlower(g_n.wc) == towlower(g_p.wc)) {
-                attr_on(A_BOLD, NULL);
-                if (broken) {
-                    addch('?' | A_REVERSE);
-                } else {
-                    addnstr(&entry->name[s_i], g_n.n);
+            if (entry->score > 0 && pat_i < Input.n) {
+                (void) get_glyph(&Input.s[pat_i], Input.n - pat_i, &g_p);
+                if (towlower(g_n.wc) == towlower(g_p.wc)) {
+                    attr_on(A_BOLD, NULL);
+                    pat_i += g_p.n;
                 }
-                attr_off(A_BOLD, NULL);
-                pat_i += g_p.n;
+            }
+            if (broken) {
+                addch('?' | A_REVERSE);
             } else {
-                if (broken) {
-                    addch('?' | A_REVERSE);
-                } else {
-                    addnstr(&entry->name[s_i], g_n.n);
-                }
+                addnstr(&entry->name[s_i], g_n.n);
             }
+            attr_off(A_BOLD, NULL);
             x += g_n.w;
             s_i += g_n.n;
         }

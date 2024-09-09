@@ -143,34 +143,17 @@ struct glyph {
 /**
  * Gets the first glyph of the multi byte string `s`.
  *
- * @param s The multi byte string, the firs byte is used to determine the nob.
- * @param n The length of the multi byte string.
- * @param g The pointer to store the glyph data in, may be `NULL`.
+ * This function assumes that there is a "next glyph" and does not handle the
+ * case where n==0 or, n==SIZE_MAX and s[0]=='\0'.
  *
- * @return -1 if the multi byte sequence is invalid, 0 otherwise.
+ * @param s The multi byte string to extract the first glyph from.
+ * @param n The length of the multi byte string, use `SIZE_MAX` for null
+ *          terminated strings, this values must be greater than 0.
+ * @param g The pointer to store the glyph data in.
+ *
+ * @return -1 if the multi byte sequence is invalid, otherwise the length of
+ *         the multi byte sequence.
  */
 int get_glyph(const char *s, size_t n, struct glyph *g);
-
-struct fitting {
-    /// the width occupied by the fitting text
-    size_t w;
-    /// the start of the fitting text
-    char *s;
-    /// the pointer to the first character that does not fit
-    char *e;
-};
-
-/**
- * Computes the amount of a string that fits into a space.
- *
- * @param s     The string to fit.
- * @param n     The length of the string.
- * @param max   The maximum extent of the text.
- * @param fit   The result.
- *
- * @return True if the text fits, false otherwise.
- */
-bool compute_string_fit(const char *s, size_t n, size_t max,
-                        struct fitting *fit);
 
 #endif

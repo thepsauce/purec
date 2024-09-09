@@ -6,6 +6,8 @@
 
 #include <unistd.h>
 
+#include <wchar.h>
+
 bool is_point_equal(const struct pos *p1, const struct pos *p2)
 {
     return p1->line == p2->line && p1->col == p2->col;
@@ -204,52 +206,28 @@ int wcwidth(wchar_t c);
 
 int get_glyph(const char *s, size_t n, struct glyph *g)
 {
-    int c;
+    size_t c;
     wchar_t wc;
+    mbstate_t mbs;
 
-    c = mbtowc(&wc, &s[0], n);
-    if (c == -1) {
+    if (s[0] == '\0') {
+        g->wc = L'\0';
+        g->n = 1;
+        g->w = 1;
+        return 1;
+    }
+
+    memset(&mbs, 0, sizeof(mbs));
+    c = mbrtowc(&wc, &s[0], n, &mbs);
+    if (c == (size_t) -1 || c == (size_t) -2) {
+        g->wc = s[0];
+        g->n = 1;
+        g->w = 1;
         return -1;
     }
 
-    if (g == NULL) {
-        return c;
-    }
-
-    g->n = c;
     g->wc = wc;
+    g->n = c;
     g->w = wcwidth(wc);
     return c;
-}
-
-bool compute_string_fit(const char *s, size_t n, size_t max,
-                        struct fitting *fit)
-{
-    size_t om;
-    struct glyph g;
-    bool f = true;
-
-    om = max;
-    fit->s = (char*) s;
-    while (n > 0) {
-        if (s[0] == '\n') {
-            break;
-        }
-
-        if (get_glyph(s, n, &g) == -1) {
-            g.w = 1;
-            g.n = 1;
-        }
-        if ((size_t) g.w > max) {
-            f = false;
-            break;
-        }
-        max -= g.w;
-
-        s += g.n;
-        n -= g.n;
-    }
-    fit->w = om - max;
-    fit->e = (char*) s;
-    return f;
 }
