@@ -218,7 +218,7 @@ char *get_absolute_path(const char *path)
         n = 0;
         do {
             path++;
-        } while (path[0] != '/');
+        } while (path[0] == '/');
     } else {
         s = NULL;
         do {

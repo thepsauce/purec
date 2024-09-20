@@ -114,7 +114,7 @@ size_t c_indentor(struct buf *buf, size_t line_i)
 
     switch ((par->type & 0xff)) {
     case '{':
-        if (index <= 1 || (par[-1].type & (FOPEN_PAREN | '(')) != '(') {
+        if (index <= 1 || par[-1].type != '(') {
             break;
         }
         index = get_matching_paren(buf, index - 2);

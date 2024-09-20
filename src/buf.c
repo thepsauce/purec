@@ -223,10 +223,12 @@ char *get_pretty_path(const char *path)
     cwd = getcwd(NULL, 0);
     if (cwd != NULL) {
         cwd_len = strlen(cwd);
+    } else {
+        cwd_len = 0;
     }
     home = getenv("HOME");
     if (home == NULL && cwd == NULL) {
-        return strncpy(s, path, sizeof(s));
+        return strncpy(s, path, sizeof(s) - 1);
     }
     if (home != NULL) {
         home_len = strlen(home);
@@ -247,7 +249,7 @@ char *get_pretty_path(const char *path)
         s[0] = '~';
         strcpy(&s[1], &path[home_len]);
     } else {
-        strncpy(s, path, sizeof(s));
+        strncpy(s, path, sizeof(s) - 1);
     }
     free(cwd);
     return s;
