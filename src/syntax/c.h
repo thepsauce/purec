@@ -127,7 +127,7 @@ size_t c_indentor(struct buf *buf, size_t line_i)
 
     line = &buf->lines[line_i];
     if (line->n > 0 && line->s[line->n - 1] == ':' &&
-            (line->attribs[line->n - 1] == HI_OPERATOR)) {
+            line->attribs[line->n - 1] == HI_OPERATOR) {
         c = 0;
     } else {
         c = get_line_indent(buf, line_i);

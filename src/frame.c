@@ -896,7 +896,10 @@ int prepare_motion(struct frame *frame, int motion_key)
     case 'f':
     case 't': /* this moves in an exclusive way */
         /* the character to look for */
-        c = get_ch();
+        do {
+            c = get_ch();
+            /* skip over rezise events */
+        } while (c == -1);
         col = new_cur.col;
         if (motion_key == 't') {
             /* make sure when the cursor is right before a match already, that
@@ -928,7 +931,10 @@ int prepare_motion(struct frame *frame, int motion_key)
     case 'F':
     case 'T': /* this moves in an exclusive way */
         /* the character to look for */
-        c = get_ch();
+        do {
+            c = get_ch();
+            /* skip over resize events */
+        } while (c == -1);
         col = new_cur.col;
         if (motion_key == 'T' && col > 0) {
             col--;

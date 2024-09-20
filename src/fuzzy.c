@@ -5,11 +5,11 @@
 #include "util.h"
 #include "xalloc.h"
 
-#include <wctype.h>
 #include <errno.h>
-#include <string.h>
-
 #include <dirent.h>
+#include <string.h>
+#include <unistd.h>
+#include <wctype.h>
 
 struct file_chooser {
     int x, y, w, h;
@@ -188,10 +188,6 @@ int update_files(void)
     }
     Fuzzy.num_entries = 0;
     while (ent = readdir(dir), ent != NULL) {
-        /* ignore hidden directories */
-        if (ent->d_type == DT_DIR && ent->d_name[0] == '.') {
-            continue;
-        }
         if (Fuzzy.num_entries == Fuzzy.a_entries) {
             Fuzzy.a_entries *= 2;
             Fuzzy.a_entries++;
@@ -206,6 +202,55 @@ int update_files(void)
     return 0;
 }
 
+static void go_back_one_dir(void)
+{
+    size_t index;
+
+    index = Input.prefix;
+    index--;
+    while (index > 0) {
+        if (Input.s[index - 1] == '/') {
+            break;
+        }
+        index--;
+    }
+    if (Input.s[index] == '.') {
+        if (Input.s[index + 1] == '/') {
+            insert_input_prefix(".", index);
+        } else if (Input.s[index + 1] == '.' &&
+                   Input.s[index + 2] == '/') {
+            insert_input_prefix("../", index);
+        } else {
+            Input.n      = index;
+            Input.index  = index;
+            Input.prefix = index;
+        }
+    } else {
+        Input.n     = index;
+        Input.index = index;
+        Input.prefix = index;
+    }
+    (void) update_files();
+}
+
+static void move_into_dir(const char *name)
+{
+    if (name[0] == '.') {
+        if (name[1] == '\0') {
+            Input.n     = Input.prefix;
+            Input.index = Input.prefix;
+            return;
+        }
+        if (name[1] == '.' && name[2] == '\0') {
+            go_back_one_dir();
+            return;
+        }
+    }
+    insert_input_prefix(name, Input.prefix);
+    insert_input_prefix("/", Input.prefix);
+    (void) update_files();
+}
+
 char *choose_fuzzy(const char *dir)
 {
     int c;
@@ -214,11 +259,6 @@ char *choose_fuzzy(const char *dir)
     size_t dir_len;
 
     Fuzzy.selected = 0;
-    
-    if (Input.a < 1024) {
-        Input.a = 1024;
-        Input.s = xrealloc(Input.s, Input.a);
-    }
  
     if (dir == NULL) {
         if (Fuzzy.last_dir == NULL) {
@@ -228,7 +268,7 @@ char *choose_fuzzy(const char *dir)
         }
     } else {
         set_input_text(dir, strlen(dir));
-        append_input_prefix("/");
+        insert_input_prefix("/", Input.prefix);
     }
     
     /* do not use a history */
@@ -288,11 +328,10 @@ char *choose_fuzzy(const char *dir)
             }
             entry = &Fuzzy.entries[Fuzzy.selected];
             dir_len = Input.prefix;
-            append_input_prefix(entry->name);
             if (entry->type == DT_DIR) {
-                append_input_prefix("/");
-                (void) update_files();
+                move_into_dir(entry->name);
             } else {
+                insert_input_prefix(entry->name, Input.prefix);
                 terminate_input();
                 free(Fuzzy.last_dir);
                 Fuzzy.last_dir = xmemdup(Input.s, dir_len + 1);
@@ -320,29 +359,35 @@ char *choose_fuzzy(const char *dir)
             if (entry->type != DT_DIR || entry->score == 0) {
                 break;
             }
-            append_input_prefix(entry->name);
-            append_input_prefix("/");
-            (void) update_files();
+            move_into_dir(entry->name);
+            break;
+
+        case CONTROL('A'):
+            if (Input.s[0] == '.' && Input.s[1] == '.' &&
+                Input.s[2] == '/') {
+                
+            }
+            break;
+
+        case CONTROL('D'):
+            Input.s[Input.prefix - 1] = '\0';
+            chdir(Input.s);
+            Input.s[Input.prefix - 1] = '/';
+            Input.s[0] = '.';
+            Input.s[1] = '/';
+            Input.index -= Input.prefix;
+            Input.n     -= Input.prefix;
+            memmove(&Input.s[0], &Input.s[Input.prefix], Input.n);
+            Input.prefix = 2;
+            Input.index += Input.prefix;
+            Input.n     += Input.prefix;
             break;
 
         case KEY_BACKSPACE:
         case '\x7f':
         case '\b':
             if (Input.n == Input.prefix) {
-                Input.prefix--;
-                while (Input.prefix > 0) {
-                    if (Input.s[Input.prefix - 1] == '/') {
-                        break;
-                    }
-                    Input.prefix--;
-                }
-                if (Input.prefix == 0) {
-                    Input.prefix += 2;
-                    break;
-                }
-                Input.n = Input.prefix;
-                Input.index = Input.n;
-                (void) update_files();
+                go_back_one_dir();
                 break;
             }
             /* fall through */

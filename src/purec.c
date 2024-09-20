@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <locale.h>
 #include <string.h>
+#include <unistd.h>
 
 WINDOW *OffScreen;
 

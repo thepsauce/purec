@@ -89,15 +89,18 @@ int get_extra_char(void)
     int c;
     size_t counter = 0, new_counter;
 
-    while (c = get_ch(), (c == '0' && counter != 0) || (c >= '1' && c <= '9')) {
-        /* add a digit to the counter */
-        new_counter = counter * 10 + c - '0';
-        /* check for overflow */
-        if (new_counter < counter) {
-            new_counter = SIZE_MAX;
+    do {
+        while (c = get_ch(), (c == '0' && counter != 0) ||
+                             (c >= '1' && c <= '9')) {
+            /* add a digit to the counter */
+            new_counter = counter * 10 + c - '0';
+            /* check for overflow */
+            if (new_counter < counter) {
+                new_counter = SIZE_MAX;
+            }
+            counter = new_counter;
         }
-        counter = new_counter;
-    }
+    } while (c == -1);
 
     if (counter == 0) {
         return c;

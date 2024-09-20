@@ -36,16 +36,11 @@ struct raw_line {
     _l->s = NULL; \
 } while (0)
 
-/// if the line has a gdb breakpoint
-#define LINE_BREAKPOINT 0x1
-
 struct line {
     /// data of the line
     char *s;
     /// number of bytes on this line
     size_t n;
-    /// special flags (`LINE_*`)
-    int flags;
     /// syntax highlighting state at the beginning of the next line
     unsigned state;
     /// state before the line was marked dirty
@@ -53,19 +48,6 @@ struct line {
     /// rendering highlights
     int *attribs;
 };
-
-/**
- * Mark the line as dirty by setting `state` to 0.
- *
- * @param line  Line to mark as dirty.
- */
-#define mark_dirty(arg_line) do { \
-    struct line *const _l = (arg_line); \
-    if (_l->state != 0) { \
-        _l->prev_state = _l->state; \
-        _l->state = 0; \
-    } \
-} while (0)
 
 /**
  * Clear the resources associated to this line.

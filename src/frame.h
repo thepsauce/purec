@@ -220,7 +220,7 @@ void set_cursor(struct frame *frame, const struct pos *pos);
  * @param frame         Frame to perform the motion within.
  * @param motion_key    The input key.
  *
- * @return 0 if the cursor would not move, 1 otherwise
+ * @return 0 if the cursor would not move, 1 otherwise.
  */
 int prepare_motion(struct frame *frame, int motion_key);
 

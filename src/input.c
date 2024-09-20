@@ -8,80 +8,82 @@
 
 struct input Input;
 
+static void grow_input(size_t to)
+{
+    if (Input.a < to) {
+        Input.a = to;
+        Input.s = xrealloc(Input.s, Input.a);
+    }
+}
+
 void set_input_text(const char *text, size_t prefix_len)
 {
     Input.n = strlen(text);
     Input.index = Input.n;
-    if (Input.a < Input.n + 128) {
-        Input.a = Input.n + 128;
-        Input.s = xrealloc(Input.s, Input.a);
-    }
+    grow_input(Input.n);
     memcpy(Input.s, text, Input.n);
 
     Input.prefix = prefix_len;
 
     Input.remember_len = Input.n;
-    Input.remember = xrealloc(Input.remember, Input.remember_len);
+    Input.remember     = xrealloc(Input.remember, Input.remember_len);
     memcpy(Input.remember, Input.s, Input.remember_len);
 }
 
 void set_input_history(char **hist, size_t num_hist)
 {
-    Input.history = hist;
-    Input.num_history = num_hist;
+    Input.history       = hist;
+    Input.num_history   = num_hist;
     Input.history_index = num_hist;
 }
 
-void append_input_prefix(const char *text)
+void insert_input_prefix(const char *text, size_t index)
 {
     size_t len;
 
-    Input.n = Input.prefix;
     len = strlen(text);
-    if (Input.n + len > Input.a) {
-        Input.a *= 2;
-        Input.a += len;
-        Input.s = xrealloc(Input.s, Input.a);
-    }
-    memcpy(&Input.s[Input.n], text, len);
-    Input.n += len;
-    Input.prefix = Input.n;
-    Input.index = Input.n;
+    grow_input(Input.prefix + len);
+    memmove(&Input.s[index + len],
+            &Input.s[index],
+            Input.prefix - index);
+    memcpy(&Input.s[index], text, len);
+    Input.prefix += len;
+    Input.n     = Input.prefix;
+    Input.index = Input.prefix;
 }
 
 void terminate_input(void)
 {
-    if (Input.n == Input.a) {
-        Input.a *= 2;
-        Input.a++;
-        Input.s = xrealloc(Input.s, Input.a);
-    }
+    grow_input(Input.n + 1);
     Input.s[Input.n] = '\0';
 }
 
 static void move_over_utf8(int dir)
 {
+    struct glyph g;
+    size_t i;
+
     if (dir > 0) {
         if (Input.index == Input.n) {
             return;
         }
-        if (!(Input.s[Input.index] & 0x80)) {
-            Input.index++;
-            return;
-        }
-        while (Input.index++, Input.index < Input.n) {
-            if ((Input.s[Input.index] & 0xc0) != 0x80) {
-                break;
-            }
-        }
+        (void) get_glyph(&Input.s[Input.index], Input.n - Input.index, &g);
+        Input.index += g.n;
     } else {
         if (Input.index == Input.prefix) {
             return;
         }
-        while (Input.index--, Input.index > Input.prefix) {
-            if ((Input.s[Input.index] & 0xc0) != 0x80) {
-                return;
+        i = Input.index;
+        while (i--, i > Input.prefix) {
+            if ((Input.s[i] & 0xc0) != 0x80) {
+                break;
             }
+        }
+        (void) get_glyph(&Input.s[i], Input.n - i, &g);
+        if (i + g.n != Input.index) {
+            Input.index--;
+        } else {
+            Input.index = i;
         }
     }
 }
@@ -194,11 +196,7 @@ char *send_to_input(int c)
         if (c < ' ' || c >= 0x100) {
             break;
         }
-        if (Input.n == Input.a) {
-            Input.a *= 2;
-            Input.a++;
-            Input.s = xrealloc(Input.s, Input.a);
-        }
+        grow_input(Input.n + 1);
         memmove(&Input.s[Input.index + 1],
                 &Input.s[Input.index], Input.n - Input.index);
         Input.s[Input.index++] = c;
@@ -222,7 +220,11 @@ void render_input(void)
     /* measure out the cursor x position */
     w = 0;
     for (size_t i = 0;; ) {
-        if (i == Input.index) {
+        /* impossible edge case:
+         * if invalid utf8 was inserted and then one byte is deleted,
+         * the index might end up in the middle of a multi byte
+         */
+        if (i >= Input.index) {
             cur_x = w;
             break;
         }

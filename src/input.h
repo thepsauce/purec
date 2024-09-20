@@ -97,11 +97,12 @@ void set_input_text(const char *text, size_t prefix_len);
 void set_input_history(char **history, size_t num_hist);
 
 /**
- * This clears the text after the prefix and appends given text.
+ * Inserts given text into the input line.
  *
  * @param text  The text to append to the prefix.
+ * @param index The index to insert the text into.
  */
-void append_input_prefix(const char *text);
+void insert_input_prefix(const char *text, size_t index);
 
 /**
  * Adds a null terminator to the end of the input line.

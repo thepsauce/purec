@@ -120,16 +120,29 @@ size_t safe_mul(size_t a, size_t b);
 size_t safe_add(size_t a, size_t b);
 
 /**
- * Gets the given path relative to the current directory (getcwd()).
+ * Gets the given path relative to the current working directory.
  *
- * If the current path is "/home/gerhard//car/" and the input `path` is
- * "/home/gerhard/../blue/red" then this function returns "../../blue/red".
- * The resulting path is always a path that leads from the current working
- * directory to given `path`.
+ * If the path to start from is "/home/gerhard/car" and the input `path` is
+ * "//home/gerhard/..//blue/red" then this function returns "../../blue/red".
+ * The resulting path is always a path that leads from the current directory
+ * to given `path`.
  *
- * @return The allocated string or `NULL` if `getcwd()` fails.
+ * @param path  The path to get the relative path from, must be sanitized.
+ * @param from  The path to start from.
+ *
+ * @return The allocated string.
  */
-char *get_relative_path(const char *path);
+char *get_relative_path(const char *path/*, const char *from*/);
+
+/**
+ * Gets the absolute path of given path.
+ *
+ * @param path  The path to get the absolute path from.
+ * @param from  The path to start from if the `path` is relative.
+ *
+ * @return The allocated string.
+ */
+char *get_absolute_path(const char *path/*, const char *from*/);
 
 struct glyph {
     /// the wide char representation of this glyph

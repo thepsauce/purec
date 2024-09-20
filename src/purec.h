@@ -297,6 +297,7 @@ bool get_selection(struct selection *sel);
  */
 bool is_in_selection(const struct selection *sel, const struct pos *pos);
 
+/// this constant can not be change to anything other than 1
 #define UPDATE_UI   0x1
 #define DO_RECORD   0x2
 

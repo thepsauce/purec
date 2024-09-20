@@ -124,8 +124,9 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
     if (num_bytes == 0) {
         set_message("nothing to write");
     } else {
-        set_message("%s %zuL, %zuB written", file,
-                MIN(buf->num_lines, cd->to) - MIN(buf->num_lines, cd->from) + 1,
+        set_message("%s %zuL, %zuB written", get_pretty_path(file),
+                MIN(buf->num_lines - 1, cd->to) -
+                    MIN(buf->num_lines - 1, cd->from) + 1,
                 num_bytes);
     }
     return 0;

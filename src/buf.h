@@ -131,7 +131,7 @@ struct buf {
      */
     size_t id;
 
-    /// path on the file system (can be `NULL` to signal no file)
+    /// absolute path on the file system (can be `NULL` to signal no file)
     char *path;
     /// last statistics of the file
     struct stat st;
@@ -211,6 +211,15 @@ struct buf *create_buffer(const char *path);
  */
 size_t detect_language(struct buf *buf);
 
+
+/**
+ * Sets the language used to highlight the buffer.
+ *
+ * @param buf   The buffer whose language to set.
+ * @param lang  The language index into the `Langs` array.
+ */
+void set_language(struct buf *buf, size_t lang);
+
 /**
  * Sets the buffer to the file contents of the buffer file, the buffer should
  * have been initialized to 0 and the buffer file should be set at this point.
@@ -230,7 +239,16 @@ void init_load_buffer(struct buf *buf);
 void destroy_buffer(struct buf *buf);
 
 /**
- * Gets a buffer by and id.
+ * Returns a pointer to a static string.
+ *
+ * The returned path is good for printing.
+ *
+ * @return Pretty path.
+ */
+char *get_pretty_path(const char *path);
+
+/**
+ * Gets a buffer by an id.
  *
  * @param id    The id of the buffer.
  *
@@ -238,16 +256,12 @@ void destroy_buffer(struct buf *buf);
  */
 struct buf *get_buffer(size_t id);
 
-void set_language(struct buf *buf, size_t lang);
-
 /**
  * Gets the number of buffers in the linked list.
  *
  * @return The number of buffers.
  */
 size_t get_buffer_count(void);
-
-void set_language(struct buf *buf, size_t lang);
 
 /**
  * Writes lines from a buffer to a file.
@@ -295,17 +309,11 @@ size_t get_line_indent(struct buf *buf, size_t line_i);
 /**
  * Sets the `min_dirty_i` and `max_dirty_i` values within a buffer.
  *
- * Implementation:
- * ```C
- * buf->min_dirty_i = MIN(buf->min_dirty_i, from);
- * buf->max_dirty_i = MAX(buf->max_dirty_i, to);
- * ```
- *
  * @param buf   The buffer to set values in.
- * @param from  The start of the range.
- * @param to    The end of the range.
+ * @param from  The first line.
+ * @param to    The last line.
  */
-void update_dirty_lines(struct buf *buf, size_t from, size_t to);
+void mark_dirty(struct buf *buf, size_t from, size_t to);
 
 /**
  * Insert lines starting from a given position.

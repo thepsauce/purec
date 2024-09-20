@@ -231,8 +231,8 @@ void render_frame(struct frame *frame)
     set_highlight(OffScreen, HI_STATUS);
 
     mvwprintw(OffScreen, 0, 0, " %s%s",
-            buf->path == NULL ? "[No name]" : buf->path,
-            buf->event_i == buf->save_event_i ?  "" : "[+]");
+              get_pretty_path(buf->path),
+              buf->event_i == buf->save_event_i ?  "" : "[+]");
     w = getcurx(OffScreen);
     if (w + orig_x > frame->w) {
         w = frame->w - orig_x;
@@ -242,7 +242,8 @@ void render_frame(struct frame *frame)
             frame->y + frame->h - 1, frame->x + orig_x + w - 1, 0);
 
     mvwprintw(OffScreen, 0, 0, "%d%% ¶%zu/%zu☰℅%zu",
-            perc, frame->cur.line + 1, buf->num_lines, frame->cur.col + 1);
+              perc, frame->cur.line + 1, buf->num_lines,
+              frame->cur.col + 1);
     w = getcurx(OffScreen);
     if (w + orig_x > frame->w) {
         w = frame->w - orig_x;

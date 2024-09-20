@@ -414,21 +414,22 @@ int normal_handle_input(int c)
     /* replace current character */
     case 'r':
         c = get_ch();
-        if (!isprint(c) && c != '\n') {
+        if (!isprint(c) && c != '\n' && c != '\t') {
             return 0;
         }
         cur = SelFrame->cur;
         cur.col = safe_add(cur.col, Core.counter);
-        if (c == '\n') {
+        if (c == '\n' || c == '\t') {
             ev = delete_range(buf, &SelFrame->cur, &cur);
             if (ev != NULL) {
                 ev->cur = SelFrame->cur;
             }
-            ev = break_line(buf, &SelFrame->cur);
-            clip_column(SelFrame);
-        } else {
-            ConvChar = c;
-            ev = change_range(buf, &SelFrame->cur, &cur, conv_to_char);
+            return insert_handle_input(c);
+        }
+        ConvChar = c;
+        ev = change_range(buf, &SelFrame->cur, &cur, conv_to_char);
+        if (ev == NULL) {
+            return 0;
         }
         ev->cur = SelFrame->cur;
         return UPDATE_UI | DO_RECORD;

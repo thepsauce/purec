@@ -231,20 +231,17 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
     seg = ev->seg;
     load_undo_data(seg);
     if ((flags & IS_REPLACE)) {
-        update_dirty_lines(buf, ev->pos.line,
-                ev->pos.line + seg->num_lines - 1);
         line = &buf->lines[ev->pos.line];
         for (size_t i = 0; i < seg->lines[0].n; i++) {
             line->s[i + ev->pos.col] ^= seg->lines[0].s[i];
         }
-        mark_dirty(line);
         for (size_t i = 1; i < seg->num_lines; i++) {
             line = &buf->lines[i + ev->pos.line];
             for (size_t j = 0; j < seg->lines[i].n; j++) {
                 line->s[j] ^= seg->lines[i].s[j];
             }
-            mark_dirty(line);
         }
+        mark_dirty(buf, ev->pos.line, ev->pos.line + seg->num_lines - 1);
     } else {
         if ((flags & IS_BLOCK)) {
             _insert_block(buf, &ev->pos, seg->lines, seg->num_lines);

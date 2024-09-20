@@ -169,7 +169,6 @@ end:
 
 int insert_handle_input(int c)
 {
-    int r = 0;
     struct buf *buf;
     char ch;
     struct undo_event *ev;
@@ -229,15 +228,16 @@ int insert_handle_input(int c)
             if (old_cur.line == buf->num_lines - 1) {
                 return 0;
             }
-            SelFrame->cur.line++;
-            SelFrame->cur.col = 0;
+            old_cur.line++;
+            old_cur.col = 0;
         } else {
-            SelFrame->cur.col++;
+            old_cur.col++;
         }
-        ev = delete_range(buf, &old_cur, &SelFrame->cur);
-        ev->cur = old_cur;
+        ev = delete_range(buf, &SelFrame->cur, &old_cur);
+        ev->cur = SelFrame->cur;
         SelFrame->vct = SelFrame->cur.col;
-        return r;
+        (void) adjust_scroll(SelFrame);
+        return UPDATE_UI;
 
     case 0x7f:
     case KEY_BACKSPACE:
@@ -267,10 +267,11 @@ int insert_handle_input(int c)
         ev = delete_range(buf, &SelFrame->cur, &old_cur);
         ev->cur = old_cur;
         SelFrame->vct = SelFrame->cur.col;
+        (void) adjust_scroll(SelFrame);
         return UPDATE_UI;
     }
 
-    if (c < 0x100 && (ch >= ' ' || ch < 0)) {
+    if (c >= ' ' && c < 0x7f) {
         lines[0].s = &ch;
         lines[0].n = 1;
         ev = insert_lines(buf, &SelFrame->cur, lines, 1, 1);
