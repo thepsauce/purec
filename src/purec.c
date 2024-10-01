@@ -148,6 +148,15 @@ size_t get_mode_line_end(struct line *line)
 
 void set_mode(int mode)
 {
+    struct buf *buf;
+
+    if (Core.mode == INSERT_MODE) {
+        buf = SelFrame->buf;
+        /* cut auto indentation */
+        if (buf->ev_last_indent + 1 == buf->event_i) {
+            undo_event_no_trans(buf);
+        }
+    }
     if (IS_VISUAL(mode) && !IS_VISUAL(Core.mode)) {
         Core.pos = SelFrame->cur;
     }

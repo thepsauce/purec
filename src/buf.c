@@ -33,6 +33,8 @@ struct buf *create_buffer(const char *path)
     }
 
     buf = xcalloc(1, sizeof(*buf));
+    /* -1 so +1 does not wrap around */
+    buf->ev_last_indent = SIZE_MAX - 1;
     buf->path = abs_path;
     init_load_buffer(buf);
 
@@ -513,6 +515,8 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
     struct line *line, *at_line;
     struct raw_line *lines;
     size_t indent;
+    size_t ev_i;
+    struct pos p;
 
     line = grow_lines(buf, pos->line + 1, 1);
     at_line = &buf->lines[pos->line];
@@ -534,10 +538,28 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
     lines = xmalloc(sizeof(*lines) * 2);
     lines[0].s = NULL;
     lines[0].n = 0;
-    lines[1].s = xmalloc(indent);
-    lines[1].n = indent;
-    memset(lines[1].s, ' ', indent);
-    return add_event(buf, IS_INSERTION, pos, lines, 2);
+    lines[1].s = NULL;
+    lines[1].n = 0;
+    /* use index to prevent base pointer change from breaking the event
+     * pointer
+     */
+    ev_i = add_event(buf, IS_INSERTION, pos, lines, 2) - buf->events;
+
+    if (line->n == indent) {
+        buf->ev_last_indent = buf->event_i;
+    }
+
+    if (indent > 0) {
+        lines = xmalloc(sizeof(*lines));
+        lines[0].s = xmalloc(indent);
+        lines[0].n = indent;
+        memset(lines[0].s, ' ', indent);
+        p.col = 0;
+        p.line = pos->line + 1;
+        (void) add_event(buf, IS_INSERTION, &p, lines, 1);
+    }
+    /* return by index because of the base pointer change potential */
+    return &buf->events[ev_i];
 }
 
 /**
@@ -660,6 +682,9 @@ struct undo_event *indent_line(struct buf *buf, size_t line_i)
     cur_indent = get_line_indent(buf, line_i);
     pos.line = line_i;
     pos.col = 0;
+    if (cur_indent == buf->lines[line_i].n) {
+        buf->ev_last_indent = buf->event_i;
+    }
     if (new_indent > cur_indent) {
         line.n = new_indent - cur_indent;
         line.s = xmalloc(new_indent - cur_indent);

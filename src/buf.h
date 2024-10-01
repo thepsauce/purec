@@ -173,6 +173,8 @@ struct buf {
     size_t a_events;
     /// current event index (1 based)
     size_t event_i;
+    /// from which event the last indentation occured
+    size_t ev_last_indent;
 
     /// matches found in the buffer
     struct match *matches;
@@ -618,6 +620,15 @@ void unload_undo_data(struct undo_seg *seg);
  */
 struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
         struct raw_line *lines, size_t num_lines);
+
+/**
+ * Undoes an event but ignores the transient flag.
+ *
+ * @param buf   Buffer to undo in.
+ *
+ * @return The event undone or `NULL` if there was none.
+ */
+struct undo_event *undo_event_no_trans(struct buf *buf);
 
 /**
  * Undoes an event.

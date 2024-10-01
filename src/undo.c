@@ -252,6 +252,25 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
     unload_undo_data(seg);
 }
 
+struct undo_event *undo_event_no_trans(struct buf *buf)
+{
+    struct undo_event *ev;
+    int flags;
+
+    if (buf->event_i == 0) {
+        return NULL;
+    }
+
+    ev = &buf->events[--buf->event_i];
+    /* reverse the insertion/deletion flags to undo */
+    flags = ev->flags;
+    if ((flags & (IS_INSERTION | IS_DELETION))) {
+        flags ^= (IS_INSERTION | IS_DELETION);
+    }
+    do_event(buf, ev, flags);
+    return ev;
+}
+
 struct undo_event *undo_event(struct buf *buf)
 {
     struct undo_event *ev;

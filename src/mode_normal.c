@@ -273,6 +273,9 @@ int normal_handle_input(int c)
     case 'D':
     case 'S':
         if (c == 'D' || c == 'C') {
+            if (c == 'C') {
+                next_mode = INSERT_MODE;
+            }
             c = 'd';
             e_c = '$';
         } else if (c == 'S') {
@@ -347,7 +350,10 @@ int normal_handle_input(int c)
             ev->cur = cur;
         }
         (void) adjust_scroll(SelFrame);
-        set_mode(next_mode);
+        if (next_mode == INSERT_MODE) {
+            Core.counter = 1;
+            set_mode(next_mode);
+        }
         return UPDATE_UI | DO_RECORD;
 
     /* delete current character on the current line */
@@ -486,7 +492,7 @@ int normal_handle_input(int c)
             cur.col = buf->lines[cur.line].n;
             ev = break_line(buf, &cur);
             ev->cur = SelFrame->cur;
-            set_cursor(SelFrame, &ev->end);
+            set_cursor(SelFrame, &buf->events[buf->event_i - 1].end);
         }
         return UPDATE_UI | DO_RECORD;
 
@@ -497,7 +503,7 @@ int normal_handle_input(int c)
         cur.col = buf->lines[cur.line].n;
         ev = break_line(buf, &cur);
         ev->cur = SelFrame->cur;
-        set_cursor(SelFrame, &ev->end);
+        set_cursor(SelFrame, &buf->events[buf->event_i - 1].end);
         return UPDATE_UI | DO_RECORD;
 
     /* enter command */

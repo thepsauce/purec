@@ -205,9 +205,14 @@ int insert_handle_input(int c)
         return UPDATE_UI;
 
     case '\n':
+        if (buf->ev_last_indent + 1 == buf->event_i) {
+            undo_event_no_trans(buf);
+            /* since the indentation is now trimmed, move to the first column */
+            SelFrame->cur.col = 0;
+        }
         ev = break_line(buf, &SelFrame->cur);
         ev->cur = SelFrame->cur;
-        set_cursor(SelFrame, &ev->end);
+        set_cursor(SelFrame, &buf->events[buf->event_i - 1].end);
         return UPDATE_UI;
 
     case '\t':
