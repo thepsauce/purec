@@ -15,6 +15,8 @@ RUN := purec
 OUT := build
 RELEASE := release
 
+$(shell mkdir -p $(OUT))
+
 MAIN_SOURCE := $(SRC)/main.c
 MAIN_OBJECT := $(OUT)/main.o
 # Find all source files and test files
@@ -39,21 +41,20 @@ default: build
 -include $(DEPENDENCIES)
 # Build each object from corresponding source file
 $(OUT)/%.o: $(SRC)/%.c
-	mkdir -p $(dir $(OUT))
 	gcc $(DEBUG_FLAGS) $(C_FLAGS) -c $< -o $@ -MMD
 
-$(OUT)/$(TESTS)/%.o: $(TESTS)/%.c
-	mkdir -p $(dir $(OUT)/$(TESTS))
+$(OUT)/$(TESTS):
+	@mkdir -p $@
+
+$(OUT)/$(TESTS)/%.o: $(OUT)/$(TESTS) $(TESTS)/%.c
 	gcc $(DEBUG_FLAGS) $(C_FLAGS) -c $< -o $@ -MMD
 
 # Build the main executable from all object files
 $(OUT)/$(RUN): $(OBJECTS) $(MAIN_OBJECT)
-	mkdir -p $(dir $(OUT))
 	gcc $(DEBUG_FLAGS) $(C_FLAGS) $(OBJECTS) $(MAIN_OBJECT) -o $@ $(C_LIBS)
 
 # Build the test executables
 $(OUT)/$(TESTS)/%: $(OBJECTS) $(TEST_OBJECTS) $(OUT)/$(TESTS)/%.o $(TESTS)/test.h
-	mkdir -p $(dir $(OUT)/$(TESTS))
 	gcc $(DEBUG_FLAGS) $(C_FLAGS) $(OBJECTS) $(TEST_OBJECTS) $(@:$(OUT)/%=%).c -o $@ $(C_LIBS)
 
 # Functions

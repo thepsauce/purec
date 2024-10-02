@@ -99,8 +99,18 @@ static bool find_string_in_list(const char *s_list, const char *s, size_t s_len)
 
 size_t detect_language(struct buf *buf)
 {
+    static const char *commit_detect = "# Please enter the commit message";
     char *ext, *end;
 
+    if (buf->num_lines > 4) {
+        if (buf->lines[0].n == 0) {
+            if (buf->lines[1].n > strlen(commit_detect) &&
+                    memcmp(buf->lines[1].s, commit_detect,
+                           strlen(commit_detect)) == 0) {
+                return COMMIT_LANG;
+            }
+        }
+    }
     for (size_t i = 0, j; i < buf->num_lines; i++) {
         for (j = 0; j < buf->lines[i].n; j++) {
             if (isspace(buf->lines[i].s[j])) {
@@ -108,6 +118,7 @@ size_t detect_language(struct buf *buf)
             }
 
             if (buf->lines[i].s[j] == '#') {
+                /* TODO: check for shell languages */
                 return C_LANG;
             }
             i = buf->num_lines - 1;
@@ -545,11 +556,10 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
      */
     ev_i = add_event(buf, IS_INSERTION, pos, lines, 2) - buf->events;
 
-    if (line->n == indent) {
-        buf->ev_last_indent = buf->event_i;
-    }
-
     if (indent > 0) {
+        if (line->n == indent) {
+            buf->ev_last_indent = buf->event_i;
+        }
         lines = xmalloc(sizeof(*lines));
         lines[0].s = xmalloc(indent);
         lines[0].n = indent;
