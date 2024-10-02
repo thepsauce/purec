@@ -189,6 +189,12 @@ int visual_handle_input(int c)
             }
         }
         return UPDATE_UI;
+
+    case '=':
+    case '<':
+    case '>':
+        get_selection(&sel);
+        return do_action_till(SelFrame, c, sel.beg.line, sel.end.line);
     }
     return do_motion(SelFrame, c);
 }

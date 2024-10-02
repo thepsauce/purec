@@ -237,6 +237,22 @@ int apply_motion(struct frame *frame);
 
 #define do_motion(frame, key) (prepare_motion(frame, (key)) && \
                                apply_motion(frame))
+/**
+ * Does given action within the frame on given lines.
+ *
+ * The action can be '<', '>' or '='.
+ *
+ * The minimum and maximum line must be in bound.
+ *
+ * @param frame     The frame to do the action in.
+ * @param action    The action to perform.
+ * @param min_line  The minimum line.
+ * @param max_line  The maximum line.
+ *
+ * @return Whether something changed.
+ */
+int do_action_till(struct frame *frame, int action, size_t min_line,
+                   size_t max_line);
 
 /**
  * Gets a motion from a keybind.

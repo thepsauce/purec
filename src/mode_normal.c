@@ -182,22 +182,19 @@ static struct frame *do_binded_frame_movement(int c)
     return SelFrame;
 }
 
-static inline int indent_to_motion(void)
+static inline int bind_to_motion(int action)
 {
     int c;
-    struct undo_event *ev;
     struct buf *buf;
     size_t min_line, max_line;
 
     c = get_extra_char();
     buf = SelFrame->buf;
-    switch (c) {
-    case '=':
+    if (c == action) {
         min_line = SelFrame->cur.line;
-        max_line = min_line;
-        break;
-
-    default:
+        max_line = safe_add(min_line, Core.counter - 1);
+        max_line = MIN(max_line, buf->num_lines - 1);
+    } else {
         if (prepare_motion(SelFrame, c) == 0) {
             min_line = SelFrame->cur.line;
             max_line = min_line;
@@ -209,29 +206,7 @@ static inline int indent_to_motion(void)
             max_line = SelFrame->cur.line;
         }
     }
-    for (; min_line <= max_line; min_line++) {
-        ev = indent_line(buf, min_line);
-        if (ev != NULL) {
-            ev->cur = SelFrame->cur;
-            if (min_line == SelFrame->cur.line) {
-                if ((ev->flags & IS_DELETION)) {
-                    if (ev->seg->data_len > SelFrame->cur.col) {
-                        SelFrame->cur.col = 0;
-                    } else {
-                        SelFrame->cur.col -= ev->seg->data_len;
-                    }
-                } else {
-                    SelFrame->cur.col += ev->seg->data_len;
-                }
-                SelFrame->vct = SelFrame->cur.col;
-                adjust_scroll(SelFrame);
-            }
-        }
-    }
-    if (ev != NULL) {
-        return UPDATE_UI;
-    }
-    return 0;
+    return do_action_till(SelFrame, action, min_line, max_line);
 }
 
 int normal_handle_input(int c)
@@ -354,6 +329,7 @@ int normal_handle_input(int c)
             Core.counter = 1;
             set_mode(next_mode);
         }
+        clip_column(SelFrame);
         return UPDATE_UI | DO_RECORD;
 
     /* delete current character on the current line */
@@ -659,7 +635,9 @@ int normal_handle_input(int c)
         return 0;
 
     case '=':
-        return indent_to_motion();
+    case '<':
+    case '>':
+        return bind_to_motion(c);
 
     /* enter insert mode and ... */
     case 'A': /* ...go to the end of the line */

@@ -1172,3 +1172,109 @@ int apply_motion(struct frame *frame)
     adjust_scroll(frame);
     return 1;
 }
+
+int do_action_till(struct frame *frame, int action, size_t min_line,
+                   size_t max_line)
+{
+    struct buf *buf;
+    bool update;
+    size_t n;
+    struct pos p1, p2;
+    struct raw_line *lines, *line;
+    struct undo_event *ev;
+
+    buf = frame->buf;
+    update = false;
+    if (action == '>') {
+        lines = xreallocarray(NULL, sizeof(*lines), max_line - min_line + 1);
+        for (size_t i = min_line; i <= max_line; i++) {
+            line = &lines[i - min_line];
+            if (buf->lines[i].n == 0) {
+                /* do not indent empty lines */
+                line->s = NULL;
+                line->n = 0;
+                continue;
+            }
+            update = true;
+            line->s = xmalloc(Core.tab_size);
+            line->n = Core.tab_size;
+            for (int s = 0; s < Core.tab_size; s++) {
+                line->s[s] = ' ';
+            }
+        }
+        if (!update) {
+            /* if all lines are empty, there is nothing to indent */
+            free(lines);
+            return 0;
+        }
+        p1.col = 0;
+        p1.line = min_line;
+        _insert_block(buf, &p1, lines, max_line - min_line + 1);
+        ev = add_event(buf, IS_BLOCK | IS_INSERTION, &p1, lines,
+                       max_line - min_line + 1);
+        ev->cur = frame->cur;
+        if (buf->lines[frame->cur.line].n > 0) {
+            frame->cur.col += Core.tab_size;
+        }
+        return UPDATE_UI;
+    } else if (action == '<') {
+        if (frame->cur.col > (size_t) Core.tab_size) {
+            frame->cur.col -= Core.tab_size;
+        } else {
+            frame->cur.col = 0;
+        }
+    }
+
+    for (; min_line <= max_line; min_line++) {
+        switch (action) {
+        case '=':
+            if (buf->lines[min_line].n == 0) {
+                /* skip empty lines */
+                break;
+            }
+            ev = indent_line(buf, min_line);
+            if (ev != NULL) {
+                update = true;
+                ev->cur = frame->cur;
+                if (min_line == frame->cur.line) {
+                    if ((ev->flags & IS_DELETION)) {
+                        if (ev->seg->data_len > frame->cur.col) {
+                            frame->cur.col = 0;
+                        } else {
+                            frame->cur.col -= ev->seg->data_len;
+                        }
+                    } else {
+                        frame->cur.col += ev->seg->data_len;
+                    }
+                    frame->vct = frame->cur.col;
+                    adjust_scroll(frame);
+                }
+            }
+            break;
+
+        case '<':
+            for (n = 0; n < buf->lines[min_line].n; n++) {
+                if (n == (size_t) Core.tab_size) {
+                    break;
+                }
+                if (buf->lines[min_line].s[n] != ' ') {
+                    break;
+                }
+            }
+            if (n > 0) {
+                p1.col = 0;
+                p1.line = min_line;
+                p2.col = n;
+                p2.line = min_line;
+                ev = delete_range(buf, &p1, &p2);
+                ev->cur = frame->cur;
+                update = true;
+            }
+            break;
+        }
+    }
+    if (update) {
+        return UPDATE_UI;
+    }
+    return 0;
+}

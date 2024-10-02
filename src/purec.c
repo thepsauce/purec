@@ -155,6 +155,8 @@ void set_mode(int mode)
         /* cut auto indentation */
         if (buf->ev_last_indent + 1 == buf->event_i) {
             undo_event_no_trans(buf);
+            /* make sure this does not pollute other things */
+            buf->ev_last_indent = SIZE_MAX - 1;
         }
     }
     if (IS_VISUAL(mode) && !IS_VISUAL(Core.mode)) {
