@@ -133,6 +133,8 @@ char *get_relative_path(const char *path)
                     path++;
                 }
                 index = 0;
+            } else {
+                index++;
             }
         }
 

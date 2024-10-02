@@ -125,6 +125,7 @@ int main(int argc, char **argv)
     int old_mode;
     size_t next_dot_i;
     struct play_rec *rec;
+    struct undo_event *ev;
     
     if (init_purec(argc, argv) == -1) {
         return -1;
@@ -171,9 +172,11 @@ int main(int argc, char **argv)
 
         /* make all events at the end of the event list of a buffer non transient */
         for (struct buf *buf = FirstBuffer; buf != NULL; buf = buf->next) {
-            if (buf->num_events > 0) {
-                buf->events[buf->num_events - 1].flags &= ~IS_TRANSIENT;
+            if (buf->num_events == 0) {
+                continue;
             }
+            ev = &buf->events[buf->num_events - 1];
+            ev->flags &= ~IS_TRANSIENT;
         }
     }
 

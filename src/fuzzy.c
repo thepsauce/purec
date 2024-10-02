@@ -1,3 +1,4 @@
+#include "buf.h"
 #include "color.h"
 #include "fuzzy.h"
 #include "input.h"
@@ -204,7 +205,7 @@ int update_files(void)
 
 static void go_back_one_dir(void)
 {
-    size_t index;
+    size_t          index;
 
     index = Input.prefix;
     index--;
@@ -253,6 +254,7 @@ static void move_into_dir(const char *name)
 
 char *choose_fuzzy(const char *dir)
 {
+    char *rel_dir;
     int c;
     char *s = NULL;
     struct entry *entry;
@@ -267,8 +269,11 @@ char *choose_fuzzy(const char *dir)
             set_input_text(Fuzzy.last_dir, strlen(Fuzzy.last_dir));
         }
     } else {
-        set_input_text(dir, strlen(dir));
-        insert_input_prefix("/", Input.prefix);
+        rel_dir = get_relative_path(dir);
+        set_input_text("/", 1);
+        insert_input_prefix(rel_dir, 0);
+        insert_input_prefix("./", 0);
+        free(rel_dir);
     }
     
     /* do not use a history */
@@ -302,6 +307,18 @@ char *choose_fuzzy(const char *dir)
         render_input();
         c = get_ch();
         switch (c) {
+        case KEY_HOME:
+            Fuzzy.selected = 0;
+            break;
+
+        case KEY_END:
+            if (Fuzzy.num_entries == 0) {
+                Fuzzy.selected = 0;
+            } else {
+                Fuzzy.selected = Fuzzy.num_entries - 1;
+            }
+            break;
+
         case KEY_UP:
             if (Fuzzy.selected > 0) {
                 Fuzzy.selected--;
@@ -360,13 +377,6 @@ char *choose_fuzzy(const char *dir)
                 break;
             }
             move_into_dir(entry->name);
-            break;
-
-        case CONTROL('A'):
-            if (Input.s[0] == '.' && Input.s[1] == '.' &&
-                Input.s[2] == '/') {
-                
-            }
             break;
 
         case CONTROL('D'):

@@ -1,4 +1,5 @@
 #include "color.h"
+#include "fuzzy.h"
 #include "lang.h"
 #include "xalloc.h"
 
@@ -33,10 +34,10 @@ struct buf *create_buffer(const char *path)
     }
 
     buf = xcalloc(1, sizeof(*buf));
+    buf->path = abs_path;
+    (void) init_load_buffer(buf);
     /* -1 so +1 does not wrap around */
     buf->ev_last_indent = SIZE_MAX - 1;
-    buf->path = abs_path;
-    init_load_buffer(buf);
 
     /* add buffer to linked list */
     if (FirstBuffer == NULL) {
@@ -150,24 +151,33 @@ size_t detect_language(struct buf *buf)
     return NO_LANG;
 }
 
-void init_load_buffer(struct buf *buf)
+int init_load_buffer(struct buf *buf)
 {
     FILE *fp;
-    char *s_line = NULL;
-    size_t a_line = 0;
+    char *s_line;
+    size_t a_line;
     ssize_t line_len;
     struct line *line;
 
+beg:
     if (buf->path == NULL || (fp = fopen(buf->path, "r")) == NULL) {
         buf->a_lines = 1;
         buf->lines = xcalloc(buf->a_lines, sizeof(*buf->lines));
         buf->num_lines = 1;
-        buf->lang = detect_language(buf);
-        return;
+        buf->lang = 0;
+        return 1;
     }
 
     (void) stat(buf->path, &buf->st);
+    if ((buf->st.st_mode & S_IFDIR)) {
+        s_line = buf->path;
+        buf->path = get_absolute_path(choose_fuzzy(buf->path));
+        free(s_line);
+        goto beg;
+    }
 
+    s_line = NULL;
+    a_line = 0;
     while (line_len = getline(&s_line, &a_line, fp), line_len > 0) {
         for (; line_len > 0; line_len--) {
             if (s_line[line_len - 1] != '\n' &&
@@ -193,6 +203,7 @@ void init_load_buffer(struct buf *buf)
     }
 
     buf->lang = detect_language(buf);
+    return 0;
 }
 
 void destroy_buffer(struct buf *buf)
@@ -224,34 +235,55 @@ void destroy_buffer(struct buf *buf)
 
 char *get_pretty_path(const char *path)
 {
-    static char s[1024];
+    static char *s;
+    static size_t s_a;
+
     char *cwd;
     size_t cwd_len;
     const char *home;
     size_t home_len;
 
     if (path == NULL) {
+        if (s_a < sizeof("[No name]")) {
+            s_a = sizeof("[No name]");
+            s = xrealloc(s, s_a);
+        }
         return strcpy(s, "[No name]");
     }
+
     cwd = getcwd(NULL, 0);
     if (cwd != NULL) {
         cwd_len = strlen(cwd);
     } else {
         cwd_len = 0;
     }
+
     home = getenv("HOME");
     if (home == NULL && cwd == NULL) {
-        return strncpy(s, path, sizeof(s) - 1);
+        if (s_a <= strlen(path)) {
+            s_a = strlen(path) + 1;
+            s = xrealloc(s, s_a);
+        }
+        return strcpy(s, path);
     }
+
     if (home != NULL) {
         home_len = strlen(home);
     } else {
         home_len = 0;
     }
     if (home_len > cwd_len && strncmp(path, home, home_len) == 0) {
+        if (s_a < home_len + 2) {
+            s_a = home_len + 2;
+            s = xrealloc(s, s_a);
+        }
         s[0] = '~';
         strcpy(&s[1], &path[home_len]);
     } else if (strncmp(path, cwd, cwd_len) == 0) {
+        if (s_a < cwd_len + 3) {
+            s_a = cwd_len + 3;
+            s = xrealloc(s, s_a);
+        }
         if (path[cwd_len] == '\0') {
             s[0] = '.';
             s[1] = '\0';
@@ -262,7 +294,11 @@ char *get_pretty_path(const char *path)
         s[0] = '~';
         strcpy(&s[1], &path[home_len]);
     } else {
-        strncpy(s, path, sizeof(s) - 1);
+        if (s_a <= strlen(path)) {
+            s_a = strlen(path) + 1;
+            s = xrealloc(s, s_a);
+        }
+        strcpy(s, path);
     }
     free(cwd);
     return s;

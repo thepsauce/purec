@@ -227,8 +227,10 @@ void set_language(struct buf *buf, size_t lang);
  * have been initialized to 0 and the buffer file should be set at this point.
  *
  * @param buf   The buffer to reload.
+ *
+ * @return 1 if the buffer was loaded without a file, 0 otherwise.
  */
-void init_load_buffer(struct buf *buf);
+int init_load_buffer(struct buf *buf);
 
 /**
  * Deletes a buffer and removes it from the buffer list.

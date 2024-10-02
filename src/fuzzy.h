@@ -7,6 +7,8 @@
  * Shows a dialog window with a search bar and display the given entries within
  * the window.
  *
+ * The return value shall not be freed and must be duplicated.
+ *
  * The user can type input and hit enter to confirm a selection.
  *
  * @param entries       Entries to look through.
