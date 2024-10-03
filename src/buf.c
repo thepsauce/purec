@@ -238,6 +238,7 @@ char *get_pretty_path(const char *path)
     static char *s;
     static size_t s_a;
 
+    size_t path_len;
     char *cwd;
     size_t cwd_len;
     const char *home;
@@ -251,6 +252,13 @@ char *get_pretty_path(const char *path)
         return strcpy(s, "[No name]");
     }
 
+    path_len = strlen(path);
+    /* +4 for safety */
+    if (s_a + 4 < path_len) {
+        s_a = path_len + 4;
+        s = xrealloc(s, s_a);
+    }
+
     cwd = getcwd(NULL, 0);
     if (cwd != NULL) {
         cwd_len = strlen(cwd);
@@ -260,10 +268,6 @@ char *get_pretty_path(const char *path)
 
     home = getenv("HOME");
     if (home == NULL && cwd == NULL) {
-        if (s_a <= strlen(path)) {
-            s_a = strlen(path) + 1;
-            s = xrealloc(s, s_a);
-        }
         return strcpy(s, path);
     }
 
@@ -273,17 +277,9 @@ char *get_pretty_path(const char *path)
         home_len = 0;
     }
     if (home_len > cwd_len && strncmp(path, home, home_len) == 0) {
-        if (s_a < home_len + 2) {
-            s_a = home_len + 2;
-            s = xrealloc(s, s_a);
-        }
         s[0] = '~';
         strcpy(&s[1], &path[home_len]);
     } else if (strncmp(path, cwd, cwd_len) == 0) {
-        if (s_a < cwd_len + 3) {
-            s_a = cwd_len + 3;
-            s = xrealloc(s, s_a);
-        }
         if (path[cwd_len] == '\0') {
             s[0] = '.';
             s[1] = '\0';
@@ -294,10 +290,6 @@ char *get_pretty_path(const char *path)
         s[0] = '~';
         strcpy(&s[1], &path[home_len]);
     } else {
-        if (s_a <= strlen(path)) {
-            s_a = strlen(path) + 1;
-            s = xrealloc(s, s_a);
-        }
         strcpy(s, path);
     }
     free(cwd);

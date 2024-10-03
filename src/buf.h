@@ -245,7 +245,8 @@ void destroy_buffer(struct buf *buf);
 /**
  * Returns a pointer to a static string.
  *
- * The returned path is good for printing.
+ * The returned path is good for printing, do not free it.
+ * This function cuts a path if it is too long.
  *
  * @return Pretty path.
  */
