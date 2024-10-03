@@ -10,6 +10,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <glob.h>
 #include <string.h>
 #include <limits.h>
 
@@ -296,11 +297,128 @@ static int run_command(char *s_cmd)
     return 0;
 }
 
+const struct cmd *get_command_beg(const char *beg, size_t i, size_t n)
+{
+    size_t prev_i;
+
+    if (n >= MAX_COMMAND_NAME) {
+        return NULL;
+    }
+    do {
+        prev_i = i;
+        for (; i < ARRAY_SIZE(Commands); i++) {
+            if (memcmp(Commands[i].name, beg, n) == 0) {
+                if (strlen(Commands[i].name) == n) {
+                    continue;
+                }
+                return &Commands[i];
+            }
+        }
+        i = 0;
+    } while (prev_i != 0);
+    return NULL;
+}
+
+/// tab complete data
+struct tab_complete {
+    /// current paths
+    glob_t g;
+    /// index of next path
+    size_t i;
+    /// tab completion is active
+    bool active;
+} Tab;
+
+void tab_complete(int dir)
+{
+    size_t i;
+    size_t st;
+    const struct cmd *cmd;
+    size_t cur_len, len;
+
+    i = 1;
+    while (i < Input.n && isblank(Input.s[i])) {
+        i++;
+    }
+    if (Input.index < i) {
+        /* either there is no command or the cursor is before it */
+        return;
+    }
+    st = i;
+
+    while (i < Input.index && isalpha(Input.s[i])) {
+        i++;
+    }
+
+    if (i != Input.index) {
+        /* this means the cursor is not at the first word */
+        while (i < Input.index && isblank(Input.s[i])) {
+            i++;
+        }
+        if (!Tab.active) {
+            if (Input.n == Input.a) {
+                Input.a *= 2;
+                Input.s = xrealloc(Input.s, Input.a);
+            }
+            Input.s[Input.n++] = '*';
+            terminate_input();
+            if (glob(&Input.s[i], 0, NULL, &Tab.g) != 0) {
+                /* remove the trailing '*' again */
+                Input.n--;
+                return;
+            }
+            Tab.i = dir == -1 ? Tab.g.gl_pathc - 1 : 0;
+            Tab.active = true;
+        } else if (dir == -1) {
+            if (Tab.i == 0) {
+                Tab.i = Tab.g.gl_pathc - 1;
+            } else {
+                Tab.i--;
+            }
+        } else {
+            Tab.i++;
+            Tab.i %= Tab.g.gl_pathc;
+        }
+        cur_len = Input.n - i;
+        len = strlen(Tab.g.gl_pathv[Tab.i]);
+        if (Input.n + len - cur_len > Input.a) {
+            Input.a += len - cur_len;
+            Input.s = xrealloc(Input.s, Input.a);
+        }
+        memmove(&Input.s[i + cur_len],
+                &Input.s[i],
+                Input.n - i - cur_len);
+        memcpy(&Input.s[i], Tab.g.gl_pathv[Tab.i], len);
+        Input.n += len - cur_len;
+        Input.index = Input.n;
+        return;
+    }
+    /* auto complete command */
+    /* :  ed\t /home/steves */
+    cur_len = i - st;
+    cmd = get_command_beg(&Input.s[st], 0, cur_len);
+    if (cmd == NULL) {
+        return;
+    }
+    len = strlen(cmd->name);
+    if (Input.n + len - cur_len > Input.a) {
+        Input.a += len - cur_len;
+        Input.s = xrealloc(Input.s, Input.a);
+    }
+    memmove(&Input.s[st + cur_len],
+            &Input.s[st],
+            Input.n - st - cur_len);
+    memcpy(&Input.s[st], cmd->name, len);
+    Input.n += len - cur_len;
+    Input.index += len - cur_len;
+}
+
 void read_command_line(const char *beg)
 {
     static char **history = NULL;
     static size_t num_history = 0;
 
+    int c;
     char *s;
 
     Core.msg_state = MSG_TO_DEFAULT;
@@ -313,7 +431,16 @@ void read_command_line(const char *beg)
         Input.max_w = COLS;
         set_highlight(stdscr, HI_CMD);
         render_input();
-        s = send_to_input(get_ch());
+        c = get_ch();
+        if (c == '\t' || c == KEY_BTAB) {
+            tab_complete(c == '\t' ? 1 : -1);
+        } else {
+            if (Tab.active) {
+                globfree(&Tab.g);
+            }
+            Tab.active = false;
+            s = send_to_input(c);
+        }
     } while (s == NULL);
 
     if (s[0] == '\n') {

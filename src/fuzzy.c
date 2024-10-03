@@ -272,7 +272,9 @@ char *choose_fuzzy(const char *dir)
         rel_dir = get_relative_path(dir);
         set_input_text("/", 1);
         insert_input_prefix(rel_dir, 0);
-        insert_input_prefix("./", 0);
+        if (rel_dir[0] != '.') {
+            insert_input_prefix("./", 0);
+        }
         free(rel_dir);
     }
     
