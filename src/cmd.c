@@ -312,76 +312,6 @@ static int run_command(char *s_cmd)
     return 0;
 }
 
-int get_color_beg(const char *beg, size_t n, int i, int dir)
-{
-    int prev_i;
-
-    do {
-        prev_i = i;
-        for (i += dir; i >= 0 && i < (int) ARRAY_SIZE(Themes); i += dir) {
-            if (strncmp(Themes[i].name, beg, n) == 0) {
-                return i;
-            }
-        }
-        if (i < 0) {
-            /* implies `dir = -1` */
-            i = ARRAY_SIZE(Langs);
-        } else if (i > 0) {
-            /* implies `dir = 1` */
-            i = -1;
-        }
-    } while (prev_i != i);
-    return -1;
-}
-
-int get_command_beg(const char *beg, size_t n, int i, int dir)
-{
-    int prev_i;
-
-    if (n >= MAX_COMMAND_NAME) {
-        return -1;
-    }
-
-    do {
-        prev_i = i;
-        for (i += dir; i >= 0 && i < (int) ARRAY_SIZE(Commands); i += dir) {
-            if (strncmp(Commands[i].name, beg, n) == 0) {
-                return i;
-            }
-        }
-        if (i < 0) {
-            /* implies `dir = -1` */
-            i = ARRAY_SIZE(Langs);
-        } else if (i > 0) {
-            /* implies `dir = 1` */
-            i = -1;
-        }
-    } while (prev_i != i);
-    return -1;
-}
-
-int get_syntax_beg(const char *beg, size_t n, int i, int dir)
-{
-    int prev_i;
-
-    do {
-        prev_i = i;
-        for (i += dir; i >= 0 && i < (int) ARRAY_SIZE(Langs); i += dir) {
-            if (strncmp(Langs[i].name, beg, n) == 0) {
-                return i;
-            }
-        }
-        if (i < 0) {
-            /* implies `dir = -1` */
-            i = ARRAY_SIZE(Langs);
-        } else if (i > 0) {
-            /* implies `dir = 1` */
-            i = -1;
-        }
-    } while (prev_i != i);
-    return -1;
-}
-
 /// tab complete data
 static struct tab_complete {
     /// the type of completion
@@ -395,6 +325,19 @@ static struct tab_complete {
     /// the last pattern
     char *pat;
 } Tab;
+
+int get_command_beg(const char *beg, size_t n)
+{
+    if (n >= MAX_COMMAND_NAME) {
+        return -1;
+    }
+    for (int i = 0; i < (int) ARRAY_SIZE(Commands); i++) {
+        if (strncmp(Commands[i].name, beg, n) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
 
 static void replace_completion(const char *item)
 {
@@ -424,27 +367,41 @@ static void replace_completion(const char *item)
 
 static void do_completion(int dir)
 {
-    static int (*const beg_proc[])
-            (const char *beg, size_t n, int i, int dir) = {
-        [TAB_COMMAND] = get_command_beg,
-        [TAB_COLOR] = get_color_beg,
-        [TAB_SYNTAX] = get_syntax_beg
-    };
-    int c_i;
+    size_t len;
+    int i;
+    int prev_i;
+    int num;
+    const char *name;
 
     switch (Tab.type) {
     case TAB_COMMAND:
     case TAB_COLOR:
     case TAB_SYNTAX:
-        c_i = beg_proc[Tab.type](Tab.pat, strlen(Tab.pat), Tab.item_i, dir);
-        if (c_i == -1) {
-            break;
-        }
-        replace_completion(Tab.type == TAB_COMMAND ?
-                           Commands[c_i].name : Tab.type == TAB_SYNTAX ?
-                           Langs[c_i].name :
-                           Themes[c_i].name);
-        Tab.item_i = c_i;
+        len = strlen(Tab.pat);
+        i = Tab.item_i;
+        num = Tab.type == TAB_COMMAND ?
+                ARRAY_SIZE(Commands) : Tab.type == TAB_SYNTAX ?
+                ARRAY_SIZE(Langs) : ARRAY_SIZE(Themes);
+        do {
+            prev_i = i;
+            for (i += dir; i >= 0 && i < num; i += dir) {
+                name = Tab.type == TAB_COMMAND ?
+                        Commands[i].name : Tab.type == TAB_SYNTAX ?
+                        Langs[i].name : Themes[i].name;
+                if (strncmp(name, Tab.pat, len) == 0) {
+                    replace_completion(name);
+                    Tab.item_i = i;
+                    return;
+                }
+            }
+            if (i < 0) {
+                /* implies `dir = -1` */
+                i = num;
+            } else if (i > 0) {
+                /* implies `dir = 1` */
+                i = -1;
+            }
+        } while (prev_i != i);
         break;
 
     case TAB_PATH:
@@ -492,7 +449,7 @@ static void tab_complete(int dir)
     if (i != Input.index) {
         /* this means the cursor is not at the first word */
 
-        c_i = get_command_beg(&Input.s[st], i - st, -1, 1);
+        c_i = get_command_beg(&Input.s[st], i - st);
         if (c_i == -1) {
             Tab.type = TAB_PATH;
         } else {
