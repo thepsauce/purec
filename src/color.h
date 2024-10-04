@@ -38,12 +38,14 @@
 #define HI_PAREN_MATCH  22
 #define HI_MAX          23
 
+#define NUM_THEMES 2
+
 extern struct theme {
     const char *name;
     const char *term_colors[256];
     int attribs[HI_MAX][3];
     int colors_needed;
-} Themes[];
+} Themes[NUM_THEMES];
 
 extern int Theme;
 

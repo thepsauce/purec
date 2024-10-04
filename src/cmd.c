@@ -28,6 +28,11 @@ struct cmd_data {
 
 #define MAX_COMMAND_NAME 12
 
+#define TAB_COMMAND 1
+#define TAB_PATH    2
+#define TAB_COLOR   3
+#define TAB_SYNTAX  4
+
 static const struct cmd {
     /// name of the command
     char name[MAX_COMMAND_NAME];
@@ -35,63 +40,73 @@ static const struct cmd {
     int flags;
     /// callback of the command to call
     int (*callback)(struct cmd_data *cd);
+    /// the tab completion to use
+    int tab_rule;
 } Commands[] = {
-    { "b", ACCEPTS_NUMBER, cmd_buffer },
+    { "b", ACCEPTS_NUMBER, cmd_buffer, 0 },
 
-    { "bn", ACCEPTS_NUMBER, cmd_bnext },
-    { "bnext", ACCEPTS_NUMBER, cmd_bnext },
+    { "bn", ACCEPTS_NUMBER, cmd_bnext, 0 },
+    { "bnext", ACCEPTS_NUMBER, cmd_bnext, 0 },
 
-    { "bp", ACCEPTS_NUMBER, cmd_bprev },
-    { "bprev", ACCEPTS_NUMBER, cmd_bprev },
+    { "bp", ACCEPTS_NUMBER, cmd_bprev, 0 },
+    { "bprev", ACCEPTS_NUMBER, cmd_bprev, 0 },
 
-    { "buffer", ACCEPTS_NUMBER, cmd_buffer },
+    { "buffer", ACCEPTS_NUMBER, cmd_buffer, 0 },
 
-    { "colo", 0, cmd_colorscheme },
-    { "colorscheme", 0, cmd_colorscheme },
+    { "colo", 0, cmd_colorscheme, TAB_COLOR },
+    { "colorscheme", 0, cmd_colorscheme, TAB_COLOR },
 
-    { "cq", ACCEPTS_NUMBER, cmd_cquit },
-    { "cquit", ACCEPTS_NUMBER, cmd_cquit },
+    { "cq", ACCEPTS_NUMBER, cmd_cquit, 0 },
+    { "cquit", ACCEPTS_NUMBER, cmd_cquit, 0 },
 
-    { "e", 0, cmd_edit },
-    { "edit", 0, cmd_edit },
+    { "e", 0, cmd_edit, TAB_PATH },
+    { "edit", 0, cmd_edit, TAB_PATH },
 
-    { "exi", 0, cmd_exit },
-    { "exit", 0, cmd_exit },
-    { "exita", 0, cmd_exit_all },
-    { "exitall", 0, cmd_exit_all },
+    { "exi", 0, cmd_exit, 0 },
+    { "exit", 0, cmd_exit, 0 },
+    { "exita", 0, cmd_exit_all, 0 },
+    { "exitall", 0, cmd_exit_all, 0 },
 
-    { "q", 0, cmd_quit },
-    { "qa", 0, cmd_quit_all },
-    { "qall", 0, cmd_quit_all },
+    { "q", 0, cmd_quit, 0 },
+    { "qa", 0, cmd_quit_all, 0 },
+    { "qall", 0, cmd_quit_all, 0 },
 
-    { "quit", 0, cmd_quit },
-    { "quita", 0, cmd_quit_all },
-    { "quitall", 0, cmd_quit_all },
+    { "quit", 0, cmd_quit, 0 },
+    { "quita", 0, cmd_quit_all, 0 },
+    { "quitall", 0, cmd_quit_all, 0 },
 
-    { "r", 0, cmd_read },
-    { "read", 0, cmd_read },
+    { "r", 0, cmd_read, TAB_PATH },
+    { "read", 0, cmd_read, TAB_PATH },
 
-    { "syn", 0, cmd_syntax },
-    { "syntax", 0, cmd_syntax },
+    { "syn", 0, cmd_syntax, TAB_SYNTAX },
+    { "syntax", 0, cmd_syntax, TAB_SYNTAX },
 
-    { "w", ACCEPTS_RANGE, cmd_write },
-    { "wa", 0, cmd_write_all },
-    { "wall", 0, cmd_write_all },
+    { "w", ACCEPTS_RANGE, cmd_write, TAB_PATH },
+    { "wa", 0, cmd_write_all, 0 },
+    { "wall", 0, cmd_write_all, 0 },
 
-    { "wq", ACCEPTS_RANGE, cmd_exit },
-    { "wqa", 0, cmd_exit_all },
-    { "wqall", 0, cmd_exit_all },
+    { "wq", ACCEPTS_RANGE, cmd_exit, 0 },
+    { "wqa", 0, cmd_exit_all, 0 },
+    { "wqall", 0, cmd_exit_all, 0 },
 
-    { "wquit", 0, cmd_exit },
+    { "wquit", 0, cmd_exit, 0 },
 
-    { "write", ACCEPTS_RANGE, cmd_write },
+    { "write", ACCEPTS_RANGE, cmd_write, TAB_PATH },
 
-    { "x", 0, cmd_exit },
-    { "xa", 0, cmd_exit_all },
-    { "xall", 0, cmd_exit_all },
-    { "xit", 0, cmd_exit },
+    { "x", 0, cmd_exit, 0 },
+    { "xa", 0, cmd_exit_all, 0 },
+    { "xall", 0, cmd_exit_all, 0 },
+    { "xit", 0, cmd_exit, 0 },
 };
 
+/**
+ * Gets the command with given name or NULL when it does not exist.
+ *
+ * @param s     The name of the command.
+ * @param s_m   The length of `s`.
+ *
+ * @return The command with that name.
+ */
 static const struct cmd *get_command(const char *s, size_t s_m)
 {
     struct {
@@ -297,44 +312,167 @@ static int run_command(char *s_cmd)
     return 0;
 }
 
-const struct cmd *get_command_beg(const char *beg, size_t i, size_t n)
+int get_color_beg(const char *beg, size_t n, int i, int dir)
 {
-    size_t prev_i;
+    int prev_i;
 
-    if (n >= MAX_COMMAND_NAME) {
-        return NULL;
-    }
     do {
         prev_i = i;
-        for (; i < ARRAY_SIZE(Commands); i++) {
-            if (memcmp(Commands[i].name, beg, n) == 0) {
-                if (strlen(Commands[i].name) == n) {
-                    continue;
-                }
-                return &Commands[i];
+        for (i += dir; i >= 0 && i < (int) ARRAY_SIZE(Themes); i += dir) {
+            if (strncmp(Themes[i].name, beg, n) == 0) {
+                return i;
             }
         }
-        i = 0;
-    } while (prev_i != 0);
-    return NULL;
+        if (i < 0) {
+            /* implies `dir = -1` */
+            i = ARRAY_SIZE(Langs);
+        } else if (i > 0) {
+            /* implies `dir = 1` */
+            i = -1;
+        }
+    } while (prev_i != i);
+    return -1;
+}
+
+int get_command_beg(const char *beg, size_t n, int i, int dir)
+{
+    int prev_i;
+
+    if (n >= MAX_COMMAND_NAME) {
+        return -1;
+    }
+
+    do {
+        prev_i = i;
+        for (i += dir; i >= 0 && i < (int) ARRAY_SIZE(Commands); i += dir) {
+            if (strncmp(Commands[i].name, beg, n) == 0) {
+                return i;
+            }
+        }
+        if (i < 0) {
+            /* implies `dir = -1` */
+            i = ARRAY_SIZE(Langs);
+        } else if (i > 0) {
+            /* implies `dir = 1` */
+            i = -1;
+        }
+    } while (prev_i != i);
+    return -1;
+}
+
+int get_syntax_beg(const char *beg, size_t n, int i, int dir)
+{
+    int prev_i;
+
+    do {
+        prev_i = i;
+        for (i += dir; i >= 0 && i < (int) ARRAY_SIZE(Langs); i += dir) {
+            if (strncmp(Langs[i].name, beg, n) == 0) {
+                return i;
+            }
+        }
+        if (i < 0) {
+            /* implies `dir = -1` */
+            i = ARRAY_SIZE(Langs);
+        } else if (i > 0) {
+            /* implies `dir = 1` */
+            i = -1;
+        }
+    } while (prev_i != i);
+    return -1;
 }
 
 /// tab complete data
-struct tab_complete {
-    /// current paths
+static struct tab_complete {
+    /// the type of completion
+    int type;
+    /// the paths
     glob_t g;
-    /// index of next path
-    size_t i;
-    /// tab completion is active
-    bool active;
+    /// index of next item
+    int item_i;
+    /// the range to replace with the next tab completion
+    size_t from, to;
+    /// the last pattern
+    char *pat;
 } Tab;
 
-void tab_complete(int dir)
+static void replace_completion(const char *item)
+{
+    size_t len, cur_len;
+
+    cur_len = Tab.to - Tab.from;
+    len = strlen(item);
+    if (Input.n + len - cur_len > Input.a) {
+        Input.a += len - cur_len;
+        Input.s = xrealloc(Input.s, Input.a);
+    }
+    memmove(&Input.s[Tab.from + cur_len],
+            &Input.s[Tab.from],
+            Input.n - Tab.to);
+    memcpy(&Input.s[Tab.from], item, len);
+    Input.n += len - cur_len;
+    Input.index = Input.n;
+    switch (Tab.type) {
+    case TAB_COMMAND:
+        Tab.to += len - cur_len;
+        break;
+
+    default:
+        Tab.to = Input.n;
+    }
+}
+
+static void do_completion(int dir)
+{
+    static int (*const beg_proc[])
+            (const char *beg, size_t n, int i, int dir) = {
+        [TAB_COMMAND] = get_command_beg,
+        [TAB_COLOR] = get_color_beg,
+        [TAB_SYNTAX] = get_syntax_beg
+    };
+    int c_i;
+
+    switch (Tab.type) {
+    case TAB_COMMAND:
+    case TAB_COLOR:
+    case TAB_SYNTAX:
+        c_i = beg_proc[Tab.type](Tab.pat, strlen(Tab.pat), Tab.item_i, dir);
+        if (c_i == -1) {
+            break;
+        }
+        replace_completion(Tab.type == TAB_COMMAND ?
+                           Commands[c_i].name : Tab.type == TAB_SYNTAX ?
+                           Langs[c_i].name :
+                           Themes[c_i].name);
+        Tab.item_i = c_i;
+        break;
+
+    case TAB_PATH:
+        if (dir == -1) {
+            if (Tab.item_i == 0) {
+                Tab.item_i = Tab.g.gl_pathc - 1;
+            } else {
+                Tab.item_i--;
+            }
+        } else {
+            Tab.item_i++;
+            Tab.item_i %= Tab.g.gl_pathc;
+        }
+        replace_completion(Tab.g.gl_pathv[Tab.item_i]);
+        break;
+    }
+}
+
+static void tab_complete(int dir)
 {
     size_t i;
     size_t st;
-    const struct cmd *cmd;
-    size_t cur_len, len;
+    int c_i;
+
+    if (Tab.type != 0) {
+        do_completion(dir);
+        return;
+    }
 
     i = 1;
     while (i < Input.n && isblank(Input.s[i])) {
@@ -350,12 +488,19 @@ void tab_complete(int dir)
         i++;
     }
 
+    Tab.item_i = -1;
     if (i != Input.index) {
+        c_i = get_command_beg(&Input.s[st], i - st, -1, 1);
+        if (c_i == -1) {
+            Tab.type = TAB_PATH;
+        } else {
+            Tab.type = Commands[c_i].tab_rule;
+        }
         /* this means the cursor is not at the first word */
         while (i < Input.index && isblank(Input.s[i])) {
             i++;
         }
-        if (!Tab.active) {
+        if (Tab.type == TAB_PATH) {
             if (Input.n == Input.a) {
                 Input.a *= 2;
                 Input.s = xrealloc(Input.s, Input.a);
@@ -367,50 +512,21 @@ void tab_complete(int dir)
                 Input.n--;
                 return;
             }
-            Tab.i = dir == -1 ? Tab.g.gl_pathc - 1 : 0;
-            Tab.active = true;
-        } else if (dir == -1) {
-            if (Tab.i == 0) {
-                Tab.i = Tab.g.gl_pathc - 1;
-            } else {
-                Tab.i--;
-            }
+            /* do not need pattern here */
+            Tab.pat = NULL;
         } else {
-            Tab.i++;
-            Tab.i %= Tab.g.gl_pathc;
+            Tab.pat = xstrndup(&Input.s[Input.index], Input.n - Input.index);
         }
-        cur_len = Input.n - i;
-        len = strlen(Tab.g.gl_pathv[Tab.i]);
-        if (Input.n + len - cur_len > Input.a) {
-            Input.a += len - cur_len;
-            Input.s = xrealloc(Input.s, Input.a);
-        }
-        memmove(&Input.s[i + cur_len],
-                &Input.s[i],
-                Input.n - i - cur_len);
-        memcpy(&Input.s[i], Tab.g.gl_pathv[Tab.i], len);
-        Input.n += len - cur_len;
-        Input.index = Input.n;
-        return;
+        Tab.from = i;
+        Tab.to = Input.n;
+    } else {
+        /* auto complete command */
+        Tab.type = TAB_COMMAND;
+        Tab.from = st;
+        Tab.to = i;
+        Tab.pat = xstrndup(&Input.s[st], i - st);
     }
-    /* auto complete command */
-    /* :  ed\t /home/steves */
-    cur_len = i - st;
-    cmd = get_command_beg(&Input.s[st], 0, cur_len);
-    if (cmd == NULL) {
-        return;
-    }
-    len = strlen(cmd->name);
-    if (Input.n + len - cur_len > Input.a) {
-        Input.a += len - cur_len;
-        Input.s = xrealloc(Input.s, Input.a);
-    }
-    memmove(&Input.s[st + cur_len],
-            &Input.s[st],
-            Input.n - st - cur_len);
-    memcpy(&Input.s[st], cmd->name, len);
-    Input.n += len - cur_len;
-    Input.index += len - cur_len;
+    do_completion(dir);
 }
 
 void read_command_line(const char *beg)
@@ -435,10 +551,12 @@ void read_command_line(const char *beg)
         if (c == '\t' || c == KEY_BTAB) {
             tab_complete(c == '\t' ? 1 : -1);
         } else {
-            if (Tab.active) {
+            if (Tab.type == TAB_PATH) {
                 globfree(&Tab.g);
             }
-            Tab.active = false;
+            free(Tab.pat);
+            Tab.pat = NULL;
+            Tab.type = 0;
             s = send_to_input(c);
         }
     } while (s == NULL);

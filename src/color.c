@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-struct theme Themes[] = {
+struct theme Themes[NUM_THEMES] = {
     {
         .name = "Term",
         .term_colors = {

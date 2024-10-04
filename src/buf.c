@@ -164,14 +164,17 @@ beg:
         buf->a_lines = 1;
         buf->lines = xcalloc(buf->a_lines, sizeof(*buf->lines));
         buf->num_lines = 1;
-        buf->lang = 0;
+        /* this will detect the language based on the file extension */
+        buf->lang = detect_language(buf);
         return 1;
     }
 
-    (void) stat(buf->path, &buf->st);
-    if ((buf->st.st_mode & S_IFDIR)) {
+    if (stat(buf->path, &buf->st) == 0 && (buf->st.st_mode & S_IFDIR)) {
         s_line = buf->path;
-        buf->path = get_absolute_path(choose_fuzzy(buf->path));
+        buf->path = choose_fuzzy(buf->path);
+        if (buf->path != NULL) {
+            buf->path = get_absolute_path(buf->path);
+        }
         free(s_line);
         goto beg;
     }
