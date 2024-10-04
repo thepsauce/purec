@@ -105,9 +105,9 @@ static void repeat_last_insertion(void)
             line = &lines[ev->pos.line - cur.line];
             line->n -= seg->lines[0].n;
             if (seg->num_lines == 1) {
-                memmove(&line->s[ev->pos.col],
-                        &line->s[ev->pos.col + seg->lines[0].n],
-                        line->n - ev->pos.col);
+                memmove(&line->s[ev->pos.col - cur.col],
+                        &line->s[ev->pos.col - cur.col + seg->lines[0].n],
+                        line->n - (ev->pos.col - cur.col));
             } else {
                 line->s = xrealloc(line->s, line->n + line[seg->num_lines - 1].n);
                 memcpy(&lines->s[line->n], &line[seg->num_lines - 1].s[0],
