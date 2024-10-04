@@ -479,7 +479,7 @@ static void tab_complete(int dir)
         i++;
     }
     if (Input.index < i) {
-        /* either there is no command or the cursor is before it */
+        /* the cursor is before the command it */
         return;
     }
     st = i;
@@ -490,13 +490,14 @@ static void tab_complete(int dir)
 
     Tab.item_i = -1;
     if (i != Input.index) {
+        /* this means the cursor is not at the first word */
+
         c_i = get_command_beg(&Input.s[st], i - st, -1, 1);
         if (c_i == -1) {
             Tab.type = TAB_PATH;
         } else {
             Tab.type = Commands[c_i].tab_rule;
         }
-        /* this means the cursor is not at the first word */
         while (i < Input.index && isblank(Input.s[i])) {
             i++;
         }
@@ -550,6 +551,7 @@ void read_command_line(const char *beg)
         c = get_ch();
         if (c == '\t' || c == KEY_BTAB) {
             tab_complete(c == '\t' ? 1 : -1);
+            s = NULL;
         } else {
             if (Tab.type == TAB_PATH) {
                 globfree(&Tab.g);
