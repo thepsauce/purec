@@ -39,7 +39,7 @@ const char *c_type_mods[] =  {
     "volatile",
 };
 
-const char *c_identfs[] = {
+const char *c_statements[] = {
     "break",
     "case",
     "continue",
@@ -163,9 +163,9 @@ static size_t c_get_identf(struct state_ctx *ctx)
         } else if (bin_search(c_type_mods, ARRAY_SIZE(c_type_mods),
                     &ctx->s[ctx->pos.col], n) != NULL) {
             ctx->hi = HI_TYPE_MOD;
-        } else if (bin_search(c_identfs, ARRAY_SIZE(c_identfs),
+        } else if (bin_search(c_statements, ARRAY_SIZE(c_statements),
                     &ctx->s[ctx->pos.col], n) != NULL) {
-            ctx->hi = HI_IDENTIFIER;
+            ctx->hi = HI_STATEMENT;
         } else if (ctx->pos.col + n < ctx->n && ctx->s[ctx->pos.col + n] == '(') {
             ctx->hi = HI_FUNCTION;
         }

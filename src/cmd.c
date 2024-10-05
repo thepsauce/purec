@@ -380,15 +380,15 @@ static void do_completion(int dir)
         len = strlen(Tab.pat);
         i = Tab.item_i;
         num = Tab.type == TAB_COMMAND ?
-                ARRAY_SIZE(Commands) : Tab.type == TAB_SYNTAX ?
-                ARRAY_SIZE(Langs) : ARRAY_SIZE(Themes);
+                (int) ARRAY_SIZE(Commands) : Tab.type == TAB_SYNTAX ?
+                (int) ARRAY_SIZE(Langs) : get_number_of_themes();
         do {
             prev_i = i;
             for (i += dir; i >= 0 && i < num; i += dir) {
                 name = Tab.type == TAB_COMMAND ?
                         Commands[i].name : Tab.type == TAB_SYNTAX ?
                         Langs[i].name : Themes[i].name;
-                if (strncmp(name, Tab.pat, len) == 0) {
+                if (strncasecmp(name, Tab.pat, len) == 0) {
                     replace_completion(name);
                     Tab.item_i = i;
                     return;
@@ -473,7 +473,7 @@ static void tab_complete(int dir)
             /* do not need pattern here */
             Tab.pat = NULL;
         } else {
-            Tab.pat = xstrndup(&Input.s[Input.index], Input.n - Input.index);
+            Tab.pat = xstrndup(&Input.s[i], Input.n - i);
         }
         Tab.from = i;
         Tab.to = Input.n;
