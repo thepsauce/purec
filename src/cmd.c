@@ -405,6 +405,9 @@ static void do_completion(int dir)
         break;
 
     case TAB_PATH:
+        if (Tab.g.gl_pathc == 0) {
+            break;
+        }
         if (dir == -1) {
             if (Tab.item_i == 0) {
                 Tab.item_i = Tab.g.gl_pathc - 1;
