@@ -544,6 +544,24 @@ void _delete_block(struct buf *buf, const struct pos *from,
         const struct pos *to);
 
 /**
+ * Deletes given range and inserts given lines.
+ *
+ * This function adds one or two events, an insertion or deletion event and
+ * a replace event if applicable.
+ *
+ * @param buf       Buffer to replace lines.
+ * @param from      Start of deletion.
+ * @param to        End of deletion.
+ * @param lines     Lines to insert.
+ * @param num_lines Number of lines to insert.
+ *
+ * @return The first added event.
+ */
+struct undo_event *replace_lines(struct buf *buf, const struct pos *from,
+                   const struct pos *to, const struct raw_line *lines,
+                   size_t num_lines);
+
+/**
  * Change text within a block.
  *
  * @param buf  Buffer of which to change text in.

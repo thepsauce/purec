@@ -54,6 +54,8 @@ static const struct cmd {
     { "buffer", ACCEPTS_NUMBER, cmd_buffer, 0 },
 
     { "colo", 0, cmd_colorscheme, TAB_COLOR },
+    { "coloi", 0, cmd_colorschemeindex, TAB_COLOR },
+    { "coloindex", 0, cmd_colorschemeindex, TAB_COLOR },
     { "colorscheme", 0, cmd_colorscheme, TAB_COLOR },
 
     { "cq", ACCEPTS_NUMBER, cmd_cquit, 0 },
@@ -77,6 +79,9 @@ static const struct cmd {
 
     { "r", 0, cmd_read, TAB_PATH },
     { "read", 0, cmd_read, TAB_PATH },
+
+    { "s", ACCEPTS_RANGE, cmd_substitute, 0 },
+    { "substitute", ACCEPTS_RANGE, cmd_substitute, 0 },
 
     { "syn", 0, cmd_syntax, TAB_SYNTAX },
     { "syntax", 0, cmd_syntax, TAB_SYNTAX },
@@ -122,7 +127,7 @@ static const struct cmd *get_command(const char *s, size_t s_m)
     int d;
     int max, max_i;
 
-    if (s_m >= 12) {
+    if (s_m >= MAX_COMMAND_NAME) {
         set_error("command '%.*s' does not exist", (int) s_m, s);
         return NULL;
     }
@@ -218,7 +223,7 @@ static bool read_number(char *s, char **p_s, size_t *p_n)
     return 0;
 }
 
-static int run_command(char *s_cmd)
+int run_command(char *s_cmd)
 {
     int r;
     size_t len;

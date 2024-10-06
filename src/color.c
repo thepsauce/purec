@@ -5287,7 +5287,7 @@ int get_number_of_themes(void)
     return ARRAY_SIZE(Themes);
 }
 
-int Theme = 11;
+int Theme = 0;
 
 static void convert_hex_to_rgb(const char *hex, int *p_r, int *p_g, int *p_b)
 {

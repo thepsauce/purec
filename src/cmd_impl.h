@@ -60,6 +60,29 @@ int cmd_colorscheme(struct cmd_data *cd)
     return 0;
 }
 
+int cmd_colorschemeindex(struct cmd_data *cd)
+{
+    int index;
+    int num;
+
+    if (cd->arg[0] != '\0') {
+        index = -1;
+        num = get_number_of_themes();
+        for (int t = 0; t < num; t++) {
+            if (strcasecmp(Themes[t].name, cd->arg) == 0) {
+                index = t;
+            }
+        }
+        if (index < 0) {
+            return -1;
+        }
+    } else {
+        index = Theme;
+    }
+    set_message("Theme index: %d", index);
+    return 0;
+}
+
 /**
  * Saves a buffer using command meta data.
  *
@@ -226,6 +249,118 @@ int cmd_read(struct cmd_data *cd)
     }
     read_file(SelFrame->buf, &SelFrame->cur, fp);
     fclose(fp);
+    return 0;
+}
+
+static struct raw_line *gen_lines(const char *s, size_t *p_num_lines)
+{
+    struct raw_line *lines;
+    size_t          num_lines;
+    char            ch;
+    char            *p;
+    size_t          a, n;
+
+    lines = NULL;
+    num_lines = 0;
+
+    p = NULL;
+    a = 0;
+    n = 0;
+    for (; s[0] != '\0'; s++) {
+        if (s[0] == '\\') {
+            s++;
+            switch (s[0]) {
+            case 'a': ch = '\a'; break;
+            case 'b': ch = '\b'; break;
+            case 'f': ch = '\f'; break;
+            case 'n': ch = '\n'; break;
+            case 'r': ch = '\r'; break;
+            case 't': ch = '\t'; break;
+            case 'v': ch = '\v'; break;
+            default:
+                ch = s[0];
+            }
+        } else {
+            ch = s[0];
+        }
+        if (ch == '\n') {
+            lines = xreallocarray(lines, sizeof(*lines), num_lines + 1);
+            lines[num_lines].s = xmemdup(p, n);
+            lines[num_lines].n = n;
+            num_lines++;
+            n = 0;
+            continue;
+        }
+        if (a == n) {
+            a *= 2;
+            a++;
+            p = xrealloc(p, a);
+        }
+        p[n++] = ch;
+    }
+    lines = xreallocarray(lines, sizeof(*lines), num_lines + 1);
+    lines[num_lines].s = xmemdup(p, n);
+    lines[num_lines].n = n;
+    num_lines++;
+
+    free(p);
+
+    *p_num_lines = num_lines;
+    return lines;
+}
+
+int cmd_substitute(struct cmd_data *cd)
+{
+    char                sep;
+    char                *e1, *e2;
+    struct buf          *buf;
+    struct raw_line     *lines;
+    size_t              num_lines;
+    struct undo_event   *ev;
+
+    sep = cd->arg[0];
+    if (sep == '\0') {
+        return 0;
+    }
+
+    do {
+        e1 = strchr(&cd->arg[1], sep);
+        if (e1 == NULL) {
+            return 0;
+        }
+    } while (e1[-1] == '\\');
+
+    do {
+        e2 = strchr(&e1[1], sep);
+        if (e2 == NULL) {
+            e2 = e1 + strlen(e1);
+            break;
+        }
+    } while (e2[-1] == '\\');
+
+    *e1 = '\0';
+    *e2 = '\0';
+
+    buf = SelFrame->buf;
+    search_string(buf, &cd->arg[1]);
+    lines = gen_lines(&e1[1], &num_lines);
+    /* do it in reverse */
+    for (struct match *m = &buf->matches[buf->num_matches];
+            m != buf->matches; ) {
+        m--;
+        /* skip matches that are out of range */
+        if (m->from.line > cd->to ||
+                m->to.line < cd->from) {
+            continue;
+        }
+        ev = replace_lines(buf, &m->from, &m->to, lines, num_lines);
+        ev->cur = SelFrame->cur;
+    }
+
+    for (size_t i = 0; i < num_lines; i++) {
+        free(lines[i].s);
+    }
+    free(lines);
     return 0;
 }
 

@@ -950,6 +950,20 @@ void _delete_block(struct buf *buf, const struct pos *from,
     }
 }
 
+struct undo_event *replace_lines(struct buf *buf, const struct pos *from,
+                   const struct pos *to, const struct raw_line *lines,
+                   size_t num_lines)
+{
+    struct undo_event *ev;
+    struct undo_event *ev2;
+
+    /* TODO: optimize this */
+    ev = delete_range(buf, from, to);
+    ev2 = insert_lines(buf, from, lines, num_lines, 1);
+
+    return ev == NULL ? ev2 : ev2 == NULL ? ev : ev2 - 1;
+}
+
 struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
         const struct pos *pto, int (*conv)(int))
 {
@@ -1136,7 +1150,7 @@ size_t search_string(struct buf *buf, const char *s)
             matches[n].from.line = i;
             matches[n].from.col = j;
             matches[n].to.line = i;
-            matches[n].to.col = j + l - 1;
+            matches[n].to.col = j + l;
             n++;
         }
     }
