@@ -190,7 +190,10 @@ char *get_relative_path(const char *path)
     }
 
     if (index == 0 && num_slashes == 0) {
-        return xstrdup(".");
+        s = xrealloc(s, 2);
+        s[0] = '.';
+        s[1] = '\0';
+        return s;
     }
 
     move = index;

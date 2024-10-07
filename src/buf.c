@@ -119,8 +119,10 @@ size_t detect_language(struct buf *buf)
             }
 
             if (buf->lines[i].s[j] == '#') {
-                /* TODO: check for shell languages */
-                return C_LANG;
+                if (j + 1 == buf->lines[i].n ||
+                        buf->lines[i].s[j + 1] != ' ') {
+                    return C_LANG;
+                }
             }
             i = buf->num_lines - 1;
             break;

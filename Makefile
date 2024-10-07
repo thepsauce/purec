@@ -16,6 +16,7 @@ OUT := build
 RELEASE := release
 
 $(shell mkdir -p $(OUT))
+$(shell mkdir -p $(OUT)/$(TESTS))
 
 MAIN_SOURCE := $(SRC)/main.c
 MAIN_OBJECT := $(OUT)/main.o
@@ -43,10 +44,7 @@ default: build
 $(OUT)/%.o: $(SRC)/%.c
 	gcc $(DEBUG_FLAGS) $(C_FLAGS) -c $< -o $@ -MMD
 
-$(OUT)/$(TESTS):
-	@mkdir -p $@
-
-$(OUT)/$(TESTS)/%.o: $(OUT)/$(TESTS) $(TESTS)/%.c
+$(OUT)/$(TESTS)/%.o: $(TESTS)/%.c
 	gcc $(DEBUG_FLAGS) $(C_FLAGS) -c $< -o $@ -MMD
 
 # Build the main executable from all object files
