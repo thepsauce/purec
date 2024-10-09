@@ -314,3 +314,29 @@ int get_glyph(const char *s, size_t n, struct glyph *g)
     g->w = wcwidth(wc);
     return c;
 }
+
+ssize_t get_line(char **p_s, size_t *p_a, FILE *fp)
+{
+    char            *s;
+    size_t          a;
+    int             c;
+    ssize_t         n;
+
+    s = *p_s;
+    a = *p_a;
+    n = 0;
+    while (c = fgetc(fp), c != EOF && c != '\n') {
+        if ((size_t) n == a) {
+            a *= 2;
+            a++;
+            s = xrealloc(s, a);
+        }
+        s[n++] = c;
+    }
+    if (n == 0 && c == EOF) {
+        return -1;
+    }
+    *p_s = s;
+    *p_a = a;
+    return n;
+}

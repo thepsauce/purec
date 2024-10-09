@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 /**
  * Gets the number of elements of a static array.
@@ -168,5 +169,16 @@ struct glyph {
  *         the multi byte sequence.
  */
 int get_glyph(const char *s, size_t n, struct glyph *g);
+
+/**
+ * Gets characters until the first new line character.
+ *
+ * @param p_s   Pointer to a string.
+ * @param p_a   Pointer to the capacity of the string.
+ * @param fp    File to read from.
+ *
+ * @return Number of characters read or -1 if at end.
+ */
+ssize_t get_line(char **p_s, size_t *p_a, FILE *fp);
 
 #endif

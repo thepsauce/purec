@@ -24,6 +24,8 @@ struct cmd_data {
     bool force;
 };
 
+struct input Cmd;
+
 #include "cmd_impl.h"
 
 #define MAX_COMMAND_NAME 12
@@ -350,23 +352,23 @@ static void replace_completion(const char *item)
 
     cur_len = Tab.to - Tab.from;
     len = strlen(item);
-    if (Input.n + len - cur_len > Input.a) {
-        Input.a += len - cur_len;
-        Input.s = xrealloc(Input.s, Input.a);
+    if (Cmd.n + len - cur_len > Cmd.a) {
+        Cmd.a += len - cur_len;
+        Cmd.s = xrealloc(Cmd.s, Cmd.a);
     }
-    memmove(&Input.s[Tab.from + cur_len],
-            &Input.s[Tab.from],
-            Input.n - Tab.to);
-    memcpy(&Input.s[Tab.from], item, len);
-    Input.n += len - cur_len;
-    Input.index = Input.n;
+    memmove(&Cmd.s[Tab.from + cur_len],
+            &Cmd.s[Tab.from],
+            Cmd.n - Tab.to);
+    memcpy(&Cmd.s[Tab.from], item, len);
+    Cmd.n += len - cur_len;
+    Cmd.index = Cmd.n;
     switch (Tab.type) {
     case TAB_COMMAND:
         Tab.to += len - cur_len;
         break;
 
     default:
-        Tab.to = Input.n;
+        Tab.to = Cmd.n;
     }
 }
 
@@ -440,57 +442,57 @@ static void tab_complete(int dir)
     }
 
     i = 1;
-    while (i < Input.n && isblank(Input.s[i])) {
+    while (i < Cmd.n && isblank(Cmd.s[i])) {
         i++;
     }
-    if (Input.index < i) {
+    if (Cmd.index < i) {
         /* the cursor is before the command it */
         return;
     }
     st = i;
 
-    while (i < Input.index && isalpha(Input.s[i])) {
+    while (i < Cmd.index && isalpha(Cmd.s[i])) {
         i++;
     }
 
     Tab.item_i = -1;
-    if (i != Input.index) {
+    if (i != Cmd.index) {
         /* this means the cursor is not at the first word */
 
-        c_i = get_command_beg(&Input.s[st], i - st);
+        c_i = get_command_beg(&Cmd.s[st], i - st);
         if (c_i == -1) {
             Tab.type = TAB_PATH;
         } else {
             Tab.type = Commands[c_i].tab_rule;
         }
-        while (i < Input.index && isblank(Input.s[i])) {
+        while (i < Cmd.index && isblank(Cmd.s[i])) {
             i++;
         }
         if (Tab.type == TAB_PATH) {
-            if (Input.n == Input.a) {
-                Input.a *= 2;
-                Input.s = xrealloc(Input.s, Input.a);
+            if (Cmd.n == Cmd.a) {
+                Cmd.a *= 2;
+                Cmd.s = xrealloc(Cmd.s, Cmd.a);
             }
-            Input.s[Input.n++] = '*';
-            terminate_input();
-            if (glob(&Input.s[i], 0, NULL, &Tab.g) != 0) {
+            Cmd.s[Cmd.n++] = '*';
+            terminate_input(&Cmd);
+            if (glob(&Cmd.s[i], 0, NULL, &Tab.g) != 0) {
                 /* remove the trailing '*' again */
-                Input.n--;
+                Cmd.n--;
                 return;
             }
             /* do not need pattern here */
             Tab.pat = NULL;
         } else {
-            Tab.pat = xstrndup(&Input.s[i], Input.n - i);
+            Tab.pat = xstrndup(&Cmd.s[i], Cmd.n - i);
         }
         Tab.from = i;
-        Tab.to = Input.n;
+        Tab.to = Cmd.n;
     } else {
         /* auto complete command */
         Tab.type = TAB_COMMAND;
         Tab.from = st;
         Tab.to = i;
-        Tab.pat = xstrndup(&Input.s[st], i - st);
+        Tab.pat = xstrndup(&Cmd.s[st], i - st);
     }
     do_completion(dir);
 }
@@ -505,14 +507,14 @@ void read_command_line(const char *beg)
 
     Core.msg_state = MSG_TO_DEFAULT;
 
-    set_input_text(beg, 1);
-    set_input_history(history, num_history);
+    set_input_text(&Cmd, beg, 1);
+    set_input_history(&Cmd, history, num_history);
     do {
-        Input.x = 0;
-        Input.y = LINES - 1;
-        Input.max_w = COLS;
+        Cmd.x = 0;
+        Cmd.y = LINES - 1;
+        Cmd.max_w = COLS;
         set_highlight(stdscr, HI_CMD);
-        render_input();
+        render_input(&Cmd);
         c = get_ch();
         if (c == '\t' || c == KEY_BTAB) {
             tab_complete(c == '\t' ? 1 : -1);
@@ -524,7 +526,7 @@ void read_command_line(const char *beg)
             free(Tab.pat);
             Tab.pat = NULL;
             Tab.type = 0;
-            s = send_to_input(c);
+            s = send_to_input(&Cmd, c);
         }
     } while (s == NULL);
 
@@ -533,7 +535,7 @@ void read_command_line(const char *beg)
     }
 
     history = xreallocarray(history, num_history + 1, sizeof(*history));
-    history[num_history++] = xstrdup(&s[-Input.prefix]);
+    history[num_history++] = xstrdup(&s[-Cmd.prefix]);
 
     switch (beg[0]) {
     case '/':

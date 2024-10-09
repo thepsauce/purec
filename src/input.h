@@ -17,15 +17,18 @@
  * {
  *     static char **history;
  *     static size_t num_history;
+ *     static struct input inp;
  *
  *     const int x = 0;
  *     const int y = 0;
  *
  *     char *s;
  *
- *     set_input(x, y, COLS, "Enter: ", sizeof("Enter:"), history, num_history);
+ *     set_input_text(&inp, "Enter: ", sizeof("Enter:"));
+ *     set_input_history(&inp, history, num_history);
  *
- *     while (render_input(), s = send_to_input(getch()), s == NULL) {
+ *     while (inp.x = 0, inp.y = 0, inp.max_w = COLS,
+ *            render_input(&inp), s = send_to_input(&inp, getch()), s == NULL) {
  *         (void) 0;
  *     }
  *
@@ -46,7 +49,7 @@
  * style) and `file.c` (no history, simple fuzzy search).
  */
 
-extern struct input {
+struct input {
     /// x position of the input
     int x;
     /// y position of the input
@@ -78,36 +81,41 @@ extern struct input {
     char *remember;
     /// Length of remembered text.
     size_t remember_len;
-} Input;
+};
 
 /**
  * Sets the text of the input line.
  * 
+ * @param inp           The input to set the text of.
  * @param text          The text to set it to including the prefix.
  * @param prefix_len    Size of the text segment in front of the input.
  */
-void set_input_text(const char *text, size_t prefix_len);
+void set_input_text(struct input *inp, const char *text, size_t prefix_len);
 
 /**
  * Sets the history of the input line.
  *
+ * @param inp       The input whose history to set.
  * @param hist      History entries, may be `NULL` (no history).
  * @param num_hist  Number of entries in the history.
  */
-void set_input_history(char **history, size_t num_hist);
+void set_input_history(struct input *inp, char **history, size_t num_hist);
 
 /**
  * Inserts given text into the input line.
  *
+ * @param inp   The input to insert a prefix into.
  * @param text  The text to append to the prefix.
  * @param index The index to insert the text into.
  */
-void insert_input_prefix(const char *text, size_t index);
+void insert_input_prefix(struct input *inp, const char *text, size_t index);
 
 /**
  * Adds a null terminator to the end of the input line.
+ *
+ * @param inp   The input to terminate.
  */
-void terminate_input(void);
+void terminate_input(struct input *inp);
 
 /**
  * Let the input box handle user input.
@@ -115,17 +123,20 @@ void terminate_input(void);
  * If enter is pressed and there is input, the input is added to the given
  * history and a null terminator is added to the end for convenience.
  *
- * @param c User input.
+ * @param inp   The input to send the character to.
+ * @param c     User input.
  *
  * @return An empty string if ESCAPE was pressed, the input if ENTER was pressed
  *         or NULL otherwise.
  */
-char *send_to_input(int c);
+char *send_to_input(struct input *inp, int c);
 
 /**
  * Renders the input at its defined position, considering scroll and placing the
  * cursor.
+ *
+ * @param inp   The input to render.
  */
-void render_input(void);
+void render_input(struct input *inp);
 
 #endif

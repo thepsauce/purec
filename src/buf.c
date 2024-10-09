@@ -173,7 +173,7 @@ beg:
 
     if (stat(buf->path, &buf->st) == 0 && (buf->st.st_mode & S_IFDIR)) {
         s_line = buf->path;
-        buf->path = choose_fuzzy(buf->path);
+        buf->path = choose_file(buf->path);
         if (buf->path != NULL) {
             buf->path = get_absolute_path(buf->path);
         }
@@ -240,14 +240,14 @@ void destroy_buffer(struct buf *buf)
 
 char *get_pretty_path(const char *path)
 {
-    static char *s;
-    static size_t s_a;
+    static char     *s;
+    static size_t   s_a;
 
-    size_t path_len;
-    char *cwd;
-    size_t cwd_len;
-    const char *home;
-    size_t home_len;
+    size_t          path_len;
+    char            *cwd;
+    size_t          cwd_len;
+    const char      *home;
+    size_t          home_len;
 
     if (path == NULL) {
         if (s_a < sizeof("[No name]")) {

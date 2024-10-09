@@ -6,120 +6,118 @@
 #include <ncurses.h>
 #include <string.h>
 
-struct input Input;
-
-static void grow_input(size_t to)
+static void grow_input(struct input *inp, size_t to)
 {
-    if (Input.a < to) {
-        Input.a = to;
-        Input.s = xrealloc(Input.s, Input.a);
+    if (inp->a < to) {
+        inp->a = to;
+        inp->s = xrealloc(inp->s, inp->a);
     }
 }
 
-void set_input_text(const char *text, size_t prefix_len)
+void set_input_text(struct input *inp, const char *text, size_t prefix_len)
 {
-    Input.n = strlen(text);
-    Input.index = Input.n;
-    grow_input(Input.n);
-    memcpy(Input.s, text, Input.n);
+    inp->n = strlen(text);
+    inp->index = inp->n;
+    grow_input(inp, inp->n);
+    memcpy(inp->s, text, inp->n);
 
-    Input.prefix = prefix_len;
+    inp->prefix = prefix_len;
 
-    Input.remember_len = Input.n;
-    Input.remember     = xrealloc(Input.remember, Input.remember_len);
-    memcpy(Input.remember, Input.s, Input.remember_len);
+    inp->remember_len = inp->n;
+    inp->remember     = xrealloc(inp->remember, inp->remember_len);
+    memcpy(inp->remember, inp->s, inp->remember_len);
 }
 
-void set_input_history(char **hist, size_t num_hist)
+void set_input_history(struct input *inp, char **hist, size_t num_hist)
 {
-    Input.history       = hist;
-    Input.num_history   = num_hist;
-    Input.history_index = num_hist;
+    inp->history       = hist;
+    inp->num_history   = num_hist;
+    inp->history_index = num_hist;
 }
 
-void insert_input_prefix(const char *text, size_t index)
+void insert_input_prefix(struct input *inp, const char *text, size_t index)
 {
     size_t len;
 
     len = strlen(text);
-    grow_input(Input.prefix + len);
-    memmove(&Input.s[index + len],
-            &Input.s[index],
-            Input.prefix - index);
-    memcpy(&Input.s[index], text, len);
-    Input.prefix += len;
-    Input.n     = Input.prefix;
-    Input.index = Input.prefix;
+    grow_input(inp, inp->prefix + len);
+    memmove(&inp->s[index + len],
+            &inp->s[index],
+            inp->prefix - index);
+    memcpy(&inp->s[index], text, len);
+    inp->prefix += len;
+    inp->n     = inp->prefix;
+    inp->index = inp->prefix;
 }
 
-void terminate_input(void)
+void terminate_input(struct input *inp)
 {
-    grow_input(Input.n + 1);
-    Input.s[Input.n] = '\0';
+    grow_input(inp, inp->n + 1);
+    inp->s[inp->n] = '\0';
 }
 
-static void move_over_utf8(int dir)
+static void move_over_utf8(struct input *inp, int dir)
 {
     struct glyph g;
     size_t i;
 
     if (dir > 0) {
-        if (Input.index == Input.n) {
+        if (inp->index == inp->n) {
             return;
         }
-        (void) get_glyph(&Input.s[Input.index], Input.n - Input.index, &g);
-        Input.index += g.n;
+        (void) get_glyph(&inp->s[inp->index], inp->n - inp->index, &g);
+        inp->index += g.n;
     } else {
-        if (Input.index == Input.prefix) {
+        if (inp->index == inp->prefix) {
             return;
         }
-        i = Input.index;
-        while (i--, i > Input.prefix) {
-            if ((Input.s[i] & 0xc0) != 0x80) {
+        i = inp->index;
+        while (i--, i > inp->prefix) {
+            if ((inp->s[i] & 0xc0) != 0x80) {
                 break;
             }
         }
-        (void) get_glyph(&Input.s[i], Input.n - i, &g);
-        if (i + g.n != Input.index) {
-            Input.index--;
+        (void) get_glyph(&inp->s[i], inp->n - i, &g);
+        if (i + g.n != inp->index) {
+            inp->index--;
         } else {
-            Input.index = i;
+            inp->index = i;
         }
     }
 }
 
-char *send_to_input(int c)
+char *send_to_input(struct input *inp, int c)
 {
     char *h;
     size_t index;
 
     switch (c) {
     case KEY_HOME:
-        Input.index = Input.prefix;
+        inp->index = inp->prefix;
         break;
 
     case KEY_END:
-        Input.index = Input.n;
+        inp->index = inp->n;
         break;
 
     case KEY_LEFT:
-        if (Input.index == Input.prefix) {
+        if (inp->index == inp->prefix) {
             break;
         }
-        move_over_utf8(-1);
+        move_over_utf8(inp, -1);
         break;
 
     case KEY_RIGHT:
-        if (Input.index == Input.n) {
+        if (inp->index == inp->n) {
             break;
         }
-        move_over_utf8(1);
+        move_over_utf8(inp, 1);
         break;
 
     case KEY_UP:
-        for (index = Input.history_index; index > 0; index--) {
-            h = Input.history[index - 1];
-            if (strncmp(h, Input.s, Input.index) == 0) {
+        for (index = inp->history_index; index > 0; index--) {
+            h = inp->history[index - 1];
+            if (strncmp(h, inp->s, inp->index) == 0) {
                 break;
             }
         }
@@ -128,89 +126,93 @@ char *send_to_input(int c)
             break;
         }
 
-        if (Input.history_index == Input.num_history) {
-            free(Input.remember);
-            Input.remember = xmemdup(Input.s, Input.n);
-            Input.remember_len = Input.n;
+        if (inp->history_index == inp->num_history) {
+            free(inp->remember);
+            inp->remember = xmemdup(inp->s, inp->n);
+            inp->remember_len = inp->n;
         }
-        h = Input.history[index - 1];
-        Input.history_index = index - 1;
-        Input.n = strlen(h);
-        memcpy(Input.s, h, Input.n);
+        h = inp->history[index - 1];
+        inp->history_index = index - 1;
+        inp->n = strlen(h);
+        memcpy(inp->s, h, inp->n);
         break;
 
     case KEY_DOWN:
-        for (index = Input.history_index + 1; index < Input.num_history; index++) {
-            h = Input.history[index];
-            if (strncmp(h, Input.s, Input.index) == 0) {
+        for (index = inp->history_index + 1; index < inp->num_history; index++) {
+            h = inp->history[index];
+            if (strncmp(h, inp->s, inp->index) == 0) {
                 break;
             }
         }
 
-        if (index + 1 >= Input.num_history) {
-            memcpy(Input.s, Input.remember, Input.remember_len);
-            Input.n = Input.remember_len;
-            Input.index = Input.n;
-            Input.history_index = Input.num_history;
+        if (index + 1 >= inp->num_history) {
+            memcpy(inp->s, inp->remember, inp->remember_len);
+            inp->n = inp->remember_len;
+            inp->index = inp->n;
+            inp->history_index = inp->num_history;
         } else {
-            h = Input.history[index];
-            Input.history_index = index;
-            Input.n = strlen(h);
-            memcpy(Input.s, h, Input.n);
+            h = inp->history[index];
+            inp->history_index = index;
+            inp->n = strlen(h);
+            memcpy(inp->s, h, inp->n);
         }
         break;
 
     case KEY_BACKSPACE:
     case '\x7f':
     case '\b':
-        if (Input.index == Input.prefix) {
+        if (inp->index == inp->prefix) {
             break;
         }
-        index = Input.index;
-        move_over_utf8(-1);
-        memmove(&Input.s[Input.index],
-                &Input.s[index],
-                Input.n - index);
-        Input.n -= index - Input.index;
+        index = inp->index;
+        move_over_utf8(inp, -1);
+        memmove(&inp->s[inp->index],
+                &inp->s[index],
+                inp->n - index);
+        inp->n -= index - inp->index;
         break;
 
     case KEY_DC:
-        if (Input.index == Input.n) {
+        if (inp->index == inp->n) {
             break;
         }
-        index = Input.index;
-        move_over_utf8(1);
-        memmove(&Input.s[index],
-                &Input.s[Input.index],
-                Input.n - Input.index);
-        Input.n -= Input.index - index;
-        Input.index = index;
+        index = inp->index;
+        move_over_utf8(inp, 1);
+        memmove(&inp->s[index],
+                &inp->s[inp->index],
+                inp->n - inp->index);
+        inp->n -= inp->index - index;
+        inp->index = index;
         break;
 
     case '\x1b':
     case CONTROL('C'):
-        Input.s[0] = '\n';
-        return Input.s;
+        if (inp->a == 0) {
+            inp->a = 16;
+            inp->s = xrealloc(inp->s, inp->a);
+        }
+        inp->s[0] = '\n';
+        return inp->s;
 
     default:
         if (c < ' ' || c >= 0x100) {
             break;
         }
-        grow_input(Input.n + 1);
-        memmove(&Input.s[Input.index + 1],
-                &Input.s[Input.index], Input.n - Input.index);
-        Input.s[Input.index++] = c;
-        Input.n++;
+        grow_input(inp, inp->n + 1);
+        memmove(&inp->s[inp->index + 1],
+                &inp->s[inp->index], inp->n - inp->index);
+        inp->s[inp->index++] = c;
+        inp->n++;
     }
 
     if (c != '\n') {
         return NULL;
     }
-    terminate_input();
-    return &Input.s[Input.prefix];
+    terminate_input(inp);
+    return &inp->s[inp->prefix];
 }
 
-void render_input(void)
+void render_input(struct input *inp)
 {
     size_t cur_x = 0;
     size_t w;
@@ -224,54 +226,54 @@ void render_input(void)
          * if invalid utf8 was inserted and then one byte is deleted,
          * the index might end up in the middle of a multi byte
          */
-        if (i >= Input.index) {
+        if (i >= inp->index) {
             cur_x = w;
             break;
         }
-        (void) get_glyph(&Input.s[i], Input.n - i, &g);
+        (void) get_glyph(&inp->s[i], inp->n - i, &g);
         w += g.w;
         i += g.n;
     }
     
     /* show the prefix */
-    if (Input.index == Input.prefix) {
-        Input.scroll = 0;
+    if (inp->index == inp->prefix) {
+        inp->scroll = 0;
     }
 
     /* adjust the scrolling so that the cursor is visible */
-    if (cur_x < Input.scroll) {
-        Input.scroll = cur_x;
-    } else if (cur_x >= Input.scroll + Input.max_w) {
-        Input.scroll = cur_x - Input.max_w + 1;
+    if (cur_x < inp->scroll) {
+        inp->scroll = cur_x;
+    } else if (cur_x >= inp->scroll + inp->max_w) {
+        inp->scroll = cur_x - inp->max_w + 1;
     }
 
     /* render the text */
-    move(Input.y, Input.x);
+    move(inp->y, inp->x);
     w = 0;
-    for (size_t i = 0; i < Input.n; ) {
-        broken = get_glyph(&Input.s[i], Input.n - i, &g) == -1;
-        if (w + g.w > Input.scroll + Input.max_w) {
+    for (size_t i = 0; i < inp->n; ) {
+        broken = get_glyph(&inp->s[i], inp->n - i, &g) == -1;
+        if (w + g.w > inp->scroll + inp->max_w) {
             break;
         }
-        if (w >= Input.scroll) {
+        if (w >= inp->scroll) {
             if (broken) {
                 addch('?' | A_REVERSE);
             } else {
-                addnstr(&Input.s[i], g.n);
+                addnstr(&inp->s[i], g.n);
             }
         }
         i += g.n;
         /* adjust for the case a multi width glyph is only half visible */
-        if (w < Input.scroll && w + g.w > Input.scroll) {
-            Input.scroll = w + g.w;
+        if (w < inp->scroll && w + g.w > inp->scroll) {
+            inp->scroll = w + g.w;
         }
         w += g.w;
     }
     /* erase to end of line */
-    for (; w < Input.scroll + Input.max_w; w++) {
+    for (; w < inp->scroll + inp->max_w; w++) {
         addch(' ');
     }
 
     /* set the visual cursor position */
-    move(Input.y, Input.x + cur_x - Input.scroll);
+    move(inp->y, inp->x + cur_x - inp->scroll);
 }

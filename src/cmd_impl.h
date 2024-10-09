@@ -168,7 +168,7 @@ int cmd_edit(struct cmd_data *cd)
     struct buf *buf = NULL;
 
     if (cd->arg[0] == '\0') {
-        entry = choose_fuzzy(NULL);
+        entry = choose_file(NULL);
         if (entry != NULL) {
             buf = create_buffer(entry);
         }

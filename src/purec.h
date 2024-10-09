@@ -348,6 +348,18 @@ void save_session(FILE *fp);
 int load_session(FILE *fp);
 
 /**
+ * Saves the current session and returns the file name.
+ *
+ * @return The name of the file the session was written to.
+ */
+char *save_current_session(void);
+
+/**
+ * Opens a fuzzy dialog and lets the user choose a session.
+ */
+void choose_session(void);
+
+/**
  * Initialize the core.
  *
  * @param argc  The number of program arguments.

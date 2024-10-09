@@ -389,13 +389,13 @@ struct play_rec *get_playback(void)
 
 int load_last_session(void)
 {
-    DIR *dir;
-    struct dirent *ent;
-    struct stat st;
-    char *name;
-    char *latest_name;
-    time_t latest_time;
-    FILE *fp;
+    DIR             *dir;
+    struct dirent   *ent;
+    struct stat     st;
+    char            *name;
+    char            *latest_name;
+    time_t          latest_time;
+    FILE            *fp;
 
     dir = opendir(Core.session_dir);
     if (dir == NULL) {
@@ -433,33 +433,9 @@ int load_last_session(void)
     return 0;
 }
 
-void save_current_session(void)
-{
-    FILE *fp;
-    time_t cur_time;
-    char *name;
-    struct tm *tm;
-
-    cur_time = time(NULL);
-    tm = localtime(&cur_time);
-
-    name = xasprintf("%s/session_%04d-%02d-%02d_%02d-%02d-%02d",
-            Core.session_dir,
-            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-            tm->tm_hour, tm->tm_min, tm->tm_sec);
-
-    fp = fopen(name, "wb");
-    if (fp != NULL) {
-        save_session(fp);
-        fclose(fp);
-    }
-
-    free(name);
-}
-
 int init_purec(int argc, char **argv)
 {
-    const char *home;
+    const char      *home;
 
     setlocale(LC_ALL, "");
 
@@ -540,12 +516,12 @@ int init_purec(int argc, char **argv)
 static void set_message_to_default(void)
 {
     static const char *mode_strings[] = {
-        [NORMAL_MODE] = "",
+        [NORMAL_MODE]       = "",
 
-        [INSERT_MODE] = "-- INSERT --",
+        [INSERT_MODE]       = "-- INSERT --",
 
-        [VISUAL_MODE] = "-- VISUAL --",
-        [VISUAL_LINE_MODE] = "-- VISUAL LINE --",
+        [VISUAL_MODE]       = "-- VISUAL --",
+        [VISUAL_LINE_MODE]  = "-- VISUAL LINE --",
         [VISUAL_BLOCK_MODE] = "-- VISUAL BLOCK --",
     };
 
@@ -570,23 +546,24 @@ static void set_message_to_default(void)
 void render_all(void)
 {
     static const char cursors[] = {
-        [NORMAL_MODE] = '\x30',
+        [NORMAL_MODE]       = '\x30',
 
-        [INSERT_MODE] = '\x35',
+        [INSERT_MODE]       = '\x35',
 
-        [VISUAL_MODE] = '\x30',
-        [VISUAL_LINE_MODE] = '\x30',
+        [VISUAL_MODE]       = '\x30',
+        [VISUAL_LINE_MODE]  = '\x30',
         [VISUAL_BLOCK_MODE] = '\x30',
     };
 
-    int cur_x, cur_y;
+    int             cur_x, cur_y;
+    struct frame *frame;
     
     curs_set(0);
 
     erase();
 
-    for (struct frame *f = FirstFrame; f != NULL; f = f->next) {
-        render_frame(f);
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+        render_frame(frame);
     }
 
     if (Core.msg_state == MSG_TO_DEFAULT) {
@@ -609,11 +586,10 @@ int leave_purec(void)
     /* restore terminal state */
     endwin();
 
-    save_current_session();
+    /* instantly free the result */
+    free(save_current_session());
 
     /* free resources */
     free_session();
-    free(Input.s);
-    free(Input.remember);
     return Core.exit_code;
 }

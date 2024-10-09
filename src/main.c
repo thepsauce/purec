@@ -126,7 +126,7 @@ int main(int argc, char **argv)
     size_t next_dot_i;
     struct play_rec *rec;
     struct undo_event *ev;
-    
+
     if (init_purec(argc, argv) == -1) {
         return -1;
     }

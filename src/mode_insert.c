@@ -169,14 +169,15 @@ end:
 
 int insert_handle_input(int c)
 {
-    struct buf *buf;
-    char ch;
-    struct undo_event *ev;
-    size_t n;
-    struct pos old_cur;
-    struct raw_line lines[2];
-    struct line *line;
-    size_t amount;
+    struct buf          *buf;
+    char                ch;
+    struct undo_event   *ev;
+    size_t              n;
+    struct pos          old_cur;
+    struct raw_line     lines[2];
+    struct line         *line;
+    size_t              amount;
+    size_t              i;
 
     buf = SelFrame->buf;
     ch = c;
@@ -258,7 +259,8 @@ int insert_handle_input(int c)
             if (old_cur.col % Core.tab_size == 0) {
                 amount = Core.tab_size;
                 line = &buf->lines[old_cur.line];
-                for (size_t i = 0; i < old_cur.col; i++) {
+                for (i = old_cur.col; i > old_cur.col - Core.tab_size; ) {
+                    i--;
                     if (line->s[i] != ' ') {
                         amount = 1;
                         break;

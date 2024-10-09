@@ -835,11 +835,15 @@ int normal_handle_input(int c)
 
     /* open a file in the fuzzy file dialog */
     case 'Z':
-        entry = choose_fuzzy(NULL);
+        entry = choose_file(NULL);
         if (entry != NULL) {
             buf = create_buffer(entry);
             set_frame_buffer(SelFrame, buf);
         }
+        return UPDATE_UI;
+
+    case CONTROL('S'):
+        choose_session();
         return UPDATE_UI;
     }
     /* do a motion, see `get_binded_motion()` */

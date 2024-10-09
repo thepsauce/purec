@@ -1,18 +1,25 @@
 #include "frame.h"
+#include "fuzzy.h"
+#include "input.h"
 #include "purec.h"
 #include "xalloc.h"
 
 #include <ctype.h>
 #include <string.h>
+#include <dirent.h>
 
 #define SESSION_HEADER "\x12PC"
 
 void free_session(void)
 {
-    for (struct frame *frame = FirstFrame, *next; frame != NULL; frame = next) {
+    struct frame    *frame, *next;
+
+    for (frame = FirstFrame; frame != NULL; frame = next) {
         next = frame->next;
         free(frame);
     }
+    FirstFrame = NULL;
+    SelFrame = NULL;
 
     while (FirstBuffer != NULL) {
         destroy_buffer(FirstBuffer);
@@ -20,9 +27,6 @@ void free_session(void)
 
     /* clear marks */
     memset(Core.marks, 0, sizeof(Core.marks));
-
-    FirstFrame = NULL;
-    FirstBuffer = NULL;
 }
 
 void save_session(FILE *fp)
@@ -256,13 +260,15 @@ static struct frame *load_frame(FILE *fp)
 
 int load_session(FILE *fp)
 {
-    size_t last_time, sel_i, cur_i;
-    int c;
-    struct buf *buf, *next_buf;
-    struct frame *frame, *next_frame;
+    size_t          last_time, sel_i, cur_i;
+    int             c;
+    struct buf      *buf, *next_buf;
+    struct frame    *frame, *next_frame;
 
     if (fp == NULL || check_header(fp) != 0) {
         FirstBuffer = create_buffer(NULL);
+        FirstFrame = create_frame(NULL, 0, FirstBuffer);
+        SelFrame = FirstFrame;
         return -1;
     }
 
@@ -311,7 +317,129 @@ int load_session(FILE *fp)
         }
     }
 
+    if (FirstFrame == NULL) {
+        frame = create_frame(NULL, 0, FirstBuffer);
+        FirstFrame = frame;
+    }
+
+    if (SelFrame == NULL) {
+        SelFrame = FirstFrame;
+    }
+
     /* the screen size back then might be different than the current one */
     update_screen_size();
     return 0;
+}
+
+struct fuzzy SessionSelect;
+
+static void update_files(void)
+{
+    DIR *dir;
+    struct dirent *ent;
+
+    dir = opendir(Core.session_dir);
+    if (dir == NULL) {
+        return;
+    }
+
+    for (size_t i = 0; i < SessionSelect.num_entries; i++) {
+        free(SessionSelect.entries[i].name);
+    }
+    SessionSelect.num_entries = 0;
+    while (ent = readdir(dir), ent != NULL) {
+        if (ent->d_name[0] == '.') {
+            continue;
+        }
+        if (SessionSelect.num_entries == SessionSelect.a_entries) {
+            SessionSelect.a_entries *= 2;
+            SessionSelect.a_entries++;
+            SessionSelect.entries = xreallocarray(SessionSelect.entries,
+                                                  SessionSelect.a_entries,
+                                                sizeof(*SessionSelect.entries));
+        }
+        SessionSelect.entries[SessionSelect.num_entries].type = ent->d_type;
+        SessionSelect.entries[SessionSelect.num_entries].name = xstrdup(ent->d_name);
+        SessionSelect.num_entries++;
+    }
+    closedir(dir);
+}
+
+char *save_current_session(void)
+{
+    FILE *fp;
+    time_t cur_time;
+    char *name;
+    struct tm *tm;
+
+    cur_time = time(NULL);
+    tm = localtime(&cur_time);
+
+    name = xasprintf("%s/session_%04d-%02d-%02d_%02d-%02d-%02d",
+            Core.session_dir,
+            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+            tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+    fp = fopen(name, "wb");
+    if (fp != NULL) {
+        save_session(fp);
+        fclose(fp);
+    }
+    return name;
+}
+
+void choose_session(void)
+{
+    int             c;
+    FILE            *fp;
+    char            *last_session;
+    char            *path;
+    size_t          last_entry;
+
+    set_input_text(&SessionSelect.inp, "", 0);
+    last_session = save_current_session();
+    update_files();
+    while (1) {
+        render_fuzzy(&SessionSelect);
+        c = getch();
+        switch (c) {
+        default:
+            last_entry = SessionSelect.selected;
+            switch (send_to_fuzzy(&SessionSelect, c)) {
+            case -1:
+                /* revert to the last loaded session */
+                path = xasprintf("%s/%s", Core.session_dir, last_session);
+                free(last_session);
+                fp = fopen(path, "rb");
+                free(path);
+                if (fp == NULL) {
+                    return;
+                }
+                free_session();
+                load_session(fp);
+                fclose(fp);
+                return;
+
+            case 0:
+                /* keep the currently loaded session */
+                free(last_session);
+                return;
+
+            case 1:
+                break;
+            }
+            if (last_entry != SessionSelect.selected) {
+                path = xasprintf("%s/%s", Core.session_dir,
+                    SessionSelect.entries[SessionSelect.selected].name);
+                fp = fopen(path, "rb");
+                free(path);
+                if (fp != NULL) {
+                    free_session();
+                    load_session(fp);
+                    fclose(fp);
+                    render_all();
+                }
+            }
+        }
+    }
 }
