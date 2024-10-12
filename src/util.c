@@ -412,9 +412,11 @@ size_t match_pattern(const char *s, size_t i, size_t s_len, const char *pat)
     const char      *end;
     char            ch;
     size_t          star;
+    bool            ignore_case;
 
     st_i = i;
     star = SIZE_MAX;
+    ignore_case = false;
     for (j = 0; i < s_len; ) {
         switch (pat[j]) {
         case '?':
@@ -463,9 +465,27 @@ size_t match_pattern(const char *s, size_t i, size_t s_len, const char *pat)
             if (pat[j] == '\0') {
                 goto mismatch;
             }
+            if (pat[j] == '\\') {
+                switch (pat[j + 1]) {
+                case 'c':
+                    ignore_case = false;
+                    break;
+                case 'i':
+                    ignore_case = true;
+                    break;
+                }
+                j += 2;
+                break;
+            }
             ch = get_pat_char(&pat[j], &end);
-            if (s[i] != ch) {
-                goto mismatch;
+            if (ignore_case) {
+                if (tolower(s[i]) != tolower(ch)) {
+                    goto mismatch;
+                }
+            } else {
+                if (s[i] != ch) {
+                    goto mismatch;
+                }
             }
             i++;
             j += end - &pat[j] + 1;
