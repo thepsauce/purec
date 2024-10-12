@@ -241,6 +241,7 @@ int run_command(char *s_cmd)
         data.has_range = true;
         data.from = 0;
         data.to = SIZE_MAX;
+        s_cmd++;
     } else {
         r = read_number(s_cmd, &s_cmd, &data.from);
         if (r == -1) {
@@ -540,9 +541,14 @@ void read_command_line(const char *beg)
     switch (beg[0]) {
     case '/':
     case '?':
-        (void) search_string(SelFrame->buf, s);
+        (void) search_pattern(SelFrame->buf, s);
         Core.counter = 1;
-        (void) do_motion(SelFrame, beg[0] == '/' ? 'n' : 'p');
+        (void) do_motion(SelFrame, beg[0] == '/' ? 'n' : 'N');
+        if (beg[0] == '?') {
+            Core.search_dir = -1;
+        } else {
+            Core.search_dir = 1;
+        }
         break;
 
     case ':':

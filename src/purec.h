@@ -76,6 +76,9 @@ extern struct core {
     /// directory in which sessions are stored in
     char *session_dir;
 
+    /// what direction the last search went in
+    int search_dir;
+
     /// type of the mode (`*_MODE`)
     int mode;
     /// current counter (number before a command)

@@ -77,11 +77,12 @@ const char *c_preproc[] = {
 
 size_t c_indentor(struct buf *buf, size_t line_i)
 {
-    struct pos p;
-    size_t index;
-    size_t c;
-    struct paren *par;
-    struct line *line;
+    struct pos      p;
+    size_t          index;
+    size_t          c;
+    struct paren    *par;
+    struct line     *line;
+    size_t          i;
 
     if (line_i == 0) {
         return 0;
@@ -126,16 +127,18 @@ size_t c_indentor(struct buf *buf, size_t line_i)
     }
 
     line = &buf->lines[line_i];
-    if (line->n > 0 && line->s[line->n - 1] == ':' &&
-            line->attribs[line->n - 1] == HI_OPERATOR) {
-        c = 0;
-    } else {
-        c = get_line_indent(buf, line_i);
-        if (c == line->n || line->s[c] != '}') {
-            c = 1;
-        } else {
-            c = 0;
+    for (i = 0; i < line->n; i++) {
+        if (line->attribs[i] == HI_OPERATOR) {
+            if (line->s[i] == ':') {
+                return get_line_indent(buf, par->pos.line);
+            }
         }
+    }
+    c = get_line_indent(buf, line_i);
+    if (c == line->n || line->s[c] != '}') {
+        c = 1;
+    } else {
+        c = 0;
     }
     return Core.tab_size * c + get_line_indent(buf, par->pos.line);
 }

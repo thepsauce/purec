@@ -628,6 +628,7 @@ int prepare_motion(struct frame *frame, int motion_key)
     int s, o_s;
     size_t index;
     size_t col;
+    int r;
 
     new_cur = frame->cur;
     new_vct = frame->vct;
@@ -645,6 +646,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             new_cur.col -= Core.counter;
         }
         new_vct = new_cur.col;
+        r = 1;
         break;
 
     /* move {count} times to the right */
@@ -662,6 +664,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             return 0;
         }
         new_vct = new_cur.col;
+        r = 1;
         break;
 
     /* move {count} times up */
@@ -676,6 +679,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             new_cur.line -= Core.counter;
         }
         new_cur.col = frame->vct;
+        r = 1;
         break;
 
     /* move {count} times down */
@@ -691,6 +695,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             return 0;
         }
         new_cur.col = frame->vct;
+        r = 1;
         break;
 
     /* move to the start of the line */
@@ -701,6 +706,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         }
         new_cur.col = 0;
         new_vct = 0;
+        r = 1;
         break;
 
     /* move to the end of the line */
@@ -710,6 +716,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         n = buf->lines[new_cur.line].n;
         new_cur.col = n;
         new_vct = SIZE_MAX;
+        r = 1;
         break;
 
     /* move back {count} characters, a line end counts as one character */
@@ -732,6 +739,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             new_cur.col -= Core.counter;
         }
         new_vct = new_cur.col;
+        r = 1;
         break;
 
     /* move forward {count} characters, a line end counts as one character */
@@ -757,6 +765,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             return 0;
         }
         new_vct = new_cur.col;
+        r = 1;
         break;
 
     /* move to the start of the frame */
@@ -766,6 +775,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         }
         /* no bounds check needed */
         new_cur.line = frame->scroll.line;
+        r = 1;
         break;
 
     /* move to the middle of the frame */
@@ -775,6 +785,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.line == frame->cur.line) {
             return 0;
         }
+        r = 1;
         break;
 
     /* move to the end of the frame */
@@ -784,6 +795,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.line == frame->cur.line) {
             return 0;
         }
+        r = 1;
         break;
 
     /* move to the start of the line but skip all indentation */
@@ -792,6 +804,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.col == frame->cur.col) {
             return 0;
         }
+        r = 1;
         break;
 
     /* go to ... */
@@ -825,6 +838,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         default:
             return 0;
         }
+        r = 1;
         break;
 
     /* move up {count} pages where a page is 2/3 of the frame height */
@@ -840,6 +854,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         } else {
             new_cur.line -= n;
         }
+        r = 1;
         break;
 
     /* move down {count} pages where a page is 2/3 of the frame height */
@@ -856,6 +871,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.line == frame->cur.line) {
             return 0;
         }
+        r = 1;
         break;
 
     /* move up {count} paragraphs */
@@ -873,6 +889,7 @@ int prepare_motion(struct frame *frame, int motion_key)
                 break;
             }
         }
+        r = 1;
         break;
 
     /* move down {count} paragraphs */
@@ -890,6 +907,7 @@ int prepare_motion(struct frame *frame, int motion_key)
                 break;
             }
         }
+        r = 1;
         break;
 
     /* find the {count}'th character */
@@ -925,6 +943,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             return 0;
         }
         new_vct = new_cur.col;
+        r = 1;
         break;
 
     /* find the {count}'th character backwards */
@@ -958,6 +977,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             return 0;
         }
         new_vct = new_cur.col;
+        r = 0;
         break;
 
     /* move forward {count} words, skip space after a word */
@@ -999,6 +1019,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             goto again_next;
         }
         new_vct = new_cur.col;
+        r = 1;
         break;
 
     /* move forward {count} words, skip space before a word */
@@ -1052,6 +1073,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             goto again_end;
         }
         new_vct = new_cur.col;
+        r = 2;
         break;
 
     /* move back {count} words */
@@ -1099,6 +1121,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             goto again_prev;
         }
         new_vct = new_cur.col;
+        r = 1;
         break;
 
     /* go forward {count} matches */
@@ -1107,6 +1130,11 @@ int prepare_motion(struct frame *frame, int motion_key)
             set_message("no matches");
             return 0;
         }
+        if (Core.search_dir == -1) {
+            goto go_forward;
+        }
+
+    go_backwards:
         index = find_current_match(buf, &new_cur);
         index += Core.counter % buf->num_matches;
         index %= buf->num_matches;
@@ -1114,13 +1142,20 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_vct = new_cur.col;
         set_message("%s [%zu/%zu]", buf->search_pat, index + 1,
                 buf->num_matches);
+        r = 1;
         break;
 
     /* go backwards {count} matches */
     case 'N':
         if (buf->num_matches == 0) {
+            set_message("no matches");
             return 0;
         }
+        if (Core.search_dir == -1) {
+            goto go_backwards;
+        }
+
+    go_forward:
         index = find_current_match(buf, &new_cur);
         new_cur = buf->matches[index].from;
         if (new_cur.line != frame->cur.line || new_cur.col != frame->cur.col) {
@@ -1137,6 +1172,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         new_vct = new_cur.col;
         set_message("%s [%zu/%zu]", buf->search_pat, index + 1,
                 buf->num_matches);
+        r = 1;
         break;
 
     /* go to the matching parenthesis */
@@ -1151,6 +1187,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         }
         new_cur = buf->parens[index].pos;
         new_vct = new_cur.col;
+        r = 1;
         break;
 
     default:
@@ -1158,7 +1195,7 @@ int prepare_motion(struct frame *frame, int motion_key)
     }
     frame->next_cur = new_cur;
     frame->next_vct = new_vct;
-    return 1;
+    return r;
 }
 
 int apply_motion(struct frame *frame)

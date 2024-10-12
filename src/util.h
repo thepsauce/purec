@@ -181,4 +181,39 @@ int get_glyph(const char *s, size_t n, struct glyph *g);
  */
 ssize_t get_line(char **p_s, size_t *p_a, FILE *fp);
 
+/**
+ * Checks if given string matches given pattern.
+ *
+ * The string matches if `pat[match_pattern(s, pat)] == '\0'` is true.
+ * This also means all strings match the empty pattern.
+ *
+ * The pattern can consist of these special characters:
+ * ? - Match any character
+ * * - Match any number of characters
+ * < - Match the beginning of a word
+ * > - Match the end of a word
+ * ^ - Match the start of the string
+ * $ - Match the end of the string
+ * These special symbols can be escaped using \.
+ *
+ * @param s     The string to check.
+ * @param s_i   The index to start from.
+ * @param s_len The length of `s`.
+ * @param pat   The pattern to check against.
+ *
+ * @return How much of string `s` matches.
+ */
+size_t match_pattern(const char *s, size_t s_i, size_t s_len, const char *pat);
+
+/**
+ * Matches the entire string so the string can not even start with the pattern.
+ *
+ * @param s     The string to check.
+ * @param s_len The length of `s`.
+ * @param pat   The pattern to match against.
+ *
+ * @return True if the pattern matches, false otherwise.
+ */
+bool match_pattern_exact(const char *s, size_t s_len, const char *pat);
+
 #endif

@@ -1,6 +1,7 @@
 #include "util.h"
 #include "xalloc.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
@@ -339,4 +340,157 @@ ssize_t get_line(char **p_s, size_t *p_a, FILE *fp)
     *p_s = s;
     *p_a = a;
     return n;
+}
+
+static bool isidentf(int c)
+{
+    return isalnum(c) || c == '_';
+}
+
+static char get_pat_char(const char *s, const char **e)
+{
+    char            ch;
+
+    if (s[0] != '\\') {
+        *e = s;
+        return s[0];
+    }
+    s++;
+    switch (s[0]) {
+    case 'a': ch = '\a'; break;
+    case 'b': ch = '\b'; break;
+    case 'f': ch = '\f'; break;
+    case 'n': ch = '\n'; break;
+    case 'r': ch = '\r'; break;
+    case 't': ch = '\t'; break;
+    case 'v': ch = '\v'; break;
+    case 'x':
+        if (isalpha(s[1])) {
+            ch = tolower(s[1]) - 'a';
+        } else if (isdigit(s[1])) {
+            ch = s[1] - '0';
+        } else {
+            ch = 'x';
+            break;
+        }
+
+        ch <<= 4;
+        s++;
+        if (isalpha(s[1])) {
+            ch |= tolower(s[1]) - 'a';
+        } else if (isdigit(s[1])) {
+            ch |= s[1] - '0';
+        } else {
+            break;
+        }
+        s++;
+        break;
+
+    default:
+        ch = s[0];
+    }
+
+    *e = s;
+    return ch;
+}
+
+bool match_pattern_exact(const char *s, size_t s_len, const char *pat)
+{
+    size_t          l;
+
+    l = match_pattern(s, 0, s_len, pat);
+    if (s[l] == '\0') {
+        return true;
+    }
+    return false;
+}
+
+size_t match_pattern(const char *s, size_t i, size_t s_len, const char *pat)
+{
+    size_t          st_i;
+    size_t          j;
+    const char      *end;
+    char            ch;
+    size_t          star;
+
+    st_i = i;
+    star = SIZE_MAX;
+    for (j = 0; i < s_len; ) {
+        switch (pat[j]) {
+        case '?':
+            j++;
+            i++;
+            break;
+
+        case '*':
+            j++;
+            star = j;
+            break;
+
+        case '<':
+            if (!isidentf(s[i])) {
+                goto mismatch;
+            }
+            if (i > 0 && isidentf(s[i - 1])) {
+                goto mismatch;
+            }
+            j++;
+            break;
+
+        case '>':
+            if (i > 0 && !isidentf(s[i - 1])) {
+                goto mismatch;
+            }
+            if (isidentf(s[i])) {
+                goto mismatch;
+            }
+            j++;
+            break;
+
+        case '^':
+            if (i > 0) {
+                /* no longer at the beginning */
+                return 0;
+            }
+            j++;
+            break;
+
+        case '$':
+            /* not at the end yet */
+            return 0;
+
+        default:
+            if (pat[j] == '\0') {
+                goto mismatch;
+            }
+            ch = get_pat_char(&pat[j], &end);
+            if (s[i] != ch) {
+                goto mismatch;
+            }
+            i++;
+            j += end - &pat[j] + 1;
+        }
+
+        /* jump over the `mismatch:` part */
+        continue;
+
+    mismatch:
+        if (pat[j] == '\0') {
+            return i - st_i;
+        }
+        if (star == SIZE_MAX) {
+            return 0;
+        }
+        /* consume one character */
+        i++;
+        j = star;
+    }
+
+    while (pat[j] == '$') {
+        j++;
+    }
+    if (pat[j] != '\0') {
+        return 0;
+    }
+    return i - st_i;
 }

@@ -7,7 +7,8 @@
 #define C_LANG      1
 #define DIFF_LANG   2
 #define COMMIT_LANG 3
-#define NUM_LANGS   4
+#define MAKE_LANG   4
+#define NUM_LANGS   5
 
 #define STATE_NULL      0
 #define STATE_START     1

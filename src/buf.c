@@ -14,8 +14,8 @@ struct buf *FirstBuffer;
 
 struct buf *create_buffer(const char *path)
 {
-    char *abs_path;
-    struct buf *buf, *prev;
+    char            *abs_path;
+    struct buf      *buf, *prev;
 
     /* check if a buffer with that path exists already */
     if (path != NULL) {
@@ -64,9 +64,9 @@ struct buf *create_buffer(const char *path)
  *
  * `s_list` is a null terminated string list, the end is marked by a double null
  * terminator. Only if the given string is equal to any of the strings in `s_list`,
- * or the first mismatcing character is an asterisk, then true is returned.
+ * or the first mismatching character is an asterisk, then true is returned.
  *
- * @param s_list    The list of strings.
+ * @param s_list    The list of pattern strings.
  * @param s         The string to check.
  * @param s_len     The length of the string to theck.
  *
@@ -74,34 +74,24 @@ struct buf *create_buffer(const char *path)
  */
 static bool find_string_in_list(const char *s_list, const char *s, size_t s_len)
 {
-    size_t i;
+    size_t              len;
 
-    for (i = 0; i < s_len; ) {
-        if (tolower(s_list[i]) != tolower(s[i])) {
-            if (s_list[i] == '*') {
-                return true;
-            }
-            while (s_list[i] != '\0') {
-                i++;
-            }
-            i++;
-            if (s_list[i] == '\0') {
-                return false;
-            }
-            /* jump to the next item */
-            s_list = &s_list[i];
-            i = 0;
-        } else {
-            i++;
+    while (s_list[0] != '\0') {
+        len = strlen(s_list);
+        if (match_pattern_exact(s, s_len, s_list)) {
+            return true;
         }
+        s_list = &s_list[len + 1];
     }
-    return s_list[i] == '\0' || s_list[i] == '*';
+    return false;
 }
 
 size_t detect_language(struct buf *buf)
 {
-    static const char *commit_detect = "# Please enter the commit message";
-    char *ext, *end;
+    static const char   *commit_detect = "# Please enter the commit message";
+    size_t              i, j;
+    size_t              len;
+    int                 l;
 
     if (buf->num_lines > 4) {
         if (buf->lines[0].n == 0) {
@@ -112,7 +102,7 @@ size_t detect_language(struct buf *buf)
             }
         }
     }
-    for (size_t i = 0, j; i < buf->num_lines; i++) {
+    for (i = 0; i < buf->num_lines; i++) {
         for (j = 0; j < buf->lines[i].n; j++) {
             if (isspace(buf->lines[i].s[j])) {
                 continue;
@@ -133,20 +123,9 @@ size_t detect_language(struct buf *buf)
         return NO_LANG;
     }
 
-    end = buf->path + strlen(buf->path);
-
-    for (ext = end; ext > buf->path; ext--) {
-        if (ext[-1] == '.' || ext[-1] == '/') {
-            break;
-        }
-    }
-
-    if (end == ext) {
-        return NO_LANG;
-    }
-
-    for (int l = 1; l < NUM_LANGS; l++) {
-        if (find_string_in_list(Langs[l].file_exts, ext, end - ext)) {
+    len = strlen(buf->path);
+    for (l = 1; l < NUM_LANGS; l++) {
+        if (find_string_in_list(Langs[l].file_exts, buf->path, len)) {
             return l;
         }
     }
@@ -155,11 +134,11 @@ size_t detect_language(struct buf *buf)
 
 int init_load_buffer(struct buf *buf)
 {
-    FILE *fp;
-    char *s_line;
-    size_t a_line;
-    ssize_t line_len;
-    struct line *line;
+    FILE            *fp;
+    char            *s_line;
+    size_t          a_line;
+    ssize_t         line_len;
+    struct line     *line;
 
 beg:
     if (buf->path == NULL || (fp = fopen(buf->path, "r")) == NULL) {
@@ -213,10 +192,11 @@ beg:
 
 void destroy_buffer(struct buf *buf)
 {
-    struct buf *prev;
+    size_t          i;
+    struct buf      *prev;
 
     free(buf->path);
-    for (size_t i = 0; i < buf->num_lines; i++) {
+    for (i = 0; i < buf->num_lines; i++) {
         clear_line(&buf->lines[i]);
     }
     free(buf->lines);
@@ -303,7 +283,7 @@ char *get_pretty_path(const char *path)
 
 void mark_dirty(struct buf *buf, size_t from, size_t to)
 {
-    struct line *line;
+    struct line     *line;
 
     buf->min_dirty_i = MIN(buf->min_dirty_i, from);
     buf->max_dirty_i = MAX(buf->max_dirty_i, to);
@@ -318,7 +298,7 @@ void mark_dirty(struct buf *buf, size_t from, size_t to)
 
 struct buf *get_buffer(size_t id)
 {
-    struct buf *buf;
+    struct buf      *buf;
 
     for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
         if (buf->id == id) {
@@ -330,9 +310,10 @@ struct buf *get_buffer(size_t id)
 
 size_t get_buffer_count(void)
 {
-    size_t c = 0;
+    struct buf *buf;
+    size_t      c = 0;
 
-    for (struct buf *buf = FirstBuffer; buf != NULL; buf = buf->next) {
+    for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
         c++;
     }
     return c;
@@ -349,8 +330,8 @@ void set_language(struct buf *buf, size_t lang)
 
 size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp)
 {
-    struct line *line;
-    size_t num_bytes = 0;
+    struct line     *line;
+    size_t          num_bytes = 0;
 
     to = MIN(to, buf->num_lines - 1);
 
@@ -360,11 +341,11 @@ size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp)
 
     from = MIN(from, buf->num_lines - 1);
 
-    for (size_t i = from; i <= to; i++) {
-        line = &buf->lines[i];
+    for (; from <= to; from++) {
+        line = &buf->lines[from];
         fwrite(line->s, 1, line->n, fp);
         num_bytes += line->n;
-        if (i + 1 != buf->num_lines || line->n != 0) {
+        if (from + 1 != buf->num_lines || line->n != 0) {
             fputc('\n', fp);
             num_bytes++;
         }
@@ -375,11 +356,11 @@ size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp)
 struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
 {
     struct raw_line *lines = NULL;
-    size_t a_lines = 0;
-    size_t num_lines = 0;
-    char *s_line = NULL;
-    size_t a_line = 0;
-    ssize_t line_len;
+    size_t          a_lines = 0;
+    size_t          num_lines = 0;
+    char            *s_line = NULL;
+    size_t          a_line = 0;
+    ssize_t         line_len;
 
     while (line_len = getline(&s_line, &a_line, fp), line_len > 0) {
         for (; line_len > 0; line_len--) {
@@ -405,8 +386,8 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
 
 size_t get_line_indent(struct buf *buf, size_t line_i)
 {
-    size_t col = 0;
-    struct line *line;
+    size_t          col = 0;
+    struct          line *line;
 
     line = &buf->lines[line_i];
     while (col < line->n && isblank(line->s[col])) {
@@ -419,7 +400,9 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
         const struct raw_line *c_lines, size_t c_num_lines, size_t repeat)
 {
     struct raw_line *lines, *line;
-    size_t num_lines;
+    size_t          num_lines;
+    size_t          r;
+    size_t          i;
 
     if (c_num_lines == 0 || repeat == 0) {
         return NULL;
@@ -432,14 +415,14 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
     if (c_num_lines == 1) {
         line->n = c_lines->n * repeat;
         line->s = xmalloc(c_lines->n * repeat);
-        for (size_t r = 0; r < repeat; r++) {
+        for (r = 0; r < repeat; r++) {
             memcpy(&line->s[r * c_lines->n], &c_lines->s[0], c_lines->n);
         }
     } else {
         init_raw_line(line, &c_lines[0].s[0], c_lines[0].n);
         line++;
-        for (size_t r = 0;;) {
-            for (size_t i = 1; i < c_num_lines; i++) {
+        while (1) {
+            for (i = 1; i < c_num_lines; i++) {
                 init_raw_line(line, &c_lines[i].s[0], c_lines[i].n);
                 line++;
             }
@@ -463,9 +446,10 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
 void _insert_lines(struct buf *buf, const struct pos *pos,
         const struct raw_line *lines, size_t num_lines)
 {
-    const struct raw_line *raw_line;
-    struct line *line, *at_line;
-    size_t old_n;
+    const struct raw_line   *raw_line;
+    struct line             *line, *at_line;
+    size_t                  i;
+    size_t                  old_n;
 
     if (num_lines == 1) {
         raw_line = &lines[0];
@@ -480,7 +464,7 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
     }
 
     line = grow_lines(buf, pos->line + 1, num_lines - 1);
-    for (size_t i = 1; i < num_lines; i++) {
+    for (i = 1; i < num_lines; i++) {
         raw_line = &lines[i];
         line->n = raw_line->n;
         line->s = xmalloc(line->n);
@@ -510,16 +494,17 @@ struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
         const struct raw_line *c_lines, size_t c_num_lines, size_t repeat)
 {
     struct raw_line *lines, *line;
-    size_t num_lines;
+    size_t          num_lines;
+    size_t          i, r;
 
     /* duplicate and repeat the lines */
     num_lines = 1 + (c_num_lines - 1) * repeat;
     lines = xreallocarray(NULL, num_lines, sizeof(*lines));
     line = &lines[0];
-    for (size_t i = 0; i < c_num_lines; i++) {
+    for (i = 0; i < c_num_lines; i++) {
         line->n = c_lines[i].n * repeat;
         line->s = xmalloc(line->n);
-        for (size_t r = 0; r < repeat; r++) {
+        for (r = 0; r < repeat; r++) {
             memcpy(&line->s[r * c_lines->n], c_lines[i].s, c_lines[i].n);
         }
         line++;
@@ -533,13 +518,14 @@ struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
 void _insert_block(struct buf *buf, const struct pos *pos,
         const struct raw_line *lines, size_t num_lines)
 {
-    const struct raw_line *rl;
-    struct line *line;
-    size_t col;
+    size_t                  i;
+    const struct raw_line   *rl;
+    struct line             *line;
+    size_t                  col;
 
     mark_dirty(buf, pos->line, pos->line + num_lines - 1);
 
-    for (size_t i = 0; i < num_lines; i++) {
+    for (i = 0; i < num_lines; i++) {
         rl = &lines[i];
         line = &buf->lines[pos->line + i];
         col = pos->col;
@@ -556,11 +542,11 @@ void _insert_block(struct buf *buf, const struct pos *pos,
 
 struct undo_event *break_line(struct buf *buf, const struct pos *pos)
 {
-    struct line *line, *at_line;
+    struct line     *line, *at_line;
     struct raw_line *lines;
-    size_t indent;
-    size_t ev_i;
-    struct pos p;
+    size_t          indent;
+    size_t          ev_i;
+    struct pos      p;
 
     line = grow_lines(buf, pos->line + 1, 1);
     at_line = &buf->lines[pos->line];
@@ -615,8 +601,8 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
  */
 static size_t get_paren_line(const struct buf *buf, size_t line_i)
 {
-    size_t l, m, r;
-    struct paren *p;
+    size_t          l, m, r;
+    struct paren    *p;
 
     l = 0;
     r = buf->num_parens;
@@ -642,7 +628,7 @@ static size_t get_paren_line(const struct buf *buf, size_t line_i)
 
 struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines)
 {
-    size_t index;
+    size_t          index;
 
     if (buf->num_lines + num_lines > buf->a_lines) {
         buf->a_lines *= 2;
@@ -677,8 +663,9 @@ struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines)
 
 void remove_lines(struct buf *buf, size_t line_i, size_t num_lines)
 {
-    size_t index;
-    size_t end;
+    size_t          i;
+    size_t          index;
+    size_t          end;
 
     /* shift dirty line indicators */
     if (line_i <= buf->max_dirty_i) {
@@ -690,7 +677,7 @@ void remove_lines(struct buf *buf, size_t line_i, size_t num_lines)
         }
     }
 
-    for (size_t i = 0; i < num_lines; i++) {
+    for (i = 0; i < num_lines; i++) {
         clear_line(&buf->lines[line_i + i]);
     }
 
@@ -716,10 +703,10 @@ void remove_lines(struct buf *buf, size_t line_i, size_t num_lines)
 
 struct undo_event *indent_line(struct buf *buf, size_t line_i)
 {
-    size_t cur_indent, new_indent;
-    struct pos pos, to;
-    struct raw_line line;
-    struct undo_event *ev;
+    size_t              cur_indent, new_indent;
+    struct pos          pos, to;
+    struct raw_line     line;
+    struct undo_event   *ev;
 
     new_indent = Langs[buf->lang].indentor(buf, line_i);
     cur_indent = get_line_indent(buf, line_i);
@@ -745,7 +732,8 @@ struct raw_line *get_lines(struct buf *buf, const struct pos *from,
         const struct pos *to, size_t *p_num_lines)
 {
     struct raw_line *lines;
-    size_t num_lines;
+    size_t          num_lines;
+    size_t          i;
 
     if (from->line != to->line) {
         num_lines = to->line - from->line + 1;
@@ -753,7 +741,7 @@ struct raw_line *get_lines(struct buf *buf, const struct pos *from,
         init_raw_line(&lines[0], &buf->lines[from->line].s[from->col],
                 buf->lines[from->line].n - from->col);
 
-        for (size_t i = from->line + 1; i < to->line; i++) {
+        for (i = from->line + 1; i < to->line; i++) {
             init_raw_line(&lines[i - from->line], &buf->lines[i].s[0],
                     buf->lines[i].n);
         }
@@ -776,13 +764,14 @@ struct raw_line *get_block(struct buf *buf, const struct pos *from,
         const struct pos *to, size_t *p_num_lines)
 {
     struct raw_line *lines;
-    size_t num_lines;
-    struct line *line;
-    size_t to_col;
+    size_t          num_lines;
+    size_t          i;
+    struct line     *line;
+    size_t          to_col;
 
     num_lines = to->line - from->line + 1;
     lines = xreallocarray(NULL, num_lines, sizeof(*lines));
-    for (size_t i = from->line; i <= to->line; i++) {
+    for (i = from->line; i <= to->line; i++) {
         line = &buf->lines[i];
         if (from->col >= line->n) {
             init_zero_raw_line(&lines[i - from->line]);
@@ -803,10 +792,10 @@ struct raw_line *get_block(struct buf *buf, const struct pos *from,
 struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
         const struct pos *pto)
 {
-    struct pos from, to;
-    struct undo_event *p_ev;
-    struct raw_line *lines;
-    size_t num_lines;
+    struct pos          from, to;
+    struct undo_event   *p_ev;
+    struct raw_line     *lines;
+    size_t              num_lines;
 
     from = *pfrom;
     to = *pto;
@@ -847,8 +836,9 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
 
 void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto)
 {
-    struct pos from, to;
-    struct line *fl, *tl;
+    struct pos      from, to;
+    size_t          i;
+    struct line     *fl, *tl;
 
     from = *pfrom;
     to = *pto;
@@ -866,7 +856,7 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
             from.line--;
         }
         /* delete the remaining lines */
-        for (size_t i = from.line + 1; i < buf->num_lines; i++) {
+        for (i = from.line + 1; i < buf->num_lines; i++) {
             clear_line(&buf->lines[i]);
         }
         remove_lines(buf, from.line + 1, to.line - from.line);
@@ -886,12 +876,13 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
 struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
         const struct pos *pto)
 {
-    struct pos from, to;
-    struct line *line;
-    size_t to_col;
-    struct undo_event *ev;
-    struct raw_line *lines;
-    size_t num_lines;
+    struct pos          from, to;
+    struct line         *line;
+    size_t              to_col;
+    struct undo_event   *ev;
+    struct raw_line     *lines;
+    size_t              num_lines;
+    size_t              i;
 
     from = *pfrom;
     to = *pto;
@@ -906,7 +897,7 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
 
     num_lines = to.line - from.line + 1;
     lines = xreallocarray(NULL, num_lines, sizeof(*lines));
-    for (size_t i = from.line; i <= to.line; i++) {
+    for (i = from.line; i <= to.line; i++) {
         line = &buf->lines[i];
         if (from.col >= line->n) {
             init_zero_raw_line(&lines[i - from.line]);
@@ -931,13 +922,14 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
 void _delete_block(struct buf *buf, const struct pos *from,
         const struct pos *to)
 {
-    struct line *line;
-    size_t to_col;
+    struct line     *line;
+    size_t          to_col;
 
     mark_dirty(buf, from->line, to->line);
 
-    for (size_t i = from->line; i <= to->line; i++) {
-        line = &buf->lines[i];
+    for (line = &buf->lines[from->line];
+         line <= &buf->lines[to->line];
+         line++) {
         if (from->col >= line->n) {
             continue;
         }
@@ -956,8 +948,8 @@ struct undo_event *replace_lines(struct buf *buf, const struct pos *from,
                    const struct pos *to, const struct raw_line *lines,
                    size_t num_lines)
 {
-    struct undo_event *ev;
-    struct undo_event *ev2;
+    struct undo_event   *ev;
+    struct undo_event   *ev2;
 
     /* TODO: optimize this */
     ev = delete_range(buf, from, to);
@@ -969,13 +961,14 @@ struct undo_event *replace_lines(struct buf *buf, const struct pos *from,
 struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
         const struct pos *pto, int (*conv)(int))
 {
-    struct pos from, to;
-    struct line *line;
-    size_t to_col;
-    struct undo_event *first_ev = NULL, *p_ev;
-    struct pos pos;
-    struct raw_line *lines;
-    char ch;
+    struct pos          from, to;
+    struct line         *line;
+    size_t              to_col;
+    struct undo_event   *first_ev = NULL, *p_ev;
+    struct pos          pos;
+    struct raw_line     *lines;
+    char                ch;
+    size_t              i;
 
     from = *pfrom;
     to = *pto;
@@ -990,7 +983,9 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
 
     mark_dirty(buf, from.line, to.line);
 
-    for (size_t i = from.line; i <= to.line; i++) {
+    for (line = &buf->lines[from.line];
+         line <= &buf->lines[to.line];
+         line++) {
         line = &buf->lines[i];
         if (from.col >= line->n) {
             continue;
@@ -1004,7 +999,7 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
         pos.col = from.col;
         lines = xmalloc(sizeof(*lines));
         init_raw_line(&lines[0], &line->s[from.col], to_col - from.col);
-        for (size_t i = from.col; i < to_col; i++) {
+        for (i = from.col; i < to_col; i++) {
             ch = (*conv)(line->s[i]);
             lines[0].s[i - from.col] ^= ch;
             line->s[i] = ch;
@@ -1026,11 +1021,12 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
 struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
         const struct pos *pto, int (*conv)(int))
 {
-    struct pos from, to;
+    struct pos      from, to;
     struct raw_line *lines;
-    size_t num_lines;
-    struct line *line;
-    char ch;
+    size_t          num_lines;
+    struct line     *line;
+    char            ch;
+    size_t          i, j;
 
     from = *pfrom;
     to = *pto;
@@ -1083,16 +1079,16 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
 
         line = &buf->lines[from.line];
         init_raw_line(&lines[0], &line->s[from.col], line->n - from.col);
-        for (size_t i = from.col; i < line->n; i++) {
+        for (i = from.col; i < line->n; i++) {
             ch = (*conv)(line->s[i]);
             lines[0].s[i - from.col] ^= ch;
             line->s[i] = ch;
         }
 
-        for (size_t i = from.line + 1; i < to.line; i++) {
+        for (i = from.line + 1; i < to.line; i++) {
             line = &buf->lines[i];
             init_raw_line(&lines[i - from.line], &line->s[0], line->n);
-            for (size_t j = 0; j < line->n; j++) {
+            for (j = 0; j < line->n; j++) {
                 ch = (*conv)(line->s[j]);
                 lines[i - from.line].s[j] ^= ch;
                 line->s[j] = ch;
@@ -1101,7 +1097,7 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
 
         line = &buf->lines[to.line];
         init_raw_line(&lines[to.line - from.line], &line->s[0], to.col);
-        for (size_t i = 0; i < to.col; i++) {
+        for (i = 0; i < to.col; i++) {
             ch = (*conv)(line->s[i]);
             lines[to.line - from.line].s[i] ^= ch;
             line->s[i] = ch;
@@ -1111,7 +1107,7 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
         lines = xmalloc(sizeof(*lines));
         line = &buf->lines[from.line];
         init_raw_line(&lines[0], &line->s[from.col], to.col - from.col);
-        for (size_t i = from.col; i < to.col; i++) {
+        for (i = from.col; i < to.col; i++) {
             ch = (*conv)(line->s[i]);
             lines[0].s[i - from.col] ^= ch;
             line->s[i] = ch;
@@ -1123,11 +1119,12 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
 
 size_t search_string(struct buf *buf, const char *s)
 {
-    size_t l;
-    struct line *line;
+    size_t          l;
+    struct line     *line;
 
-    struct match *matches;
-    size_t n;
+    struct match    *matches;
+    size_t          n;
+    size_t          i, j;
 
     free(buf->search_pat);
     buf->search_pat = xstrdup(s);
@@ -1142,9 +1139,9 @@ size_t search_string(struct buf *buf, const char *s)
 
     matches = NULL;
     n = 0;
-    for (size_t i = 0; i < buf->num_lines; i++) {
+    for (i = 0; i < buf->num_lines; i++) {
         line = &buf->lines[i];
-        for (size_t j = 0; j + l <= line->n; j++) {
+        for (j = 0; j + l <= line->n; j++) {
             if (memcmp(&line->s[j], s, l) != 0) {
                 continue;
             }
@@ -1153,6 +1150,42 @@ size_t search_string(struct buf *buf, const char *s)
             matches[n].from.col = j;
             matches[n].to.line = i;
             matches[n].to.col = j + l;
+            n++;
+        }
+    }
+    free(buf->matches);
+    buf->matches = matches;
+    buf->num_matches = n;
+    return n;
+}
+
+size_t search_pattern(struct buf *buf, const char *pat)
+{
+    struct line     *line;
+
+    struct match    *matches;
+    size_t          n;
+    size_t          i, j, l;
+
+    free(buf->search_pat);
+    buf->search_pat = xstrdup(pat);
+
+    matches = NULL;
+    n = 0;
+    for (i = 0; i < buf->num_lines; i++) {
+        line = &buf->lines[i];
+        for (j = 0; j < line->n; ) {
+            l = match_pattern(line->s, j, line->n, pat);
+            if (l == 0) {
+                j++;
+                continue;
+            }
+            matches = xreallocarray(matches, n + 1, sizeof(*matches));
+            matches[n].from.line = i;
+            matches[n].from.col = j;
+            matches[n].to.line = i;
+            j += l;
+            matches[n].to.col = j;
             n++;
         }
     }
@@ -1171,9 +1204,9 @@ size_t search_string(struct buf *buf, const char *s)
  */
 static void highlight_line(struct buf *buf, size_t line_i, size_t state)
 {
-    struct state_ctx ctx;
-    size_t n;
-    struct line *line;
+    struct state_ctx    ctx;
+    size_t              n;
+    struct line         *line;
 
     line = &buf->lines[line_i];
     line->attribs = xreallocarray(line->attribs, line->n,
@@ -1207,13 +1240,14 @@ static void highlight_line(struct buf *buf, size_t line_i, size_t state)
 
 void clean_lines(struct buf *buf, size_t last_line)
 {
-    unsigned prev_state;
+    unsigned    prev_state;
     struct line *line;
+    size_t      i;
 
     prev_state = buf->min_dirty_i == 0 ? STATE_START :
         buf->min_dirty_i == SIZE_MAX ? 0 :
         buf->lines[buf->min_dirty_i - 1].state;
-    for (size_t i = buf->min_dirty_i; i < last_line; i++) {
+    for (i = buf->min_dirty_i; i < last_line; i++) {
         line = &buf->lines[i];
         if (line->state == 0) {
             highlight_line(buf, i, prev_state);
@@ -1237,8 +1271,8 @@ void clean_lines(struct buf *buf, size_t last_line)
 
 size_t get_next_paren_index(const struct buf *buf, const struct pos *pos)
 {
-    size_t l, m, r;
-    struct paren *p;
+    size_t          l, m, r;
+    struct paren    *p;
 
     l = 0;
     r = buf->num_parens;
@@ -1258,8 +1292,8 @@ size_t get_next_paren_index(const struct buf *buf, const struct pos *pos)
 
 void add_paren(struct buf *buf, const struct pos *pos, int type)
 {
-    size_t index;
-    struct paren *paren;
+    size_t          index;
+    struct paren    *paren;
 
     if (buf->num_parens + 1 >= buf->a_parens) {
         buf->a_parens *= 2;
@@ -1280,7 +1314,7 @@ void add_paren(struct buf *buf, const struct pos *pos, int type)
 
 size_t get_paren(struct buf *buf, const struct pos *pos)
 {
-    size_t first_i, index;
+    size_t          first_i, index;
 
     clean_lines(buf, pos->line + 1);
 
@@ -1306,7 +1340,7 @@ size_t get_paren(struct buf *buf, const struct pos *pos)
 
 void clear_parens(struct buf *buf, size_t line_i)
 {
-    size_t first_i, index;
+    size_t          first_i, index;
 
     index = get_paren_line(buf, line_i);
     first_i = index;
@@ -1322,8 +1356,8 @@ void clear_parens(struct buf *buf, size_t line_i)
 
 size_t get_matching_paren(struct buf *buf, size_t paren_i)
 {
-    struct paren *paren, *p;
-    size_t c;
+    struct paren    *paren, *p;
+    size_t          c;
 
     paren = &buf->parens[paren_i];
     if ((paren->type & FOPEN_PAREN)) {

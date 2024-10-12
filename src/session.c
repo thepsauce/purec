@@ -31,9 +31,10 @@ void free_session(void)
 
 void save_session(FILE *fp)
 {
-    struct buf *buf;
-    struct frame *frame;
-    size_t num_frames, sel_i = 0;
+    struct buf      *buf;
+    struct frame    *frame;
+    size_t          num_frames, sel_i = 0;
+    int             i;
 
     num_frames = 0;
     for (frame = FirstFrame; frame != NULL; frame = frame->next) {
@@ -44,8 +45,6 @@ void save_session(FILE *fp)
     }
 
     fprintf(fp, "%s%ld %zu selected\n", SESSION_HEADER, time(NULL), sel_i);
-
-    /* TODO: also store some core data */
 
     for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
         fprintf(fp, "B%zu %c%s%c %zu,%zu %zu,%zu %zu\n",
@@ -62,11 +61,26 @@ void save_session(FILE *fp)
                 frame->cur.col, frame->cur.line,
                 frame->scroll.col, frame->scroll.line);
     }
+
+    fprintf(fp, "%d\n", Core.tab_size);
+    for (i = 0; i <= MARK_MAX - MARK_MIN; i++) {
+        fprintf(fp, "%zu %zu,%zu\n",
+                Core.marks[i].buf == NULL ? 0 : Core.marks[i].buf->id,
+                Core.marks[i].pos.line,
+                Core.marks[i].pos.col);
+    }
+    fprintf(fp, "%zu:\n", Core.rec_len);
+    fwrite(Core.rec, Core.rec_len, 1, fp);
+    fputc('\n', fp);
+    for (i = 0; i <= USER_REC_MAX - USER_REC_MIN; i++) {
+        fprintf(fp, "%zu -> %zu\n", Core.user_recs[i].from, Core.user_recs[i].to);
+    }
+    fprintf(fp, "%zu -> %zu\n", Core.dot.from, Core.dot.to);
 }
 
 static int check_header(FILE *fp)
 {
-    char header[sizeof(SESSION_HEADER) - 1];
+    char            header[sizeof(SESSION_HEADER) - 1];
 
     if (fread(header, 1, sizeof(header), fp) != sizeof(header) ||
             memcmp(SESSION_HEADER, header, sizeof(header)) != 0) {
@@ -77,7 +91,7 @@ static int check_header(FILE *fp)
 
 static int skip_to_line_end(FILE *fp)
 {
-    int c;
+    int             c;
 
     while (c = fgetc(fp), c != '\n' && c != EOF) {
         (void) 0;
@@ -92,14 +106,20 @@ static int skip_to_line_end(FILE *fp)
     return c;
 }
 
+static bool is_blank_ext(int c)
+{
+    return isblank(c) || c == ':' || c == ';' || c == ',' || c == 'x' ||
+        c == '>';
+}
+
 static int load_number_zu(FILE *fp, size_t *p_num)
 {
-    size_t num;
-    int c;
+    size_t          num;
+    int             c;
 
     do {
         c = fgetc(fp);
-    } while (isblank(c) || c == ':' || c == ';' || c == ',' || c == 'x');
+    } while (is_blank_ext(c));
 
     if (!isdigit(c)) {
         return -1;
@@ -119,13 +139,13 @@ static int load_number_zu(FILE *fp, size_t *p_num)
 
 static int load_number_d(FILE *fp, int *p_num)
 {
-    int sign;
-    int num;
-    int c;
+    int             sign;
+    int             num;
+    int             c;
 
     do {
         c = fgetc(fp);
-    } while (isblank(c) || c == ':' || c == ';' || c == ',' || c == 'x');
+    } while (is_blank_ext(c));
 
     if (c == '+' || c == '-') {
         sign = c == '+' ? 1 : -1;
@@ -264,6 +284,8 @@ int load_session(FILE *fp)
     int             c;
     struct buf      *buf, *next_buf;
     struct frame    *frame, *next_frame;
+    int             i;
+    size_t          buf_id;
 
     if (fp == NULL || check_header(fp) != 0) {
         FirstBuffer = create_buffer(NULL);
@@ -328,6 +350,16 @@ int load_session(FILE *fp)
 
     /* the screen size back then might be different than the current one */
     update_screen_size();
+
+    load_number_d(fp, &Core.tab_size);
+    for (i = 0; i <= MARK_MAX - MARK_MIN; i++) {
+        if (load_number_zu(fp, &buf_id) == -1) {
+            break;
+        }
+        Core.marks[i].buf = get_buffer(buf_id);
+        load_number_zu(fp, &Core.marks[i].pos.col);
+        load_number_zu(fp, &Core.marks[i].pos.line);
+    }
     return 0;
 }
 
@@ -335,8 +367,8 @@ struct fuzzy SessionSelect;
 
 static void update_files(void)
 {
-    DIR *dir;
-    struct dirent *ent;
+    DIR             *dir;
+    struct dirent   *ent;
 
     dir = opendir(Core.session_dir);
     if (dir == NULL) {
@@ -356,7 +388,7 @@ static void update_files(void)
             SessionSelect.a_entries++;
             SessionSelect.entries = xreallocarray(SessionSelect.entries,
                                                   SessionSelect.a_entries,
-                                                sizeof(*SessionSelect.entries));
+                                        sizeof(*SessionSelect.entries));
         }
         SessionSelect.entries[SessionSelect.num_entries].type = ent->d_type;
         SessionSelect.entries[SessionSelect.num_entries].name = xstrdup(ent->d_name);

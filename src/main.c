@@ -8,7 +8,7 @@
 int get_ch(void)
 {
     struct play_rec *rec;
-    int c;
+    int             c;
 
     rec = get_playback();
     if (rec != NULL) {
@@ -48,8 +48,8 @@ int get_ch(void)
 
 static int get_first_char(void)
 {
-    int c;
-    size_t counter = 0, new_counter;
+    int             c;
+    size_t          counter = 0, new_counter;
 
     Core.counter = 1;
     Core.user_reg = '.';
@@ -86,8 +86,8 @@ static int get_first_char(void)
 
 int get_extra_char(void)
 {
-    int c;
-    size_t counter = 0, new_counter;
+    int             c;
+    size_t          counter = 0, new_counter;
 
     do {
         while (c = get_ch(), (c == '0' && counter != 0) ||
@@ -120,12 +120,13 @@ int main(int argc, char **argv)
         [VISUAL_LINE_MODE] = visual_handle_input,
     };
 
-    int c;
-    int r;
-    int old_mode;
-    size_t next_dot_i;
-    struct play_rec *rec;
-    struct undo_event *ev;
+    int                 c;
+    int                 r;
+    int                 old_mode;
+    size_t              next_dot_i;
+    struct play_rec     *rec;
+    struct undo_event   *ev;
+    struct buf          *buf;
 
     if (init_purec(argc, argv) == -1) {
         return -1;
@@ -171,7 +172,7 @@ int main(int argc, char **argv)
         }
 
         /* make all events at the end of the event list of a buffer non transient */
-        for (struct buf *buf = FirstBuffer; buf != NULL; buf = buf->next) {
+        for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
             if (buf->num_events == 0) {
                 continue;
             }

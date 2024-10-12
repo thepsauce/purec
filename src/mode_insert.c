@@ -284,7 +284,8 @@ int insert_handle_input(int c)
         ev = insert_lines(buf, &SelFrame->cur, lines, 1, 1);
         ev->cur = SelFrame->cur;
         SelFrame->cur.col++;
-        if (SelFrame->cur.col == buf->lines[SelFrame->cur.line].n) {
+        if (SelFrame->cur.col == buf->lines[SelFrame->cur.line].n &&
+                ch == '}') {
             ev = indent_line(buf, SelFrame->cur.line);
             if (ev != NULL) {
                 ev->cur = SelFrame->cur;

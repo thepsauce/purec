@@ -58,6 +58,7 @@ static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
 #include "syntax/c.h"
 #include "syntax/diff.h"
 #include "syntax/commit.h"
+#include "syntax/make.h"
 
 size_t no_indentor(struct buf *buf, size_t line_i)
 {
@@ -66,9 +67,12 @@ size_t no_indentor(struct buf *buf, size_t line_i)
 
 struct lang Langs[] = {
     [NO_LANG] = { "none", none_lang_states, no_indentor, "\0" },
-    [C_LANG] = { "C", c_lang_states, c_indentor, "c\0h\0cpp\0cxx\0c++\0hpp\0hxx\0h++\0" },
-    [DIFF_LANG] = { "diff", diff_lang_states, no_indentor, "diff\0patch\0" },
-    [COMMIT_LANG] = { "commit", commit_lang_states, no_indentor, "commit*\0" },
+    [C_LANG] = { "C", c_lang_states, c_indentor,
+                "*.c\0*.h\0*.cpp\0*.cxx\0*.c++\0*.hpp\0*.hxx\0*.h++\0" },
+    [DIFF_LANG] = { "diff", diff_lang_states, no_indentor, "*.diff\0*.patch\0" },
+    [COMMIT_LANG] = { "\\i*commit*", commit_lang_states, no_indentor, "*.commit*\0" },
+    [MAKE_LANG] = { "make", make_lang_states, make_indentor,
+                   "makefile\0Makefile\0GNUmakefile\0" },
 };
 
 /**

@@ -699,6 +699,18 @@ struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev)
 size_t search_string(struct buf *buf, const char *s);
 
 /**
+ * Searches for a pattern within a buffer.
+ * The result of this function is stored within the buffer itself.
+ *
+ * @param buf   The buffer to search in.
+ * @param pat   The pattern to look for.
+ *
+ * @return The number of matches.
+
+ */
+size_t search_pattern(struct buf *buf, const char *pat);
+
+/**
  * Rehighlights all lines until `last_line`.
  *
  * @param buf       The buffer containing the lines.

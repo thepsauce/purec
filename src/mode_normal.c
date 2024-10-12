@@ -308,11 +308,15 @@ int normal_handle_input(int c)
             break;
 
         default:
-            if (prepare_motion(SelFrame, e_c) == 0) {
+            r = prepare_motion(SelFrame, e_c);
+            if (r == 0) {
                 return 0;
             }
             from = SelFrame->cur;
             to = SelFrame->next_cur;
+            if (r == 2) {
+                to.col++;
+            }
             ev = delete_range(buf, &from, &to);
             if (to.line < SelFrame->cur.line ||
                 (to.line == SelFrame->cur.line &&
