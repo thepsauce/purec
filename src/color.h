@@ -14,6 +14,7 @@
  * ncurses and also an index into a color theme attribute array.
  */
 
+#define HI_DEFAULT      0
 #define HI_NORMAL       1
 #define HI_COMMENT      2
 #define HI_JAVADOC      3
@@ -37,14 +38,22 @@
 #define HI_REMOVED      21
 #define HI_CHANGED      22
 #define HI_PAREN_MATCH  23
-#define HI_MAX          24
+#define HI_SEARCH       24
+#define HI_MAX          25
 
-extern struct theme {
+extern const char *HiNames[HI_MAX];
+
+extern const struct theme {
     const char *name;
     const char *term_colors[256];
     int attribs[HI_MAX][3];
     int colors_needed;
 } Themes[];
+
+extern const struct named_color {
+    const char *name;
+    unsigned int color;
+} ColorMap[];
 
 /**
  * Gets the number of elements in `Themes`.

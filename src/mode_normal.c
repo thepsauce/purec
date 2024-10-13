@@ -326,7 +326,6 @@ int normal_handle_input(int c)
         }
         if (ev != NULL) {
             yank_data(ev->seg, 0);
-            ev->cur = cur;
         }
         (void) adjust_scroll(SelFrame);
         if (next_mode == INSERT_MODE) {
@@ -344,7 +343,6 @@ int normal_handle_input(int c)
         ev = delete_range(buf, &SelFrame->cur, &cur);
         if (ev != NULL) {
             yank_data(ev->seg, 0);
-            ev->cur = SelFrame->cur;
             r = UPDATE_UI;
         }
         if (c == 's') {
@@ -370,7 +368,6 @@ int normal_handle_input(int c)
         }
         ev = delete_range(buf, &SelFrame->cur, &cur);
         yank_data(ev->seg, 0);
-        ev->cur = cur;
         SelFrame->vct = SelFrame->cur.col;
         (void) adjust_scroll(SelFrame);
         return UPDATE_UI | DO_RECORD;
@@ -387,7 +384,6 @@ int normal_handle_input(int c)
             to.line++;
             to.col = get_line_indent(buf, to.line);
             ev = delete_range(buf, &from, &to);
-            ev->cur = SelFrame->cur;
             if (from.col > 0 && from.col != buf->lines[from.line].n &&
                     !isblank(buf->lines[from.line].s[from.col - 1])) {
                 init_raw_line(&lines[0], " ", 1);
@@ -407,9 +403,6 @@ int normal_handle_input(int c)
         cur.col = safe_add(cur.col, Core.counter);
         if (c == '\n' || c == '\t') {
             ev = delete_range(buf, &SelFrame->cur, &cur);
-            if (ev != NULL) {
-                ev->cur = SelFrame->cur;
-            }
             return insert_handle_input(c);
         }
         ConvChar = c;
@@ -417,7 +410,6 @@ int normal_handle_input(int c)
         if (ev == NULL) {
             return 0;
         }
-        ev->cur = SelFrame->cur;
         return UPDATE_UI | DO_RECORD;
 
     /* undo last event in current frame */
@@ -465,13 +457,11 @@ int normal_handle_input(int c)
             lines[1].n = 0;
             cur.col = 0;
             ev = insert_lines(buf, &cur, lines, 2, 1);
-            ev->cur = SelFrame->cur;
             clip_column(SelFrame);
         } else {
             cur.line--;
             cur.col = buf->lines[cur.line].n;
             ev = break_line(buf, &cur);
-            ev->cur = SelFrame->cur;
             set_cursor(SelFrame, &buf->events[buf->event_i - 1].end);
         }
         return UPDATE_UI | DO_RECORD;
@@ -482,7 +472,6 @@ int normal_handle_input(int c)
         cur.line = SelFrame->cur.line;
         cur.col = buf->lines[cur.line].n;
         ev = break_line(buf, &cur);
-        ev->cur = SelFrame->cur;
         set_cursor(SelFrame, &buf->events[buf->event_i - 1].end);
         return UPDATE_UI | DO_RECORD;
 
@@ -767,7 +756,6 @@ int normal_handle_input(int c)
             }
             unload_undo_data(reg->seg);
         }
-        ev->cur = SelFrame->cur;
         set_cursor(SelFrame, &ev->end);
         return UPDATE_UI;
 

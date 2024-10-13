@@ -23,6 +23,13 @@ struct render_info {
     /// the index of the line to render
     size_t line_i;
 
+    /// the next match to consider
+    struct match *match;
+    /* the last match to consider, if `match == last_match`,
+     * then there are no more matches
+     */
+    struct match *last_match;
+
     /// if a selection exists
     bool sel_exists;
     /// the selection
@@ -99,6 +106,27 @@ static void render_line(struct render_info *ri)
                 attr_set(A_REVERSE, 0, NULL);
                 addch('?');
             } else {
+                if (ri->match < ri->last_match &&
+                        ri->match->from.line == ri->line_i) {
+                    if (ri->match->to.line != ri->line_i) {
+                        hi = HI_SEARCH;
+                    } else if (ri->match->from.col <= p.col) {
+                        while (ri->match->to.col <= p.col) {
+                            ri->match++;
+                            if (ri->match == ri->last_match) {
+                                goto cont;
+                            }
+                            if (ri->match->from.line > ri->line_i) {
+                                goto cont;
+                            }
+                        }
+                        if (ri->match->from.col <= p.col) {
+                            hi = HI_SEARCH;
+                        }
+                    }
+                }
+
+            cont:
                 if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
                     attr_set(get_attrib_of(hi) ^ A_REVERSE, 0, NULL);
                 } else {
@@ -189,6 +217,13 @@ void render_frame(struct frame *frame)
     /* render the lines */
     ri.x = frame->scroll.col;
     ri.w = frame->scroll.col + w;
+    ri.match = frame->buf->matches;
+    ri.last_match = &frame->buf->matches[frame->buf->num_matches];
+    for (; ri.match < ri.last_match; ri.match++) {
+        if (ri.match->from.line >= frame->scroll.line) {
+            break;
+        }
+    }
     for (size_t i = frame->scroll.line; i < last_line; i++) {
         move(frame->y + i - frame->scroll.line, frame->x + x);
         ri.line_i = i;

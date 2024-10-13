@@ -30,10 +30,11 @@ struct input Cmd;
 
 #define MAX_COMMAND_NAME 12
 
-#define TAB_COMMAND 1
-#define TAB_PATH    2
-#define TAB_COLOR   3
-#define TAB_SYNTAX  4
+#define TAB_COMMAND     1
+#define TAB_PATH        2
+#define TAB_COLOR       3
+#define TAB_SYNTAX      4
+#define TAB_HIGHLIGHT   5
 
 static const struct cmd {
     /// name of the command
@@ -70,6 +71,12 @@ static const struct cmd {
     { "exit", 0, cmd_exit, 0 },
     { "exita", 0, cmd_exit_all, 0 },
     { "exitall", 0, cmd_exit_all, 0 },
+
+    { "hi", 0, cmd_highlight, TAB_HIGHLIGHT },
+    { "highlight", 0, cmd_highlight, TAB_HIGHLIGHT },
+
+    { "noh", 0, cmd_nohighlight, 0 },
+    { "nohighlight", 0, cmd_nohighlight, 0 },
 
     { "q", 0, cmd_quit, 0 },
     { "qa", 0, cmd_quit_all, 0 },
@@ -227,10 +234,13 @@ static bool read_number(char *s, char **p_s, size_t *p_n)
 
 int run_command(char *s_cmd)
 {
-    int r;
-    size_t len;
-    const struct cmd *cmd;
-    struct cmd_data data;
+    int                 r;
+    size_t              len;
+    const struct cmd    *cmd;
+    struct cmd_data     data;
+    FILE                *pp;
+    struct buf          *buf;
+    size_t              i;
 
     s_cmd += strspn(s_cmd, " \t");
     if (s_cmd[0] == '\0') {
@@ -266,6 +276,32 @@ int run_command(char *s_cmd)
         } else {
             data.has_range = false;
         }
+    }
+
+    if (s_cmd[0] == '!') {
+        s_cmd++;
+
+        endwin();
+
+        pp = popen(s_cmd, "w");
+        if (pp == NULL) {
+            set_error("could not open process");
+            return -1;
+        }
+
+        buf = SelFrame->buf;
+        data.to = MIN(data.to, buf->num_lines - 1);
+        for (i = data.from; i <= data.to; i++) {
+            fwrite(buf->lines[i].s, buf->lines[i].n, 1, pp);
+            fputc('\n', pp);
+        }
+        pclose(pp);
+
+        printf("\nPress enter to return...\n");
+        while (getch() != '\n') {
+            (void) 0;
+        }
+        return 0;
     }
 
     for (len = 0; isalpha(s_cmd[len]); ) {
@@ -385,17 +421,20 @@ static void do_completion(int dir)
     case TAB_COMMAND:
     case TAB_COLOR:
     case TAB_SYNTAX:
+    case TAB_HIGHLIGHT:
         len = strlen(Tab.pat);
         i = Tab.item_i;
         num = Tab.type == TAB_COMMAND ?
                 (int) ARRAY_SIZE(Commands) : Tab.type == TAB_SYNTAX ?
-                (int) ARRAY_SIZE(Langs) : get_number_of_themes();
+                (int) ARRAY_SIZE(Langs) : Tab.type == TAB_COLOR ?
+                get_number_of_themes() : HI_MAX;
         do {
             prev_i = i;
             for (i += dir; i >= 0 && i < num; i += dir) {
                 name = Tab.type == TAB_COMMAND ?
                         Commands[i].name : Tab.type == TAB_SYNTAX ?
-                        Langs[i].name : Themes[i].name;
+                        Langs[i].name : Tab.type == TAB_COLOR ?
+                        Themes[i].name : HiNames[i];
                 if (strncasecmp(name, Tab.pat, len) == 0) {
                     replace_completion(name);
                     Tab.item_i = i;

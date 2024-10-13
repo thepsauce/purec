@@ -470,6 +470,7 @@ size_t match_pattern(const char *s, size_t i, size_t s_len, const char *pat)
                 case 'c':
                     ignore_case = false;
                     break;
+
                 case 'i':
                     ignore_case = true;
                     break;

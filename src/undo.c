@@ -211,6 +211,7 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
     }
     ev->time = time(NULL);
     ev->seg = save_lines(lines, num_lines);
+    ev->cur = SelFrame->cur;
     return ev;
 }
 

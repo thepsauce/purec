@@ -421,6 +421,7 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
     } else {
         init_raw_line(line, &c_lines[0].s[0], c_lines[0].n);
         line++;
+        r = 0;
         while (1) {
             for (i = 1; i < c_num_lines; i++) {
                 init_raw_line(line, &c_lines[i].s[0], c_lines[i].n);
@@ -793,7 +794,7 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
         const struct pos *pto)
 {
     struct pos          from, to;
-    struct undo_event   *p_ev;
+    struct undo_event   *ev;
     struct raw_line     *lines;
     size_t              num_lines;
 
@@ -828,10 +829,10 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
 
     /* get the deleted text for undo */
     lines = get_lines(buf, &from, &to, &num_lines);
-    p_ev = add_event(buf, IS_DELETION, &from, lines, num_lines);
+    ev = add_event(buf, IS_DELETION, &from, lines, num_lines);
 
     _delete_range(buf, &from, &to);
-    return p_ev;
+    return ev;
 }
 
 void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto)
@@ -964,7 +965,7 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
     struct pos          from, to;
     struct line         *line;
     size_t              to_col;
-    struct undo_event   *first_ev = NULL, *p_ev;
+    struct undo_event   *ev;
     struct pos          pos;
     struct raw_line     *lines;
     char                ch;
@@ -983,10 +984,10 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
 
     mark_dirty(buf, from.line, to.line);
 
+    ev = NULL;
     for (line = &buf->lines[from.line];
          line <= &buf->lines[to.line];
          line++) {
-        line = &buf->lines[i];
         if (from.col >= line->n) {
             continue;
         }
@@ -995,7 +996,7 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
             continue;
         }
 
-        pos.line = i;
+        pos.line = line - buf->lines;
         pos.col = from.col;
         lines = xmalloc(sizeof(*lines));
         init_raw_line(&lines[0], &line->s[from.col], to_col - from.col);
@@ -1004,18 +1005,10 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
             lines[0].s[i - from.col] ^= ch;
             line->s[i] = ch;
         }
-        p_ev = add_event(buf, IS_REPLACE | IS_TRANSIENT, &pos, lines, 1);
-        if (first_ev == NULL) {
-            first_ev = p_ev;
-        }
+        ev = add_event(buf, IS_REPLACE, &pos, lines, 1);
     }
 
-    if (first_ev == NULL) {
-        return NULL;
-    }
-
-    p_ev->flags ^= IS_TRANSIENT;
-    return first_ev;
+    return ev;
 }
 
 struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,

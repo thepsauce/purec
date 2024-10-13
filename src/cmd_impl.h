@@ -202,6 +202,54 @@ int cmd_exit_all(struct cmd_data *cd)
     return 0;
 }
 
+int cmd_highlight(struct cmd_data *cd)
+{
+    int             i;
+    short           fg, bg;
+    short           r, g, b;
+
+    for (i = 1; i < HI_MAX; i++) {
+        if (strcasecmp(HiNames[i], cd->arg) == 0) {
+            set_highlight(Core.msg_win, HI_CMD);
+            Core.msg_state = MSG_OTHER;
+            werase(Core.msg_win);
+            waddstr(Core.msg_win, HiNames[i]);
+
+            waddch(Core.msg_win, ' ');
+            set_highlight(Core.msg_win, i);
+            waddstr(Core.msg_win, "xxx");
+
+            color_content(i, &r, &g, &b);
+
+            set_highlight(Core.msg_win, HI_CMD);
+
+            waddch(Core.msg_win, ' ');
+            pair_content(i, &fg, &bg);
+            color_content(fg, &r, &g, &b);
+            r = r * 51 / 200;
+            g = g * 51 / 200;
+            b = b * 51 / 200;
+            wprintw(Core.msg_win, "#%02x%02x%02x", r, g, b);
+
+            waddch(Core.msg_win, ' ');
+            color_content(bg, &r, &g, &b);
+            r = r * 51 / 200;
+            g = g * 51 / 200;
+            b = b * 51 / 200;
+            wprintw(Core.msg_win, "#%02x%02x%02x", r, g, b);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int cmd_nohighlight(struct cmd_data *cd)
+{
+    (void) cd;
+    SelFrame->buf->num_matches = 0;
+    return 0;
+}
+
 int cmd_quit(struct cmd_data *cd)
 {
     if (!cd->force && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
