@@ -801,6 +801,9 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
     from = *pfrom;
     to = *pto;
 
+    /* swap if needed */
+    sort_positions(&from, &to);
+
     /* clip lines */
     if (from.line >= buf->num_lines) {
         from.line = buf->num_lines - 1;
@@ -809,9 +812,6 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
     if (to.line > buf->num_lines) {
         to.line = buf->num_lines;
     }
-
-    /* swap if needed */
-    sort_positions(&from, &to);
 
     /* clip columns */
     from.col = MIN(from.col, buf->lines[from.line].n);
@@ -1233,9 +1233,9 @@ static void highlight_line(struct buf *buf, size_t line_i, size_t state)
 
 void clean_lines(struct buf *buf, size_t last_line)
 {
-    unsigned    prev_state;
-    struct line *line;
-    size_t      i;
+    unsigned        prev_state;
+    struct line     *line;
+    size_t          i;
 
     prev_state = buf->min_dirty_i == 0 ? STATE_START :
         buf->min_dirty_i == SIZE_MAX ? 0 :
@@ -1247,7 +1247,13 @@ void clean_lines(struct buf *buf, size_t last_line)
             if (i + 1 != buf->num_lines &&
                     (line->state != STATE_START ||
                      line->prev_state != STATE_START)) {
-                mark_dirty(buf, i + 1, i + 1);
+                if (buf->max_dirty_i == i) {
+                    buf->max_dirty_i++;
+                }
+                if (line[1].state != 0) {
+                    line[1].prev_state = line[1].state;
+                    line[1].state = 0;
+                }
             }
         }
         prev_state = line->state;

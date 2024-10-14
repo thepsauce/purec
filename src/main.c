@@ -13,7 +13,7 @@ int get_ch(void)
     rec = get_playback();
     if (rec != NULL) {
         c = Core.rec[rec->index++];
-        if (c == (char) 0xff) {
+        if (c == 0xff) {
             c = 0x100 | Core.rec[rec->index++];
         }
         return c;

@@ -943,7 +943,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             return 0;
         }
         new_vct = new_cur.col;
-        r = 1;
+        r = 2;
         break;
 
     /* find the {count}'th character backwards */
@@ -977,7 +977,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             return 0;
         }
         new_vct = new_cur.col;
-        r = 0;
+        r = 1;
         break;
 
     /* move forward {count} words, skip space after a word */

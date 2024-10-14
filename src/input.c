@@ -2,6 +2,7 @@
 #include "util.h"
 #include "xalloc.h"
 
+#include <ctype.h>
 #include <limits.h>
 #include <ncurses.h>
 #include <string.h>
@@ -88,8 +89,9 @@ static void move_over_utf8(struct input *inp, int dir)
 
 char *send_to_input(struct input *inp, int c)
 {
-    char *h;
-    size_t index;
+    char            *h;
+    size_t          index;
+    bool            is_blank;
 
     switch (c) {
     case KEY_HOME:
@@ -160,12 +162,28 @@ char *send_to_input(struct input *inp, int c)
 
     case KEY_BACKSPACE:
     case '\x7f':
-    case '\b':
         if (inp->index == inp->prefix) {
             break;
         }
         index = inp->index;
         move_over_utf8(inp, -1);
+        memmove(&inp->s[inp->index],
+                &inp->s[index],
+                inp->n - index);
+        inp->n -= index - inp->index;
+        break;
+
+    case '\b': /* Shift/Control + Backspace or C-H */
+        if (inp->index == inp->prefix) {
+            break;
+        }
+        index = inp->index;
+        inp->index--;
+        is_blank = isblank(inp->s[inp->index]);
+        while (inp->index > inp->prefix &&
+               is_blank == isblank(inp->s[inp->index - 1])) {
+            inp->index--;
+        }
         memmove(&inp->s[inp->index],
                 &inp->s[index],
                 inp->n - index);

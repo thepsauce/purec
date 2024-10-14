@@ -14,7 +14,7 @@
  */
 static void attempt_join(void)
 {
-    struct undo_event *prev_ev, *ev;
+    struct undo_event   *prev_ev, *ev;
 
     for (size_t i = Core.ev_from_ins + 1; i < SelFrame->buf->event_i; i++) {
         prev_ev = &SelFrame->buf->events[i - 1];
@@ -84,7 +84,7 @@ static void repeat_last_insertion(void)
 
                 memmove(&lines[seg->num_lines - 1], &lines[0],
                         sizeof(*lines) * num_lines);
-                for (size_t i = 1; i < seg->num_lines; i++) {
+                for (j = 1; j < seg->num_lines; j++) {
                     init_raw_line(&lines[i - 1], seg->lines[i].s,
                             seg->lines[i].n);
                 }
