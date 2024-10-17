@@ -390,7 +390,7 @@ int cmd_substitute(struct cmd_data *cd)
     *e2 = '\0';
 
     buf = SelFrame->buf;
-    search_string(buf, &cd->arg[1]);
+    search_pattern(buf, &cd->arg[1]);
     lines = gen_lines(&e1[1], &num_lines);
     /* do it in reverse */
     for (struct match *m = &buf->matches[buf->num_matches];

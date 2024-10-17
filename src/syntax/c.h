@@ -87,7 +87,6 @@ size_t c_indentor(struct buf *buf, size_t line_i)
     if (line_i == 0) {
         return 0;
     }
-    clean_lines(buf, line_i + 1);
     p.col = 0;
     p.line = line_i;
     index = get_next_paren_index(buf, &p);

@@ -218,7 +218,9 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
 static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
 {
     struct undo_seg *seg;
-    struct line *line;
+    struct line     *line;
+    size_t          i, j;
+    bool            r;
 
     if ((flags & IS_DELETION)) {
         if ((flags & IS_BLOCK)) {
@@ -233,16 +235,24 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
     load_undo_data(seg);
     if ((flags & IS_REPLACE)) {
         line = &buf->lines[ev->pos.line];
-        for (size_t i = 0; i < seg->lines[0].n; i++) {
-            line->s[i + ev->pos.col] ^= seg->lines[0].s[i];
+        for (i = 0; i < seg->lines[0].n; i++) {
+            line->s[ev->pos.col + i] ^= seg->lines[0].s[i];
         }
-        for (size_t i = 1; i < seg->num_lines; i++) {
-            line = &buf->lines[i + ev->pos.line];
-            for (size_t j = 0; j < seg->lines[i].n; j++) {
+        for (i = 1; i < seg->num_lines; i++) {
+            line = &buf->lines[ev->pos.line + i];
+            for (j = 0; j < seg->lines[i].n; j++) {
                 line->s[j] ^= seg->lines[i].s[j];
             }
         }
-        mark_dirty(buf, ev->pos.line, ev->pos.line + seg->num_lines - 1);
+
+        r = false;
+        for (i = 0; i < seg->num_lines; i++) {
+            r = rehighlight_line(buf, ev->pos.line + i);
+        }
+        while (r) {
+            r = rehighlight_line(buf, ev->pos.line + i);
+            i++;
+        }
     } else {
         if ((flags & IS_BLOCK)) {
             _insert_block(buf, &ev->pos, seg->lines, seg->num_lines);

@@ -146,11 +146,6 @@ struct buf {
     /// the index of the highlighting machine
     size_t lang;
 
-    /// the first dirty line
-    size_t min_dirty_i;
-    /// the last dirty line; there might also be dirty lines in the middle
-    size_t max_dirty_i;
-
     /// lines within this buffer
     struct line *lines;
     /// number of lines
@@ -396,6 +391,16 @@ void _insert_block(struct buf *buf, const struct pos *pos,
 struct undo_event *break_line(struct buf *buf, const struct pos *pos);
 
 /**
+ * Gets the first index of the match on the given line.
+ *
+ * @param buf       The buffer to look for the match.
+ * @param line_i    The line to look for.
+ *
+ * @return The index of the match.
+ */
+size_t get_match_line(struct buf *buf, size_t line_i);
+
+/**
  * Inserts given number of lines starting from given index.
  *
  * This simply inserts uninitialized lines after given index. NO clipping and NO
@@ -561,6 +566,14 @@ struct undo_event *replace_lines(struct buf *buf, const struct pos *from,
                    const struct pos *to, const struct raw_line *lines,
                    size_t num_lines);
 
+/// outside parameter for `conv_to_char`
+extern int ConvChar;
+
+/**
+ * Meant to be passed in to the change routines.
+ */
+int conv_to_char(int c);
+
 /**
  * Change text within a block.
  *
@@ -687,18 +700,6 @@ struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev)
     __attribute__((deprecated));
 
 /**
- * Searches a string within a buffer.
- *
- * The result of this function is stored within the buffer itself.
- *
- * @param buf   The buffer to search in.
- * @param s     The string to search for.
- *
- * @return The number of matches.
- */
-size_t search_string(struct buf *buf, const char *s);
-
-/**
  * Searches for a pattern within a buffer.
  * The result of this function is stored within the buffer itself.
  *
@@ -711,12 +712,14 @@ size_t search_string(struct buf *buf, const char *s);
 size_t search_pattern(struct buf *buf, const char *pat);
 
 /**
- * Rehighlights all lines until `last_line`.
+ * Rehighlights given line.
  *
- * @param buf       The buffer containing the lines.
- * @param last_line The line at which to stop highlighting.
+ * @param buf       The buffer containing the line.
+ * @param line_i    The line to highlight again.
+ *
+ * @return Whether this highlighting affects the next line.
  */
-void clean_lines(struct buf *buf, size_t last_line);
+bool rehighlight_line(struct buf *buf, size_t line_i);
 
 /**
  * Gets the index where the given position should be inserted within the

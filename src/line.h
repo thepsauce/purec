@@ -43,8 +43,6 @@ struct line {
     size_t n;
     /// syntax highlighting state at the beginning of the next line
     unsigned state;
-    /// state before the line was marked dirty
-    unsigned prev_state;
     /// rendering highlights
     int *attribs;
 };
@@ -58,6 +56,14 @@ struct line {
     struct line *const _l = (arg_line); \
     free(_l->attribs); \
     free(_l->s); \
+} while (0)
+
+#define set_line_dirty(arg_line) do { \
+    struct line *const _l = (arg_line); \
+    if (_l->state != 0) { \
+        _l->prev_state = _l->state; \
+        _l->state = 0; \
+    } \
 } while (0)
 
 #endif

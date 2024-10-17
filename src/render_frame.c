@@ -22,18 +22,6 @@ struct render_info {
     struct line *line;
     /// the index of the line to render
     size_t line_i;
-
-    /// the next match to consider
-    struct match *match;
-    /* the last match to consider, if `match == last_match`,
-     * then there are no more matches
-     */
-    struct match *last_match;
-
-    /// if a selection exists
-    bool sel_exists;
-    /// the selection
-    struct selection sel;
 };
 
 static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
@@ -106,43 +94,12 @@ static void render_line(struct render_info *ri)
                 attr_set(A_REVERSE, 0, NULL);
                 addch('?');
             } else {
-                if (ri->match < ri->last_match &&
-                        ri->match->from.line == ri->line_i) {
-                    if (ri->match->to.line != ri->line_i) {
-                        hi = HI_SEARCH;
-                    } else if (ri->match->from.col <= p.col) {
-                        while (ri->match->to.col <= p.col) {
-                            ri->match++;
-                            if (ri->match == ri->last_match) {
-                                goto cont;
-                            }
-                            if (ri->match->from.line > ri->line_i) {
-                                goto cont;
-                            }
-                        }
-                        if (ri->match->from.col <= p.col) {
-                            hi = HI_SEARCH;
-                        }
-                    }
-                }
-
-            cont:
-                if (ri->sel_exists && is_in_selection(&ri->sel, &p)) {
-                    attr_set(get_attrib_of(hi) ^ A_REVERSE, 0, NULL);
-                } else {
-                    set_highlight(stdscr, hi);
-                }
+                set_highlight(stdscr, hi);
                 addch(ch);
             }
         }
         p.col++;
         x++;
-    }
-
-    if (x >= ri->x && x < ri->w && ri->sel_exists &&
-            is_in_selection(&ri->sel, &p)) {
-        attr_set(A_REVERSE, 0, NULL);
-        addch(' ');
     }
 }
 
@@ -166,31 +123,23 @@ static inline bool translate_pos(struct frame *frame, struct pos *pos,
 
 void render_frame(struct frame *frame)
 {
-    struct buf *buf;
-    int perc;
-    struct render_info ri;
-    size_t line;
-    size_t last_line;
-    int x, y, w, h;
-    int orig_x;
-    size_t paren_i, match_i;
-    struct pos p;
-    int p_x, p_y;
+    struct buf          *buf;
+    int                 perc;
+    struct render_info  ri;
+    size_t              line;
+    int                 i, j;
+    size_t              s;
+    size_t              last_line;
+    int                 x, y, w, h;
+    int                 orig_x;
+    struct match        *match;
+    struct selection    sel;
+    size_t              start, end;
+    size_t              paren_i, match_i;
+    struct pos          p;
+    int                 p_x, p_y;
 
     buf = frame->buf;
-
-    /* get selection */
-    ri.cur_line = &buf->lines[frame->cur.line];
-    if (SelFrame != frame) {
-        ri.sel_exists = false;
-    } else {
-        ri.sel_exists = get_selection(&ri.sel);
-    }
-
-    last_line = frame->scroll.line + frame->h - 1;
-    last_line = MIN(last_line, frame->buf->num_lines);
-
-    clean_lines(buf, last_line);
 
     orig_x = frame->x > 0;
     get_text_rect(frame, &x, &y, &w, &h);
@@ -199,11 +148,11 @@ void render_frame(struct frame *frame)
     if (x > 2) {
         set_highlight(stdscr, HI_LINE_NO);
         line = frame->scroll.line + 1;
-        for (int i = y; i < h; i++) {
+        for (i = y; i < h; i++) {
             if (line > buf->num_lines) {
                 set_highlight(stdscr, HI_NORMAL);
                 mvaddstr(frame->y + i, frame->x + orig_x, " ~");
-                for (int j = orig_x + 2; j < x; j++) {
+                for (j = orig_x + 2; j < x; j++) {
                     addch(' ');
                 }
             } else {
@@ -215,24 +164,62 @@ void render_frame(struct frame *frame)
     }
 
     /* render the lines */
+    ri.cur_line = &buf->lines[frame->cur.line];
     ri.x = frame->scroll.col;
     ri.w = frame->scroll.col + w;
-    ri.match = frame->buf->matches;
-    ri.last_match = &frame->buf->matches[frame->buf->num_matches];
-    for (; ri.match < ri.last_match; ri.match++) {
-        if (ri.match->from.line >= frame->scroll.line) {
-            break;
-        }
-    }
-    for (size_t i = frame->scroll.line; i < last_line; i++) {
-        move(frame->y + i - frame->scroll.line, frame->x + x);
-        ri.line_i = i;
-        ri.line = &buf->lines[i];
+
+    last_line = frame->scroll.line + frame->h - 1;
+    last_line = MIN(last_line, buf->num_lines);
+    for (s = frame->scroll.line; s < last_line; s++) {
+        move(frame->y + s - frame->scroll.line, frame->x + x);
+        ri.line_i = s;
+        ri.line = &buf->lines[s];
         render_line(&ri);
     }
 
-    /* highlight matching parentheses */
+    /* overlay with matches */
+    match_i = get_match_line(buf, frame->scroll.line);
+    for (match = &buf->matches[match_i];
+            match < &buf->matches[buf->num_matches] &&
+                match->from.line < last_line;
+            match++) {
+        if (match->from.col >= ri.w) {
+            break;
+        }
+        mvchgat(frame->y + match->from.line - frame->scroll.line,
+                frame->x + x + match->from.col - frame->scroll.col,
+                MIN((int) (match->to.col - match->from.col), w),
+                get_attrib_of(HI_SEARCH), HI_SEARCH, NULL);
+    }
+
     if (frame == SelFrame) {
+        /* render the selection if it exists */
+        if (get_selection(&sel)) {
+            start = sel.beg.col;
+            for (s = MAX(sel.beg.line, frame->scroll.line);
+                 s <= sel.end.line && s < last_line;
+                 s++) {
+                if (sel.is_block) {
+                    start = sel.beg.col;
+                    end = MIN(sel.end.col, buf->lines[s].n);
+                } else {
+                    end = s == sel.end.line ? sel.end.col + 1 :
+                        buf->lines[s].n + 1;
+                }
+                if (start < frame->scroll.col) {
+                    start = frame->scroll.col;
+                }
+                if (end <= start) {
+                    continue;
+                }
+                mvchgat(frame->y + s - frame->scroll.line,
+                        frame->x + x + start - frame->scroll.col,
+                        MIN((int) (end - start), w),
+                        get_attrib_of(HI_VISUAL), HI_VISUAL, NULL);
+                start = 0;
+            }
+        }
+        /* highlight matching parentheses */
         paren_i = get_paren(buf, &frame->cur);
         if (paren_i != SIZE_MAX) {
             match_i = get_matching_paren(buf, paren_i);
@@ -263,7 +250,7 @@ void render_frame(struct frame *frame)
      * 2. File position on the right
      */
     set_highlight(stdscr, HI_STATUS);
-    for (int i = orig_x; i < frame->w; i++) {
+    for (i = orig_x; i < frame->w; i++) {
         mvaddch(frame->y + frame->h - 1, frame->x + i, ' ');
     }
 

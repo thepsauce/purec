@@ -10,18 +10,6 @@
 #include <ncurses.h>
 #include <string.h>
 
-/// "outside parameter" for `conv_to_char()`
-static int ConvChar;
-
-/**
- * Returns `ConvChar`, used in the replace bind.
- */
-static int conv_to_char(int c)
-{
-    (void) c;
-    return ConvChar;
-}
-
 /**
  * Swaps given frames.
  *
