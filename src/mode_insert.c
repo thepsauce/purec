@@ -52,7 +52,6 @@ static void repeat_last_insertion(void)
         }
     }
 
-    /* TODO: re write this!! it crashes!! */
     /* combine the events (we only expect insertion and deletion events) */
     cur = buf->events[Core.ev_from_ins].pos;
     for (i = Core.ev_from_ins; i < buf->event_i; i++) {

@@ -54,7 +54,7 @@ static int get_first_char(void)
     Core.counter = 1;
     Core.user_reg = '.';
     while (c = get_ch(), (c == '0' && counter != 0) || (c >= '1' && c <= '9') ||
-            (c == '\"')) {
+                         c == '\"') {
         if (c == '\"') {
             if (counter != 0) {
                 Core.counter = counter;

@@ -815,7 +815,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         switch (motion_key) {
         /* ...the line at {counter} */
         case 'g':
-            Core.counter--;
+            Core.counter = MIN(Core.counter - 1, buf->num_lines - 1);
             if (new_cur.line == Core.counter) {
                 return 0;
             }

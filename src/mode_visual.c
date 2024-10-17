@@ -9,17 +9,18 @@
 
 int visual_handle_input(int c)
 {
-    struct buf *buf;
-    struct pos cur;
-    int next_mode = NORMAL_MODE;
-    struct selection sel;
-    struct undo_event *ev;
-    bool line_based;
-    struct raw_line *lines;
-    size_t num_lines;
+    struct buf          *buf;
+    struct pos          cur;
+    int                 next_mode = NORMAL_MODE;
+    struct selection    sel;
+    struct undo_event   *ev;
+    bool                line_based;
+    struct raw_line     *lines;
+    size_t              num_lines;
 
     buf = SelFrame->buf;
     switch (c) {
+    /* go back to normal mode */
     case '\x1b':
     case CONTROL('C'):
         set_mode(NORMAL_MODE);
@@ -90,6 +91,23 @@ int visual_handle_input(int c)
         }
         return 0;
 
+    /* replace all characters under the selection */
+    case 'r':
+        ConvChar = get_ch();
+        if (!isprint(ConvChar)) {
+            return 0;
+        }
+        get_selection(&sel);
+        if (sel.is_block) {
+            (void) change_block(buf, &sel.beg, &sel.end, conv_to_char);
+        } else {
+            sel.end.col++;
+            (void) change_range(buf, &sel.beg, &sel.end, conv_to_char);
+        }
+        set_mode(NORMAL_MODE);
+        return UPDATE_UI;
+
+    /* copy selected text */
     case 'Y':
     case 'y':
         get_selection(&sel);
@@ -117,6 +135,7 @@ int visual_handle_input(int c)
         set_mode(NORMAL_MODE);
         return UPDATE_UI;
 
+    /* convert selection to upper or lower case */
     case 'U':
     case 'u':
         get_selection(&sel);
@@ -134,6 +153,7 @@ int visual_handle_input(int c)
         }
         return UPDATE_UI;
 
+    /* jump to the corners of the selection */
     case 'O':
     case 'o':
         if (Core.mode == VISUAL_BLOCK_MODE && c == 'O') {
@@ -148,24 +168,29 @@ int visual_handle_input(int c)
         Core.pos = cur;
         return UPDATE_UI;
 
+    /* enter the command with the selected area */
     case ':':
         read_command_line(":'<,'>");
         return UPDATE_UI;
 
+    /* enter visual mode or exit it */
     case 'v':
         set_mode(Core.mode == VISUAL_MODE ? NORMAL_MODE : VISUAL_MODE);
         return UPDATE_UI;
 
+    /* enter visual line mode or exit it */
     case 'V':
         set_mode(Core.mode == VISUAL_LINE_MODE ? NORMAL_MODE :
                 VISUAL_LINE_MODE);
         return UPDATE_UI;
 
+    /* enter visual block mode or exit it */
     case CONTROL('V'):
         set_mode(Core.mode == VISUAL_BLOCK_MODE ? NORMAL_MODE :
                 VISUAL_BLOCK_MODE);
         return UPDATE_UI;
 
+    /* go to insert mode */
     case 'A':
     case 'I':
         get_selection(&sel);
@@ -188,6 +213,7 @@ int visual_handle_input(int c)
         }
         return UPDATE_UI;
 
+    /* indent all selected lines */
     case '=':
     case '<':
     case '>':
