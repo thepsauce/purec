@@ -47,8 +47,8 @@ void save_session(FILE *fp)
     fprintf(fp, "%s%ld %zu selected\n", SESSION_HEADER, time(NULL), sel_i);
 
     for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
-        fprintf(fp, "B%zu %c%s%c %zu,%zu %zu,%zu %zu\n",
-                buf->id, '\0', buf->path == NULL ? "" : buf->path, '\0',
+        fprintf(fp, "B%zu %c%s%c "PRCOL","PRLINE" "PRCOL","PRLINE" %zu\n",
+                buf->id, '\0', buf->path == NULL ? "" : (char*) buf->path, '\0',
                 buf->save_cur.col, buf->save_cur.line,
                 buf->save_scroll.col, buf->save_scroll.line,
                 buf->lang);
@@ -56,7 +56,7 @@ void save_session(FILE *fp)
 
     fputc('\n', fp);
     for (frame = FirstFrame; frame != NULL; frame = frame->next) {
-        fprintf(fp, "F%zu %d:%d;%dx%d %zu,%zu %zu,%zu\n",
+        fprintf(fp, "F%zu %d:%d;%dx%d "PRCOL","PRLINE" "PRCOL","PRLINE"\n",
                 frame->buf->id, frame->x, frame->y, frame->w, frame->h,
                 frame->cur.col, frame->cur.line,
                 frame->scroll.col, frame->scroll.line);
@@ -64,7 +64,7 @@ void save_session(FILE *fp)
 
     fprintf(fp, "%d\n", Core.tab_size);
     for (i = 0; i <= MARK_MAX - MARK_MIN; i++) {
-        fprintf(fp, "%zu %zu,%zu\n",
+        fprintf(fp, "%zu "PRLINE","PRCOL"\n",
                 Core.marks[i].buf == NULL ? 0 : Core.marks[i].buf->id,
                 Core.marks[i].pos.line,
                 Core.marks[i].pos.col);
@@ -173,12 +173,48 @@ static int load_number_d(FILE *fp, int *p_num)
     return 0;
 }
 
+static int load_number_ld(FILE *fp, long *p_num)
+{
+    int             sign;
+    long            num;
+    int             c;
+
+    do {
+        c = fgetc(fp);
+    } while (is_blank_ext(c));
+
+    if (c == '+' || c == '-') {
+        sign = c == '+' ? 1 : -1;
+        c = fgetc(fp);
+    } else {
+        sign = 1;
+    }
+
+    if (!isdigit(c)) {
+        if (c == '\n') {
+            ungetc(c, fp);
+        }
+        return -1;
+    }
+
+    num = 0;
+    do {
+        num *= 10;
+        num += c - '0';
+    } while (c = fgetc(fp), isdigit(c));
+
+    ungetc(c, fp);
+
+    *p_num = sign * num;
+    return 0;
+}
+
 static char *load_string(FILE *fp)
 {
-    int c;
-    char *s;
-    size_t a, n;
-    char *r;
+    int             c;
+    char            *s;
+    size_t          a, n;
+    char            *r;
 
     do {
         c = fgetc(fp);
@@ -230,10 +266,10 @@ static struct buf *load_buffer(FILE *fp)
             buf->path = NULL;
         }
         /* this just makes sure we stop after a failed call */
-        (void) (load_number_zu(fp, &buf->save_cur.col) != 0 ||
-                load_number_zu(fp, &buf->save_cur.line) != 0 ||
-                load_number_zu(fp, &buf->save_scroll.col) != 0 ||
-                load_number_zu(fp, &buf->save_scroll.line) != 0 ||
+        (void) (load_number_d(fp, &buf->save_cur.col) != 0 ||
+                load_number_ld(fp, &buf->save_cur.line) != 0 ||
+                load_number_d(fp, &buf->save_scroll.col) != 0 ||
+                load_number_ld(fp, &buf->save_scroll.line) != 0 ||
                 load_number_zu(fp, &buf->lang) != 0);
     }
 
@@ -254,10 +290,10 @@ static struct frame *load_frame(FILE *fp)
             load_number_d(fp, &frame->y) != 0 ||
             load_number_d(fp, &frame->w) != 0 ||
             load_number_d(fp, &frame->h) != 0 ||
-            load_number_zu(fp, &frame->cur.col) != 0 ||
-            load_number_zu(fp, &frame->cur.line) != 0 ||
-            load_number_zu(fp, &frame->scroll.col) != 0 ||
-            load_number_zu(fp, &frame->scroll.line) != 0);
+            load_number_d(fp, &frame->cur.col) != 0 ||
+            load_number_ld(fp, &frame->cur.line) != 0 ||
+            load_number_d(fp, &frame->scroll.col) != 0 ||
+            load_number_ld(fp, &frame->scroll.line) != 0);
 
     if (frame->w <= 0) {
         frame->w = 1;
@@ -357,8 +393,8 @@ int load_session(FILE *fp)
             break;
         }
         Core.marks[i].buf = get_buffer(buf_id);
-        load_number_zu(fp, &Core.marks[i].pos.col);
-        load_number_zu(fp, &Core.marks[i].pos.line);
+        load_number_d(fp, &Core.marks[i].pos.col);
+        load_number_ld(fp, &Core.marks[i].pos.line);
     }
     return 0;
 }
@@ -368,6 +404,7 @@ struct fuzzy SessionSelect;
 static void update_files(void)
 {
     DIR             *dir;
+    line_t          i;
     struct dirent   *ent;
 
     dir = opendir(Core.session_dir);
@@ -375,7 +412,7 @@ static void update_files(void)
         return;
     }
 
-    for (size_t i = 0; i < SessionSelect.num_entries; i++) {
+    for (i = 0; i < SessionSelect.num_entries; i++) {
         free(SessionSelect.entries[i].name);
     }
     SessionSelect.num_entries = 0;
@@ -426,7 +463,7 @@ void choose_session(void)
     FILE            *fp;
     char            *last_session;
     char            *path;
-    size_t          last_entry;
+    line_t          last_entry;
 
     set_input_text(&SessionSelect.inp, "", 0);
     last_session = save_current_session();
@@ -438,7 +475,7 @@ void choose_session(void)
         default:
             last_entry = SessionSelect.selected;
             switch (send_to_fuzzy(&SessionSelect, c)) {
-            case -1:
+            case INP_CANCELLED:
                 /* revert to the last loaded session */
                 path = xasprintf("%s/%s", Core.session_dir, last_session);
                 free(last_session);
@@ -452,13 +489,10 @@ void choose_session(void)
                 fclose(fp);
                 return;
 
-            case 0:
+            case INP_FINISHED:
                 /* keep the currently loaded session */
                 free(last_session);
                 return;
-
-            case 1:
-                break;
             }
             if (last_entry != SessionSelect.selected) {
                 path = xasprintf("%s/%s", Core.session_dir,

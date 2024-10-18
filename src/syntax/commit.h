@@ -1,7 +1,7 @@
 #define COMMIT_STATE_SECOND 2
 #define COMMIT_STATE_REST   3
 
-size_t commit_state_start(struct state_ctx *ctx)
+col_t commit_state_start(struct state_ctx *ctx)
 {
     switch (ctx->pos.line) {
     case 0:
@@ -27,7 +27,7 @@ size_t commit_state_start(struct state_ctx *ctx)
     return 50;
 }
 
-size_t commit_state_second(struct state_ctx *ctx)
+col_t commit_state_second(struct state_ctx *ctx)
 {
     if (ctx->s[0] == '#') {
         ctx->state = COMMIT_STATE_REST;
@@ -37,9 +37,9 @@ size_t commit_state_second(struct state_ctx *ctx)
     return ctx->n;
 }
 
-size_t commit_state_rest(struct state_ctx *ctx)
+col_t commit_state_rest(struct state_ctx *ctx)
 {
-    size_t n;
+    col_t           n;
 
     for (n = 0; n < ctx->n; n++) {
         if (!isblank(ctx->s[n])) {

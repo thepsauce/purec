@@ -89,14 +89,15 @@ static bool find_string_in_list(const char *s_list, const char *s, size_t s_len)
 size_t detect_language(struct buf *buf)
 {
     static const char   *commit_detect = "# Please enter the commit message";
-    size_t              i, j;
+    line_t              i;
+    col_t               j;
     size_t              len;
     int                 l;
     char                *name;
 
     if (buf->num_lines > 4) {
         if (buf->lines[0].n == 0) {
-            if (buf->lines[1].n > strlen(commit_detect) &&
+            if (buf->lines[1].n > (col_t) strlen(commit_detect) &&
                     memcmp(buf->lines[1].s, commit_detect,
                            strlen(commit_detect)) == 0) {
                 return COMMIT_LANG;
@@ -197,7 +198,7 @@ beg:
 
 void destroy_buffer(struct buf *buf)
 {
-    size_t          i;
+    line_t          i;
     struct buf      *prev;
 
     free(buf->path);
@@ -311,18 +312,15 @@ size_t get_buffer_count(void)
 
 void set_language(struct buf *buf, size_t lang)
 {
-    size_t          i;
+    line_t          i;
 
-    if (buf->lang == lang) {
-        return;
-    }
     buf->lang = lang;
     for (i = 0; i < buf->num_lines; i++) {
         rehighlight_line(buf, i);
     }
 }
 
-size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp)
+size_t write_file(struct buf *buf, line_t from, line_t to, FILE *fp)
 {
     struct line     *line;
     size_t          num_bytes = 0;
@@ -350,8 +348,8 @@ size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp)
 struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
 {
     struct raw_line *lines = NULL;
-    size_t          a_lines = 0;
-    size_t          num_lines = 0;
+    line_t          a_lines = 0;
+    line_t          num_lines = 0;
     char            *s_line = NULL;
     size_t          a_line = 0;
     ssize_t         line_len;
@@ -378,9 +376,9 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
     return insert_lines(buf, pos, lines, num_lines, 1);
 }
 
-size_t get_line_indent(struct buf *buf, size_t line_i)
+size_t get_line_indent(struct buf *buf, line_t line_i)
 {
-    size_t          col = 0;
+    col_t           col = 0;
     struct          line *line;
 
     line = &buf->lines[line_i];
@@ -391,12 +389,12 @@ size_t get_line_indent(struct buf *buf, size_t line_i)
 }
 
 struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
-        const struct raw_line *c_lines, size_t c_num_lines, size_t repeat)
+        const struct raw_line *c_lines, line_t c_num_lines, line_t repeat)
 {
     struct raw_line *lines, *line;
-    size_t          num_lines;
-    size_t          r;
-    size_t          i;
+    line_t          num_lines;
+    line_t          r;
+    line_t          i;
 
     if (c_num_lines == 0 || repeat == 0) {
         return NULL;
@@ -439,12 +437,12 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
 }
 
 void _insert_lines(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, size_t num_lines)
+        const struct raw_line *lines, line_t num_lines)
 {
     const struct raw_line   *raw_line;
     struct line             *line, *at_line;
-    size_t                  i;
-    size_t                  old_n;
+    line_t                  i;
+    col_t                   old_n;
     bool                    r;
 
     if (num_lines == 1) {
@@ -499,11 +497,11 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
 }
 
 struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
-        const struct raw_line *c_lines, size_t c_num_lines, size_t repeat)
+        const struct raw_line *c_lines, line_t c_num_lines, line_t repeat)
 {
     struct raw_line *lines, *line;
-    size_t          num_lines;
-    size_t          i, r;
+    line_t          num_lines;
+    line_t          i, r;
 
     /* duplicate and repeat the lines */
     num_lines = 1 + (c_num_lines - 1) * repeat;
@@ -524,12 +522,12 @@ struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
 }
 
 void _insert_block(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, size_t num_lines)
+        const struct raw_line *lines, line_t num_lines)
 {
-    size_t                  i;
+    line_t                  i;
     const struct raw_line   *rl;
     struct line             *line;
-    size_t                  col;
+    line_t                  col;
     bool                    r;
 
     r = false;
@@ -560,8 +558,8 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
 {
     struct line     *line, *at_line;
     struct raw_line *lines;
-    size_t          indent;
-    size_t          i;
+    col_t           indent;
+    line_t          i;
     size_t          ev_i;
     struct pos      p;
 
@@ -620,7 +618,7 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
  *
  * @return The index of the parenthesis.
  */
-static size_t get_paren_line(const struct buf *buf, size_t line_i)
+static size_t get_paren_line(const struct buf *buf, line_t line_i)
 {
     size_t          l, m, r;
     struct paren    *p;
@@ -647,7 +645,7 @@ static size_t get_paren_line(const struct buf *buf, size_t line_i)
     return l;
 }
 
-size_t get_match_line(struct buf *buf, size_t line_i)
+size_t get_match_line(struct buf *buf, line_t line_i)
 {
     size_t          l, m, r;
     struct match    *match;
@@ -674,7 +672,7 @@ size_t get_match_line(struct buf *buf, size_t line_i)
     return l;
 }
 
-struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines)
+struct line *grow_lines(struct buf *buf, line_t line_i, line_t num_lines)
 {
     size_t          index;
 
@@ -705,9 +703,9 @@ struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines)
     return &buf->lines[line_i];
 }
 
-void remove_lines(struct buf *buf, size_t line_i, size_t num_lines)
+void remove_lines(struct buf *buf, line_t line_i, line_t num_lines)
 {
-    size_t          i;
+    line_t          i;
     size_t          index;
     size_t          end;
 
@@ -748,9 +746,9 @@ void remove_lines(struct buf *buf, size_t line_i, size_t num_lines)
 
 }
 
-struct undo_event *indent_line(struct buf *buf, size_t line_i)
+struct undo_event *indent_line(struct buf *buf, line_t line_i)
 {
-    size_t              cur_indent, new_indent;
+    col_t               cur_indent, new_indent;
     struct pos          pos, to;
     struct raw_line     line;
     struct undo_event   *ev;
@@ -776,11 +774,11 @@ struct undo_event *indent_line(struct buf *buf, size_t line_i)
 }
 
 struct raw_line *get_lines(struct buf *buf, const struct pos *from,
-        const struct pos *to, size_t *p_num_lines)
+        const struct pos *to, line_t *p_num_lines)
 {
     struct raw_line *lines;
-    size_t          num_lines;
-    size_t          i;
+    line_t          num_lines;
+    line_t          i;
 
     if (from->line != to->line) {
         num_lines = to->line - from->line + 1;
@@ -808,13 +806,13 @@ struct raw_line *get_lines(struct buf *buf, const struct pos *from,
 }
 
 struct raw_line *get_block(struct buf *buf, const struct pos *from,
-        const struct pos *to, size_t *p_num_lines)
+        const struct pos *to, line_t *p_num_lines)
 {
     struct raw_line *lines;
-    size_t          num_lines;
-    size_t          i;
+    line_t          num_lines;
+    line_t          i;
     struct line     *line;
-    size_t          to_col;
+    col_t           to_col;
 
     num_lines = to->line - from->line + 1;
     lines = xreallocarray(NULL, num_lines, sizeof(*lines));
@@ -842,7 +840,7 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
     struct pos          from, to;
     struct undo_event   *ev;
     struct raw_line     *lines;
-    size_t              num_lines;
+    line_t              num_lines;
 
     from = *pfrom;
     to = *pto;
@@ -884,7 +882,7 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *pfrom,
 void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto)
 {
     struct pos      from, to;
-    size_t          i;
+    line_t          i;
     struct line     *fl, *tl;
 
     from = *pfrom;
@@ -925,11 +923,11 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *pfrom,
 {
     struct pos          from, to;
     struct line         *line;
-    size_t              to_col;
+    col_t               to_col;
     struct undo_event   *ev;
     struct raw_line     *lines;
-    size_t              num_lines;
-    size_t              i;
+    line_t              num_lines;
+    line_t              i;
 
     from = *pfrom;
     to = *pto;
@@ -970,9 +968,9 @@ void _delete_block(struct buf *buf, const struct pos *from,
         const struct pos *to)
 {
     bool            r;
-    size_t          i;
+    line_t          i;
     struct line     *line;
-    size_t          to_col;
+    col_t           to_col;
 
     r = false;
     for (i = from->line; i <= to->line; i++) {
@@ -1006,7 +1004,7 @@ void _delete_block(struct buf *buf, const struct pos *from,
 
 struct undo_event *replace_lines(struct buf *buf, const struct pos *from,
                    const struct pos *to, const struct raw_line *lines,
-                   size_t num_lines)
+                   line_t num_lines)
 {
     struct undo_event   *ev;
     struct undo_event   *ev2;
@@ -1031,13 +1029,14 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
 {
     struct pos          from, to;
     struct line         *line;
-    size_t              to_col;
+    col_t               to_col;
     struct undo_event   *ev;
     struct pos          pos;
     struct raw_line     *lines;
     char                ch;
     bool                r;
-    size_t              i, j;
+    line_t              i;
+    col_t               j;
 
     from = *pfrom;
     to = *pto;
@@ -1089,10 +1088,11 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
 {
     struct pos      from, to;
     struct raw_line *lines;
-    size_t          num_lines;
+    line_t          num_lines;
     struct line     *line;
     char            ch;
-    size_t          i, j;
+    line_t          i;
+    col_t           j;
     bool            r;
 
     from = *pfrom;
@@ -1191,11 +1191,12 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
     return add_event(buf, IS_REPLACE, &from, lines, num_lines);
 }
 
-static struct match *search_line_pattern(struct buf *buf, size_t line_i,
+static struct match *search_line_pattern(struct buf *buf, line_t line_i,
                                          size_t *p_num_matches)
 {
     struct line     *line;
-    size_t          i, l;
+    col_t           i;
+    size_t          l;
     struct match    *matches;
     size_t          num_matches;
 
@@ -1220,7 +1221,7 @@ static struct match *search_line_pattern(struct buf *buf, size_t line_i,
     return matches;
 }
 
-static void fuse_matches(struct buf *buf, size_t line_i,
+static void fuse_matches(struct buf *buf, line_t line_i,
                          struct match *matches, size_t n)
 {
     size_t          match_i, end;
@@ -1248,7 +1249,8 @@ static void fuse_matches(struct buf *buf, size_t line_i,
 size_t search_pattern(struct buf *buf, const char *pat)
 {
     struct match    *matches;
-    size_t          i, n;
+    line_t          i;
+    size_t          n;
 
     free(buf->search_pat);
     buf->search_pat = xstrdup(pat);
@@ -1260,7 +1262,7 @@ size_t search_pattern(struct buf *buf, const char *pat)
         fuse_matches(buf, i, matches, n);
         free(matches);
     }
-    return n;
+    return buf->num_matches;
 }
 
 /**
@@ -1273,7 +1275,7 @@ size_t search_pattern(struct buf *buf, const char *pat)
 static void highlight_line(struct buf *buf, size_t line_i, unsigned state)
 {
     struct state_ctx    ctx;
-    size_t              n;
+    col_t               n;
     struct line         *line;
 
     line = &buf->lines[line_i];
@@ -1306,7 +1308,7 @@ static void highlight_line(struct buf *buf, size_t line_i, unsigned state)
     line->state = ctx.state & ~FSTATE_MULTI;
 }
 
-bool rehighlight_line(struct buf *buf, size_t line_i)
+bool rehighlight_line(struct buf *buf, line_t line_i)
 {
     struct          line *line;
     unsigned        state;
@@ -1399,7 +1401,7 @@ size_t get_paren(struct buf *buf, const struct pos *pos)
     return SIZE_MAX;
 }
 
-void clear_parens(struct buf *buf, size_t line_i)
+void clear_parens(struct buf *buf, line_t line_i)
 {
     size_t          first_i, index;
 

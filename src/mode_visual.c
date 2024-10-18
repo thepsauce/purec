@@ -16,7 +16,7 @@ int visual_handle_input(int c)
     struct undo_event   *ev;
     bool                line_based;
     struct raw_line     *lines;
-    size_t              num_lines;
+    line_t              num_lines;
 
     buf = SelFrame->buf;
     switch (c) {
@@ -44,10 +44,10 @@ int visual_handle_input(int c)
         if (sel.is_block) {
             line_based = false;
             if (c == 'D' || c == 'C') {
-                sel.end.col = SIZE_MAX;
+                sel.end.col = COL_MAX;
             } else if (c == 'X') {
                 sel.beg.col = 0;
-                sel.end.col = SIZE_MAX;
+                sel.end.col = COL_MAX;
             }
             ev = delete_block(buf, &sel.beg, &sel.end);
             if (c == 'C' || c == 'c') {

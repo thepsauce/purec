@@ -64,14 +64,14 @@ const char *make_else_preproc[] = {
     "if", "ifdef", "ifndef"
 };
 
-size_t make_indentor(struct buf *buf, size_t line_i)
+col_t make_indentor(struct buf *buf, line_t line_i)
 {
     (void) buf;
     (void) line_i;
     return 0;
 }
 
-static size_t check_variable(struct state_ctx *ctx)
+static col_t check_variable(struct state_ctx *ctx)
 {
     struct pos  pos;
 
@@ -94,9 +94,9 @@ static size_t check_variable(struct state_ctx *ctx)
     return 0;
 }
 
-size_t make_state_default(struct state_ctx *ctx)
+col_t make_state_default(struct state_ctx *ctx)
 {
-    size_t          n;
+    col_t          n;
 
     n = check_variable(ctx);
     if (n != 0) {
@@ -106,9 +106,9 @@ size_t make_state_default(struct state_ctx *ctx)
     return 1;
 }
 
-size_t make_state_start(struct state_ctx *ctx)
+col_t make_state_start(struct state_ctx *ctx)
 {
-    size_t          i, j;
+    col_t          i, j;
 
     i = ctx->pos.col;
     while (i < ctx->n && isblank(ctx->s[i])) {
@@ -162,9 +162,9 @@ size_t make_state_start(struct state_ctx *ctx)
     }
 }
 
-size_t make_state_variable(struct state_ctx *ctx)
+col_t make_state_variable(struct state_ctx *ctx)
 {
-    size_t n;
+    col_t           n;
 
     n = check_variable(ctx);
     if (n != 0) {
@@ -182,9 +182,9 @@ size_t make_state_variable(struct state_ctx *ctx)
     return 1;
 }
 
-size_t make_state_variable_begin(struct state_ctx *ctx)
+col_t make_state_variable_begin(struct state_ctx *ctx)
 {
-    size_t          i;
+    col_t          i;
 
     ctx->hi = HI_IDENTIFIER;
     i = ctx->pos.col;

@@ -40,7 +40,8 @@
 #define HI_PAREN_MATCH  23
 #define HI_SEARCH       24
 #define HI_VISUAL       25
-#define HI_MAX          26
+#define HI_TODO         26
+#define HI_MAX          27
 
 extern const char *HiNames[HI_MAX];
 

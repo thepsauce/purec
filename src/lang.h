@@ -30,7 +30,7 @@ struct state_ctx {
     /// the current line
     char *s;
     /// the length of the current line
-    size_t n;
+    col_t n;
 };
 
 /**
@@ -38,12 +38,12 @@ struct state_ctx {
  *
  * It may modify `ctx->hi` to set the highlight for the consumed characters.
  */
-typedef size_t (*state_proc_t)(struct state_ctx *ctx);
+typedef col_t (*state_proc_t)(struct state_ctx *ctx);
 
 /**
  * An indentor for a language computes the indentation given line would need.
  */
-typedef size_t (*indentor_t)(struct buf *buf, size_t line_i);
+typedef col_t (*indentor_t)(struct buf *buf, line_t line_i);
 
 /**
  * Defined in "render_frame.c".

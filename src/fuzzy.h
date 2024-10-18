@@ -9,14 +9,14 @@
 extern struct fuzzy {
     int x, y, w, h;
     struct pos scroll;
-    size_t selected;
+    line_t selected;
     struct entry {
         int type;
         int score;
         char *name;
     } *entries;
-    size_t num_entries;
-    size_t a_entries;
+    line_t num_entries;
+    line_t a_entries;
     struct input inp;
 } Fuzzy;
 

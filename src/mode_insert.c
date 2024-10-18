@@ -14,9 +14,10 @@
  */
 static void attempt_join(void)
 {
+    size_t              i;
     struct undo_event   *prev_ev, *ev;
 
-    for (size_t i = Core.ev_from_ins + 1; i < SelFrame->buf->event_i; i++) {
+    for (i = Core.ev_from_ins + 1; i < SelFrame->buf->event_i; i++) {
         prev_ev = &SelFrame->buf->events[i - 1];
         ev = &SelFrame->buf->events[i];
         if (should_join(prev_ev, ev)) {
@@ -28,13 +29,14 @@ static void attempt_join(void)
 static void repeat_last_insertion(void)
 {
     struct buf          *buf;
-    size_t              i, j;
+    size_t              e;
+    line_t              i;
     struct undo_event   *ev;
     struct pos          cur;
     struct raw_line     *lines = NULL, *line;
-    size_t              num_lines = 0;
+    line_t              num_lines = 0;
     struct undo_seg     *seg;
-    size_t              orig_col;
+    col_t               orig_col;
     size_t              repeat;
 
     buf = SelFrame->buf;
@@ -45,8 +47,8 @@ static void repeat_last_insertion(void)
     }
 
     /* check if there is only a SINGLE transient chain */
-    for (i = Core.ev_from_ins + 1; i < buf->event_i; i++) {
-        ev = &buf->events[i - 1];
+    for (e = Core.ev_from_ins + 1; e < buf->event_i; e++) {
+        ev = &buf->events[e - 1];
         if (!(ev->flags & IS_TRANSIENT)) {
             return;
         }
@@ -54,8 +56,8 @@ static void repeat_last_insertion(void)
 
     /* combine the events (we only expect insertion and deletion events) */
     cur = buf->events[Core.ev_from_ins].pos;
-    for (i = Core.ev_from_ins; i < buf->event_i; i++) {
-        ev = &buf->events[i];
+    for (e = Core.ev_from_ins; e < buf->event_i; e++) {
+        ev = &buf->events[e];
         seg = ev->seg;
         load_undo_data(seg);
         if ((ev->flags & IS_INSERTION)) {
@@ -63,9 +65,9 @@ static void repeat_last_insertion(void)
             if (num_lines == 0) {
                 lines = xreallocarray(NULL, seg->num_lines, sizeof(*lines));
                 num_lines = seg->num_lines;
-                for (j = 0; j < num_lines; j++) {
-                    init_raw_line(&lines[j], seg->lines[j].s,
-                            seg->lines[j].n);
+                for (i = 0; i < num_lines; i++) {
+                    init_raw_line(&lines[i], seg->lines[i].s,
+                            seg->lines[i].n);
                 }
                 unload_undo_data(seg);
                 continue;
@@ -83,7 +85,7 @@ static void repeat_last_insertion(void)
 
                 memmove(&lines[seg->num_lines - 1], &lines[0],
                         sizeof(*lines) * num_lines);
-                for (j = 1; j < seg->num_lines; j++) {
+                for (i = 1; i < seg->num_lines; i++) {
                     init_raw_line(&lines[i - 1], seg->lines[i].s,
                             seg->lines[i].n);
                 }
@@ -95,9 +97,9 @@ static void repeat_last_insertion(void)
                         seg->lines[0].n);
                 line->n += seg->lines[0].n;
 
-                for (j = 0; j < seg->num_lines - 1; j++) {
+                for (i = 0; i < seg->num_lines - 1; i++) {
                     line++;
-                    init_raw_line(line, seg->lines[j].s, seg->lines[j].n);
+                    init_raw_line(line, seg->lines[i].s, seg->lines[i].n);
                 }
             }
             num_lines += seg->num_lines - 1;
@@ -176,7 +178,7 @@ int insert_handle_input(int c)
     struct raw_line     lines[2];
     struct line         *line;
     size_t              amount;
-    size_t              i;
+    col_t               i;
 
     buf = SelFrame->buf;
     ch = c;
@@ -273,7 +275,7 @@ int insert_handle_input(int c)
         return UPDATE_UI;
     }
 
-    if (c >= ' ' && c < 0x7f) {
+    if (c >= ' ') {
         lines[0].s = &ch;
         lines[0].n = 1;
         (void) insert_lines(buf, &SelFrame->cur, lines, 1, 1);

@@ -19,7 +19,7 @@
 
 struct cmd_data {
     char *arg;
-    size_t from, to;
+    line_t from, to;
     bool has_number, has_range;
     bool force;
 };
@@ -210,7 +210,7 @@ static const struct cmd *get_command(const char *s, size_t s_m)
     return NULL;
 }
 
-static bool read_number(char *s, char **p_s, size_t *p_n)
+static bool read_number(char *s, char **p_s, line_t *p_n)
 {
     struct mark *mark;
 
@@ -240,7 +240,7 @@ int run_command(char *s_cmd)
     struct cmd_data     data;
     FILE                *pp;
     struct buf          *buf;
-    size_t              i;
+    line_t              i;
 
     s_cmd += strspn(s_cmd, " \t");
     if (s_cmd[0] == '\0') {
@@ -250,7 +250,7 @@ int run_command(char *s_cmd)
     if (s_cmd[0] == '%') {
         data.has_range = true;
         data.from = 0;
-        data.to = SIZE_MAX;
+        data.to = LINE_MAX;
         s_cmd++;
     } else {
         r = read_number(s_cmd, &s_cmd, &data.from);
@@ -271,7 +271,7 @@ int run_command(char *s_cmd)
                 return -1;
             }
             if (r != 0) {
-                data.to = SIZE_MAX;
+                data.to = LINE_MAX;
             }
         } else {
             data.has_range = false;
@@ -325,7 +325,7 @@ int run_command(char *s_cmd)
         if (!data.has_range) {
             if (!data.has_number) {
                 data.from = 0;
-                data.to = SIZE_MAX;
+                data.to = LINE_MAX;
             } else {
                 data.to = data.from;
             }
@@ -542,13 +542,16 @@ void read_command_line(const char *beg)
     static char **history = NULL;
     static size_t num_history = 0;
 
-    int c;
-    char *s;
+    int             c;
+    struct pos      cur, scroll;
+    int             r;
 
     Core.msg_state = MSG_TO_DEFAULT;
 
     set_input_text(&Cmd, beg, 1);
     set_input_history(&Cmd, history, num_history);
+    cur = SelFrame->cur;
+    scroll = SelFrame->scroll;
     do {
         Cmd.x = 0;
         Cmd.y = LINES - 1;
@@ -558,7 +561,7 @@ void read_command_line(const char *beg)
         c = get_ch();
         if (c == '\t' || c == KEY_BTAB) {
             tab_complete(c == '\t' ? 1 : -1);
-            s = NULL;
+            r = INP_CHANGED;
         } else {
             if (Tab.type == TAB_PATH) {
                 globfree(&Tab.g);
@@ -566,32 +569,43 @@ void read_command_line(const char *beg)
             free(Tab.pat);
             Tab.pat = NULL;
             Tab.type = 0;
-            s = send_to_input(&Cmd, c);
+            r = send_to_input(&Cmd, c);
+            if (r == INP_CHANGED && (beg[0] == '/' || beg[0] == '?')) {
+                /* get live results */
+                terminate_input(&Cmd);
+                (void) search_pattern(SelFrame->buf, &Cmd.s[Cmd.prefix]);
+                SelFrame->cur = cur;
+                SelFrame->scroll = scroll;
+                Core.counter = 1;
+                if (beg[0] == '?') {
+                    Core.search_dir = -1;
+                } else {
+                    Core.search_dir = 1;
+                }
+                (void) do_motion(SelFrame, 'n');
+                render_all();
+            }
         }
-    } while (s == NULL);
+    } while (r > INP_FINISHED);
 
-    if (s[0] == '\n') {
+    SelFrame->cur = cur;
+    SelFrame->scroll = scroll;
+
+    if (r == INP_CANCELLED || Cmd.n == Cmd.prefix) {
         return;
     }
 
     history = xreallocarray(history, num_history + 1, sizeof(*history));
-    history[num_history++] = xstrdup(&s[-Cmd.prefix]);
+    history[num_history++] = xstrdup(Cmd.s);
 
     switch (beg[0]) {
     case '/':
     case '?':
-        (void) search_pattern(SelFrame->buf, s);
-        Core.counter = 1;
-        (void) do_motion(SelFrame, beg[0] == '/' ? 'n' : 'N');
-        if (beg[0] == '?') {
-            Core.search_dir = -1;
-        } else {
-            Core.search_dir = 1;
-        }
+        (void) do_motion(SelFrame, 'n');
         break;
 
     case ':':
-        run_command(s);
+        run_command(&Cmd.s[Cmd.prefix]);
         break;
     }
 }

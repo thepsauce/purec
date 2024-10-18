@@ -75,14 +75,14 @@ const char *c_preproc[] = {
     "warning",
 };
 
-size_t c_indentor(struct buf *buf, size_t line_i)
+col_t c_indentor(struct buf *buf, line_t line_i)
 {
     struct pos      p;
     size_t          index;
-    size_t          c;
+    col_t           c;
     struct paren    *par;
     struct line     *line;
-    size_t          i;
+    col_t           i;
 
     if (line_i == 0) {
         return 0;
@@ -128,7 +128,7 @@ size_t c_indentor(struct buf *buf, size_t line_i)
     line = &buf->lines[line_i];
     for (i = 0; i < line->n; i++) {
         if (line->attribs[i] == HI_OPERATOR) {
-            if (line->s[i] == ':') {
+            if (i > 0 && line->s[i - 1] != ' ' && line->s[i] == ':') {
                 return get_line_indent(buf, par->pos.line);
             }
         }
@@ -142,10 +142,10 @@ size_t c_indentor(struct buf *buf, size_t line_i)
     return Core.tab_size * c + get_line_indent(buf, par->pos.line);
 }
 
-static size_t c_get_identf(struct state_ctx *ctx)
+static col_t c_get_identf(struct state_ctx *ctx)
 {
     char ch;
-    size_t n;
+    col_t n;
 
     ch = ctx->s[ctx->pos.col];
     if (isalpha(ch) || ch == '_') {
@@ -177,9 +177,9 @@ static size_t c_get_identf(struct state_ctx *ctx)
     return n;
 }
 
-static size_t c_get_number(struct state_ctx *ctx)
+static col_t c_get_number(struct state_ctx *ctx)
 {
-    size_t n = 0;
+    col_t n = 0;
 
     if (isdigit(ctx->s[ctx->pos.col]) || (ctx->pos.col + 1 != ctx->n &&
                 ctx->s[ctx->pos.col] == '.' &&
@@ -199,9 +199,9 @@ static size_t c_get_number(struct state_ctx *ctx)
     return n;
 }
 
-static size_t c_read_escapist(struct state_ctx *ctx, size_t i)
+static col_t c_read_escapist(struct state_ctx *ctx, col_t i)
 {
-    size_t hex_l;
+    col_t hex_l;
 
     switch (ctx->s[ctx->pos.col + i]) {
     case 'a':
@@ -244,10 +244,10 @@ static size_t c_read_escapist(struct state_ctx *ctx, size_t i)
     return i;
 }
 
-static size_t c_get_char(struct state_ctx *ctx)
+static col_t c_get_char(struct state_ctx *ctx)
 {
-    size_t n;
-    size_t e;
+    col_t n;
+    col_t e;
 
     if (ctx->s[ctx->pos.col] != '\'') {
         return 0;
@@ -284,7 +284,7 @@ static size_t c_get_char(struct state_ctx *ctx)
     return n + 1;
 }
 
-static inline void check_paren(struct state_ctx *ctx, size_t i, int flags)
+static inline void check_paren(struct state_ctx *ctx, col_t i, int flags)
 {
     struct pos pos;
 
@@ -308,9 +308,9 @@ static inline void check_paren(struct state_ctx *ctx, size_t i, int flags)
     }
 }
 
-size_t c_state_string(struct state_ctx *ctx)
+col_t c_state_string(struct state_ctx *ctx)
 {
-    size_t n;
+    col_t n;
 
     ctx->hi = HI_STRING;
     for (n = 0; ctx->pos.col + n < ctx->n; n++) {
@@ -345,7 +345,7 @@ size_t c_state_string(struct state_ctx *ctx)
     return n;
 }
 
-size_t c_state_include(struct state_ctx *ctx)
+col_t c_state_include(struct state_ctx *ctx)
 {
     switch (ctx->s[ctx->pos.col]) {
     case '\t':
@@ -369,9 +369,9 @@ size_t c_state_include(struct state_ctx *ctx)
     }
 }
 
-size_t c_state_include_corner(struct state_ctx *ctx)
+col_t c_state_include_corner(struct state_ctx *ctx)
 {
-    size_t n;
+    col_t n;
 
     ctx->hi = HI_STRING;
     for (n = 0; ctx->pos.col + n < ctx->n; n++) {
@@ -395,9 +395,9 @@ size_t c_state_include_corner(struct state_ctx *ctx)
     return n;
 }
 
-size_t c_state_include_string(struct state_ctx *ctx)
+col_t c_state_include_string(struct state_ctx *ctx)
 {
-    size_t n;
+    col_t n;
 
     ctx->hi = HI_STRING;
     for (n = 0; ctx->pos.col + n < ctx->n; n++) {
@@ -421,15 +421,15 @@ size_t c_state_include_string(struct state_ctx *ctx)
     return n;
 }
 
-size_t c_state_preproc_trail(struct state_ctx *ctx)
+col_t c_state_preproc_trail(struct state_ctx *ctx)
 {
     ctx->hi = HI_ERROR;
     return ctx->n - ctx->pos.col;
 }
 
-size_t c_state_common(struct state_ctx *ctx)
+col_t c_state_common(struct state_ctx *ctx)
 {
-    size_t len;
+    col_t len;
 
     len = c_get_identf(ctx);
     if (len > 0) {
@@ -504,7 +504,7 @@ size_t c_state_common(struct state_ctx *ctx)
     return 1;
 }
 
-size_t c_state_preproc(struct state_ctx *ctx)
+col_t c_state_preproc(struct state_ctx *ctx)
 {
     if (ctx->pos.col + 1 == ctx->n && ctx->s[ctx->pos.col] == '\\') {
         ctx->hi = HI_PREPROC;
@@ -515,10 +515,10 @@ size_t c_state_preproc(struct state_ctx *ctx)
     return c_state_common(ctx);
 }
 
-size_t c_state_start(struct state_ctx *ctx)
+col_t c_state_start(struct state_ctx *ctx)
 {
-    size_t i;
-    size_t w_i;
+    col_t i;
+    col_t w_i;
 
     if (ctx->s[ctx->pos.col] == '#') {
         /* skip all space after '#' */
@@ -554,7 +554,7 @@ size_t c_state_start(struct state_ctx *ctx)
     return c_state_common(ctx);
 }
 
-size_t c_state_comment(struct state_ctx *ctx)
+col_t c_state_comment(struct state_ctx *ctx)
 {
     if (ctx->s[ctx->n - 1] == '\\') {
         ctx->state |= FSTATE_MULTI;
@@ -563,12 +563,36 @@ size_t c_state_comment(struct state_ctx *ctx)
     return ctx->n - ctx->pos.col;
 }
 
-size_t c_state_multi_comment(struct state_ctx *ctx)
+col_t c_state_multi_comment(struct state_ctx *ctx)
 {
-    size_t i;
+    col_t i;
 
     ctx->hi = HI_COMMENT;
     switch (ctx->s[ctx->pos.col]) {
+    case 'F':
+        if (ctx->pos.col + 5 < ctx->n &&
+                memcmp(&ctx->s[ctx->pos.col + 1], "IXME:", 5) == 0) {
+            ctx->hi = HI_TODO;
+            return 6;
+        }
+        break;
+
+    case 'T':
+        if (ctx->pos.col + 4 < ctx->n &&
+                memcmp(&ctx->s[ctx->pos.col + 1], "ODO:", 4) == 0) {
+            ctx->hi = HI_TODO;
+            return 5;
+        }
+        break;
+
+    case 'X':
+        if (ctx->pos.col + 3 < ctx->n &&
+                memcmp(&ctx->s[ctx->pos.col + 1], "XX:", 3) == 0) {
+            ctx->hi = HI_TODO;
+            return 4;
+        }
+        break;
+
     case '/':
         if (ctx->pos.col == 0 || ctx->s[ctx->pos.col - 1] != '*') {
             break;

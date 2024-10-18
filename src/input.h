@@ -1,6 +1,8 @@
 #ifndef INPUT_H
 #define INPUT_H
 
+#include "util.h"
+
 #include <stdlib.h>
 
 /* ** ** ** * * ** * ** *
@@ -117,8 +119,14 @@ void insert_input_prefix(struct input *inp, const char *text, size_t index);
  */
 void terminate_input(struct input *inp);
 
+#define INP_CANCELLED   (-1)
+#define INP_FINISHED    0
+#define INP_CHANGED     1
+#define INP_CURSOR      2
+#define INP_NOTHING     3
+
 /**
- * Let the input box handle user input.
+ * Let an input box handle user input.
  *
  * If enter is pressed and there is input, the input is added to the given
  * history and a null terminator is added to the end for convenience.
@@ -126,10 +134,10 @@ void terminate_input(struct input *inp);
  * @param inp   The input to send the character to.
  * @param c     User input.
  *
- * @return An empty string if ESCAPE was pressed, the input if ENTER was pressed
- *         or NULL otherwise.
+ * @return The status of the input:
+ *         -1: Cancelled, 0: Finished, 1: Changed, 2: Nothing.
  */
-char *send_to_input(struct input *inp, int c);
+int send_to_input(struct input *inp, int c);
 
 /**
  * Renders the input at its defined position, considering scroll and placing the

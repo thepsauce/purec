@@ -33,19 +33,20 @@ static int compare_entries(const void *v_a, const void *v_b)
  */
 static void sort_entries(struct fuzzy *fuzzy)
 {
-    size_t s_i;
-    size_t pat_i;
-    int score;
-    int cons_score;
-    struct entry *entry;
-    struct glyph g_p, g_n;
+    line_t          i;
+    size_t          s_i;
+    size_t          pat_i;
+    int             score;
+    int             cons_score;
+    struct entry    *entry;
+    struct glyph    g_p, g_n;
 
     if (fuzzy->num_entries == 0) {
         fuzzy->selected = 0;
         return;
     }
 
-    for (size_t i = 0; i < fuzzy->num_entries; i++) {
+    for (i = 0; i < fuzzy->num_entries; i++) {
         entry = &fuzzy->entries[i];
         s_i = 0;
         score = 0;
@@ -90,17 +91,17 @@ static void sort_entries(struct fuzzy *fuzzy)
  */
 static void render_entries(struct fuzzy *fuzzy)
 {
-    size_t i, e;
-    struct entry *entry;
-    int x;
-    size_t s_i;
-    size_t pat_i;
-    struct glyph g_n, g_p;
-    bool broken;
+    line_t          i, e;
+    struct entry    *entry;
+    int             x;
+    size_t          s_i;
+    size_t          pat_i;
+    struct glyph    g_n, g_p;
+    bool            broken;
 
     set_highlight(stdscr, HI_FUZZY);
 
-    e = MIN(fuzzy->num_entries, (size_t) (fuzzy->scroll.line + fuzzy->h));
+    e = MIN(fuzzy->num_entries, fuzzy->scroll.line + fuzzy->h);
     for (i = fuzzy->scroll.line; i < e; i++) {
         move(fuzzy->y + 1 + i - fuzzy->scroll.line, fuzzy->x);
 
@@ -177,7 +178,7 @@ void render_fuzzy(struct fuzzy *fuzzy)
         fuzzy->scroll.line = fuzzy->selected - fuzzy->h + 1;
     }
 
-    if ((size_t) fuzzy->h >= fuzzy->num_entries) {
+    if ((line_t) fuzzy->h >= fuzzy->num_entries) {
         fuzzy->scroll.line = 0;
     }
 
@@ -187,9 +188,8 @@ void render_fuzzy(struct fuzzy *fuzzy)
 
 int send_to_fuzzy(struct fuzzy *fuzzy, int c)
 {
-    char *s;
+    int             r;
 
-    s = NULL;
     switch (c) {
     case KEY_HOME:
         fuzzy->selected = 0;
@@ -236,19 +236,18 @@ int send_to_fuzzy(struct fuzzy *fuzzy, int c)
 
     case '\n':
         if (fuzzy->num_entries == 0) {
-            return -1;
+            return INP_CANCELLED;
         }
-        return 0;
+        return INP_FINISHED;
 
     default:
-        s = send_to_input(&fuzzy->inp, c);
-        fuzzy->selected = 0;
-        if (s != NULL) {
-            if (s[0] == '\n') {
-                return -1;
-            }
-            return 0;
+        r = send_to_input(&fuzzy->inp, c);
+        if (r == INP_CHANGED) {
+            fuzzy->selected = 0;
+        }
+        if (r <= INP_FINISHED) {
+            return r;
         }
     }
-    return 1;
+    return INP_NOTHING;
 }

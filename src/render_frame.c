@@ -12,16 +12,16 @@ struct render_info {
     size_t lang;
 
     /// the origin of the line rendering
-    size_t x;
+    col_t x;
     /// the maximum width of the line rendering
-    size_t w;
+    col_t w;
     /// the line the cursor is on
     struct line *cur_line;
 
     /// the line to render
     struct line *line;
     /// the index of the line to render
-    size_t line_i;
+    line_t line_i;
 };
 
 static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
@@ -55,18 +55,18 @@ static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
 #include "syntax/commit.h"
 #include "syntax/make.h"
 
-size_t no_indentor(struct buf *buf, size_t line_i)
+col_t no_indentor(struct buf *buf, line_t line_i)
 {
     return get_line_indent(buf, line_i);
 }
 
 struct lang Langs[] = {
-    [NO_LANG] = { "none", none_lang_states, no_indentor, "\0" },
+    [NO_LANG] = { "None", none_lang_states, no_indentor, "\0" },
     [C_LANG] = { "C", c_lang_states, c_indentor,
                 "*.c\0*.h\0*.cpp\0*.cxx\0*.c++\0*.hpp\0*.hxx\0*.h++\0" },
-    [DIFF_LANG] = { "diff", diff_lang_states, no_indentor, "*.diff\0*.patch\0" },
-    [COMMIT_LANG] = { "\\i*commit*", commit_lang_states, no_indentor, "*.commit*\0" },
-    [MAKE_LANG] = { "make", make_lang_states, make_indentor,
+    [DIFF_LANG] = { "Diff", diff_lang_states, no_indentor, "*.diff\0*.patch\0" },
+    [COMMIT_LANG] = { "Commit", commit_lang_states, no_indentor, "\\i*.commit*\0" },
+    [MAKE_LANG] = { "Make", make_lang_states, make_indentor,
                    "makefile\0Makefile\0GNUmakefile\0" },
 };
 
@@ -77,29 +77,27 @@ struct lang Langs[] = {
  */
 static void render_line(struct render_info *ri)
 {
-    size_t x;
-    char ch;
-    int hi;
-    struct pos p;
+    col_t           x;
+    int             hi;
+    struct pos      p;
+    struct glyph    g;
+    bool            err;
 
     p.line = ri->line_i;
     for (p.col = 0, x = 0; p.col < ri->line->n && x < ri->w;) {
-        ch = ri->line->s[p.col];
+        err = get_glyph(&ri->line->s[p.col], ri->line->n - p.col, &g) == -1;
         if (x >= ri->x) {
             hi = ri->line->attribs[p.col];
-            if (ch < 32 || ch == 0x7f) {
-                if (x + 1 >= ri->w) {
-                    break;
-                }
+            if (err) {
                 attr_set(A_REVERSE, 0, NULL);
                 addch('?');
             } else {
                 set_highlight(stdscr, hi);
-                addch(ch);
+                addnstr(&ri->line->s[p.col], g.n);
             }
         }
-        p.col++;
-        x++;
+        p.col += g.n;
+        x += g.w;
     }
 }
 
@@ -112,8 +110,8 @@ static inline bool translate_pos(struct frame *frame, struct pos *pos,
 {
     if (pos->col >= frame->scroll.col &&
             pos->line >= frame->scroll.line &&
-            pos->col - frame->scroll.col < (size_t) w &&
-            pos->line - frame->scroll.line < (size_t) h) {
+            pos->col - frame->scroll.col < (col_t) w &&
+            pos->line - frame->scroll.line < (line_t) h) {
         *p_x = frame->x + x + pos->col - frame->scroll.col;
         *p_y = frame->y + y + pos->line - frame->scroll.line;
         return true;
@@ -126,15 +124,15 @@ void render_frame(struct frame *frame)
     struct buf          *buf;
     int                 perc;
     struct render_info  ri;
-    size_t              line;
+    line_t              line;
     int                 i, j;
-    size_t              s;
-    size_t              last_line;
+    line_t              l;
+    line_t              last_line;
     int                 x, y, w, h;
     int                 orig_x;
     struct match        *match;
     struct selection    sel;
-    size_t              start, end;
+    col_t               start, end;
     size_t              paren_i, match_i;
     struct pos          p;
     int                 p_x, p_y;
@@ -170,10 +168,10 @@ void render_frame(struct frame *frame)
 
     last_line = frame->scroll.line + frame->h - 1;
     last_line = MIN(last_line, buf->num_lines);
-    for (s = frame->scroll.line; s < last_line; s++) {
-        move(frame->y + s - frame->scroll.line, frame->x + x);
-        ri.line_i = s;
-        ri.line = &buf->lines[s];
+    for (l = frame->scroll.line; l < last_line; l++) {
+        move(frame->y + l - frame->scroll.line, frame->x + x);
+        ri.line_i = l;
+        ri.line = &buf->lines[l];
         render_line(&ri);
     }
 
@@ -196,15 +194,15 @@ void render_frame(struct frame *frame)
         /* render the selection if it exists */
         if (get_selection(&sel)) {
             start = sel.beg.col;
-            for (s = MAX(sel.beg.line, frame->scroll.line);
-                 s <= sel.end.line && s < last_line;
-                 s++) {
+            for (l = MAX(sel.beg.line, frame->scroll.line);
+                 l <= sel.end.line && l < last_line;
+                 l++) {
                 if (sel.is_block) {
                     start = sel.beg.col;
-                    end = MIN(sel.end.col, buf->lines[s].n);
+                    end = MIN(sel.end.col + 1, buf->lines[l].n);
                 } else {
-                    end = s == sel.end.line ? sel.end.col + 1 :
-                        buf->lines[s].n + 1;
+                    end = l == sel.end.line ? sel.end.col + 1 :
+                        buf->lines[l].n + 1;
                 }
                 if (start < frame->scroll.col) {
                     start = frame->scroll.col;
@@ -212,7 +210,7 @@ void render_frame(struct frame *frame)
                 if (end <= start) {
                     continue;
                 }
-                mvchgat(frame->y + s - frame->scroll.line,
+                mvchgat(frame->y + l - frame->scroll.line,
                         frame->x + x + start - frame->scroll.col,
                         MIN((int) (end - start), w),
                         get_attrib_of(HI_VISUAL), HI_VISUAL, NULL);
@@ -267,7 +265,7 @@ void render_frame(struct frame *frame)
             frame->y + frame->h - 1, frame->x + orig_x,
             frame->y + frame->h - 1, frame->x + orig_x + w - 1, 0);
 
-    mvwprintw(OffScreen, 0, 0, "%d%% ¶%zu/%zu☰℅%zu",
+    mvwprintw(OffScreen, 0, 0, "%d%% ¶"PRLINE"/"PRLINE"☰℅"PRCOL,
               perc, frame->cur.line + 1, buf->num_lines,
               frame->cur.col + 1);
     w = getcurx(OffScreen);
@@ -321,6 +319,6 @@ bool get_visual_cursor(const struct frame *frame, int *p_x, int *p_y)
 
     return frame->cur.col >= frame->scroll.col &&
             frame->cur.line >= frame->scroll.line &&
-            frame->cur.col - frame->scroll.col < (size_t) w &&
-            frame->cur.line - frame->scroll.line < (size_t) h;
+            frame->cur.col - frame->scroll.col < (col_t) w &&
+            frame->cur.line - frame->scroll.line < (line_t) h;
 }

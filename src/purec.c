@@ -137,7 +137,7 @@ void yank_data(struct undo_seg *seg, int flags)
     }
 }
 
-size_t get_mode_line_end(struct line *line)
+col_t get_mode_line_end(struct line *line)
 {
     if (Core.mode != NORMAL_MODE) {
         return line->n;
@@ -571,7 +571,7 @@ void render_all(void)
         Core.msg_state = MSG_DEFAULT;
     }
     copywin(Core.msg_win, stdscr, 0, 0, LINES - 1, 0, LINES - 1,
-            MIN(COLS - 1, getmaxx(Core.msg_win)), 0);
+            MIN(COLS - 1, getmaxx(Core.msg_win) - 1), 0);
 
     if (get_visual_cursor(SelFrame, &cur_x, &cur_y)) {
         move(cur_y, cur_x);

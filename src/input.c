@@ -59,8 +59,8 @@ void terminate_input(struct input *inp)
 
 static void move_over_utf8(struct input *inp, int dir)
 {
-    struct glyph g;
-    size_t i;
+    struct glyph    g;
+    size_t          i;
 
     if (dir > 0) {
         if (inp->index == inp->n) {
@@ -87,7 +87,7 @@ static void move_over_utf8(struct input *inp, int dir)
     }
 }
 
-char *send_to_input(struct input *inp, int c)
+int send_to_input(struct input *inp, int c)
 {
     char            *h;
     size_t          index;
@@ -95,26 +95,32 @@ char *send_to_input(struct input *inp, int c)
 
     switch (c) {
     case KEY_HOME:
+        if (inp->index == 0) {
+            break;
+        }
         inp->index = inp->prefix;
-        break;
+        return INP_CURSOR;
 
     case KEY_END:
+        if (inp->index == inp->n) {
+            break;
+        }
         inp->index = inp->n;
-        break;
+        return INP_CURSOR;
 
     case KEY_LEFT:
         if (inp->index == inp->prefix) {
             break;
         }
         move_over_utf8(inp, -1);
-        break;
+        return INP_CURSOR;
 
     case KEY_RIGHT:
         if (inp->index == inp->n) {
             break;
         }
         move_over_utf8(inp, 1);
-        break;
+        return INP_CURSOR;
 
     case KEY_UP:
         for (index = inp->history_index; index > 0; index--) {
@@ -137,7 +143,7 @@ char *send_to_input(struct input *inp, int c)
         inp->history_index = index - 1;
         inp->n = strlen(h);
         memcpy(inp->s, h, inp->n);
-        break;
+        return INP_CHANGED;
 
     case KEY_DOWN:
         for (index = inp->history_index + 1; index < inp->num_history; index++) {
@@ -158,7 +164,7 @@ char *send_to_input(struct input *inp, int c)
             inp->n = strlen(h);
             memcpy(inp->s, h, inp->n);
         }
-        break;
+        return INP_CHANGED;
 
     case KEY_BACKSPACE:
     case '\x7f':
@@ -171,7 +177,7 @@ char *send_to_input(struct input *inp, int c)
                 &inp->s[index],
                 inp->n - index);
         inp->n -= index - inp->index;
-        break;
+        return INP_CHANGED;
 
     case '\b': /* Shift/Control + Backspace or C-H */
         if (inp->index == inp->prefix) {
@@ -188,7 +194,7 @@ char *send_to_input(struct input *inp, int c)
                 &inp->s[index],
                 inp->n - index);
         inp->n -= index - inp->index;
-        break;
+        return INP_CHANGED;
 
     case KEY_DC:
         if (inp->index == inp->n) {
@@ -201,16 +207,15 @@ char *send_to_input(struct input *inp, int c)
                 inp->n - inp->index);
         inp->n -= inp->index - index;
         inp->index = index;
-        break;
+        return INP_CHANGED;
 
     case '\x1b':
     case CONTROL('C'):
-        if (inp->a == 0) {
-            inp->a = 16;
-            inp->s = xrealloc(inp->s, inp->a);
-        }
-        inp->s[0] = '\n';
-        return inp->s;
+        return INP_CANCELLED;
+
+    case '\n':
+        terminate_input(inp);
+        return INP_FINISHED;
 
     default:
         if (c < ' ' || c >= 0x100) {
@@ -221,25 +226,23 @@ char *send_to_input(struct input *inp, int c)
                 &inp->s[inp->index], inp->n - inp->index);
         inp->s[inp->index++] = c;
         inp->n++;
+        return INP_CHANGED;
     }
-
-    if (c != '\n') {
-        return NULL;
-    }
-    terminate_input(inp);
-    return &inp->s[inp->prefix];
+    return INP_NOTHING;
 }
 
 void render_input(struct input *inp)
 {
-    size_t cur_x = 0;
-    size_t w;
-    struct glyph g;
-    bool broken;
+    size_t          w;
+    size_t          i;
+    size_t          cur_x = 0;
+    struct glyph    g;
+    bool            broken;
 
     /* measure out the cursor x position */
     w = 0;
-    for (size_t i = 0;; ) {
+    i = 0;
+    while (1) {
         /* impossible edge case:
          * if invalid utf8 was inserted and then one byte is deleted,
          * the index might end up in the middle of a multi byte
@@ -252,7 +255,7 @@ void render_input(struct input *inp)
         w += g.w;
         i += g.n;
     }
-    
+
     /* show the prefix */
     if (inp->index == inp->prefix) {
         inp->scroll = 0;
@@ -268,7 +271,7 @@ void render_input(struct input *inp)
     /* render the text */
     move(inp->y, inp->x);
     w = 0;
-    for (size_t i = 0; i < inp->n; ) {
+    for (i = 0; i < inp->n; ) {
         broken = get_glyph(&inp->s[i], inp->n - i, &g) == -1;
         if (w + g.w > inp->scroll + inp->max_w) {
             break;

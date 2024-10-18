@@ -54,8 +54,8 @@ static int exchange_frames(struct frame *a, struct frame *b)
  */
 static struct frame *do_binded_frame_movement(int c)
 {
-    struct frame *frame, *f;
-    int x, y;
+    struct frame    *frame, *f;
+    int             x, y;
 
     switch (c) {
     /* go to a previous window in the linked list */
@@ -145,7 +145,7 @@ static struct frame *do_binded_frame_movement(int c)
     case CONTROL('T'):
     case 't':
         frame = get_frame_at(0, 0);
-        for (size_t i = 1; i < Core.counter; i++) {
+        for (; Core.counter > 1; Core.counter--) {
             f = get_frame_at(frame->x + frame->w, 0);
             if (f == NULL) {
                 break;
@@ -158,7 +158,7 @@ static struct frame *do_binded_frame_movement(int c)
     case CONTROL('B'):
     case 'b':
         frame = get_frame_at(COLS - 1, LINES - 2);
-        for (size_t i = 1; i < Core.counter; i++) {
+        for (; Core.counter > 1; Core.counter--) {
             f = get_frame_at(frame->x - 1, 0);
             if (f == NULL) {
                 break;
@@ -172,9 +172,9 @@ static struct frame *do_binded_frame_movement(int c)
 
 static inline int bind_to_motion(int action)
 {
-    int c;
-    struct buf *buf;
-    size_t min_line, max_line;
+    int             c;
+    struct buf      *buf;
+    line_t          min_line, max_line;
 
     c = get_extra_char();
     buf = SelFrame->buf;
@@ -199,21 +199,21 @@ static inline int bind_to_motion(int action)
 
 int normal_handle_input(int c)
 {
-    int r = 0;
-    struct buf *buf;
-    struct pos cur, from, to;
-    int e_c;
-    struct undo_event *ev, *ev_nn;
-    struct raw_line lines[2];
-    struct frame *frame;
-    char *entry;
-    int next_mode = NORMAL_MODE;
-    struct raw_line *d_lines;
-    size_t num_lines;
-    struct reg *reg;
-    struct mark *mark;
-    struct play_rec *rec;
-    char ch[2];
+    int                 r = 0;
+    struct buf          *buf;
+    struct pos          cur, from, to;
+    int                 e_c;
+    struct undo_event   *ev, *ev_nn;
+    struct raw_line     lines[2];
+    struct frame        *frame;
+    char                *entry;
+    int                 next_mode = NORMAL_MODE;
+    struct raw_line     *d_lines;
+    line_t              num_lines;
+    struct reg          *reg;
+    struct mark         *mark;
+    struct play_rec     *rec;
+    char                ch[2];
 
     buf = SelFrame->buf;
     switch (c) {
@@ -255,7 +255,7 @@ int normal_handle_input(int c)
             from.line = cur.line;
             from.col = 0;
             to.line = safe_add(from.line, Core.counter - 1);
-            to.col = SIZE_MAX;
+            to.col = COL_MAX;
             ev = delete_range(buf, &from, &to);
             ev_nn = indent_line(buf, from.line);
             if (ev_nn != NULL && ev != NULL) {
@@ -349,7 +349,7 @@ int normal_handle_input(int c)
         if (cur.col == 0) {
             return 0;
         }
-        if (cur.col < Core.counter) {
+        if ((size_t) cur.col < Core.counter) {
             SelFrame->cur.col = 0;
         } else {
             SelFrame->cur.col -= Core.counter;
@@ -363,7 +363,7 @@ int normal_handle_input(int c)
     /* join lines */
     case CONTROL('J'):
         from = SelFrame->cur;
-        for (size_t i = 0; i < Core.counter; i++) {
+        for (; Core.counter > 0; Core.counter--) {
             if (from.line + 1 == buf->num_lines) {
                 break;
             }
@@ -403,7 +403,7 @@ int normal_handle_input(int c)
     /* undo last event in current frame */
     case 'u':
         ev_nn = NULL;
-        for (size_t i = 0; i < Core.counter; i++) {
+        for (; Core.counter > 0; Core.counter--) {
             ev = undo_event(buf);
             if (ev == NULL) {
                 break;
@@ -419,7 +419,7 @@ int normal_handle_input(int c)
     /* redo last undone event in current frame */
     case CONTROL('R'):
         ev_nn = NULL;
-        for (size_t i = 0; i < Core.counter; i++) {
+        for (; Core.counter > 0; Core.counter--) {
             ev = redo_event(buf);
             if (ev == NULL) {
                 break;
@@ -797,21 +797,21 @@ int normal_handle_input(int c)
 
     /* scroll up {counter} times */
     case 'K':
-        return scroll_frame(SelFrame, Core.counter, -1);
+        return scroll_frame(SelFrame, -Core.counter);
 
     /* scroll down {counter} times */
     case 'J':
-        return scroll_frame(SelFrame, Core.counter, 1);
+        return scroll_frame(SelFrame, Core.counter);
 
     /* scroll up half the frame {counter} times */
     case CONTROL('U'):
         Core.counter = safe_mul(Core.counter, MAX(SelFrame->h / 2, 1));
-        return scroll_frame(SelFrame, Core.counter, -1);
+        return scroll_frame(SelFrame, -Core.counter);
 
     /* scroll down half the frame {counter} times */
     case CONTROL('D'):
         Core.counter = safe_mul(Core.counter, MAX(SelFrame->h / 2, 1));
-        return scroll_frame(SelFrame, Core.counter, 1);
+        return scroll_frame(SelFrame, Core.counter);
 
     /* open a file in the fuzzy file dialog */
     case 'Z':

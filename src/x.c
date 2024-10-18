@@ -26,7 +26,7 @@ static struct x_data {
     /// the lines currently being worked on by paste
     struct raw_line *lines;
     /// the number of lines
-    size_t num_lines;
+    line_t num_lines;
 } X;
 
 /**
@@ -166,7 +166,7 @@ static void handle_sel_request(XEvent *e)
     (void) XSendEvent(xsre->display, xsre->requestor, True, 0, (XEvent*) &xev);
 }
 
-struct raw_line *paste_clipboard(size_t *p_num_lines, int primary)
+struct raw_line *paste_clipboard(line_t *p_num_lines, int primary)
 {
     Atom clipboard, target;
     XEvent xev;

@@ -8,6 +8,36 @@
 #include <unistd.h>
 #include <wchar.h>
 
+int wcwidth(wchar_t c);
+
+int get_glyph(const char *s, size_t n, struct glyph *g)
+{
+    size_t          c;
+    wchar_t         wc;
+    mbstate_t       mbs;
+
+    if (s[0] < ' ' || s[0] == 0x7f) {
+        g->wc = L'?';
+        g->n = 1;
+        g->w = 1;
+        return -1;
+    }
+
+    memset(&mbs, 0, sizeof(mbs));
+    c = mbrtowc(&wc, &s[0], n, &mbs);
+    if (c == (size_t) -1 || c == (size_t) -2) {
+        g->wc = L'?';
+        g->n = 1;
+        g->w = 1;
+        return -1;
+    }
+
+    g->wc = wc;
+    g->n = c;
+    g->w = wcwidth(wc);
+    return c;
+}
+
 bool is_point_equal(const struct pos *p1, const struct pos *p2)
 {
     return p1->line == p2->line && p1->col == p2->col;
@@ -88,13 +118,13 @@ size_t safe_add(size_t a, size_t b)
 
 char *get_relative_path(const char *path)
 {
-    char *cwd;
-    char *s;
-    char *p;
-    size_t index;
-    size_t num_slashes;
-    const char *seg;
-    size_t move;
+    char            *cwd;
+    char            *s;
+    char            *p;
+    size_t          index;
+    size_t          num_slashes;
+    const char     *seg;
+    size_t          move;
 
     cwd = getcwd(NULL, 0);
     if (cwd == NULL) {
@@ -213,10 +243,10 @@ char *get_relative_path(const char *path)
 
 char *get_absolute_path(const char *path)
 {
-    size_t      cap;
-    char        *err;
-    char        *s;
-    size_t      n;
+    size_t          cap;
+    char            *err;
+    char            *s;
+    size_t          n;
 
     cap = 512;
     if (path[0] == '/') {
@@ -230,7 +260,7 @@ char *get_absolute_path(const char *path)
         do {
             cap *= 2;
             s = xrealloc(s, cap);
-            err = getcwd(s, cap);
+            err = getcwd((char*) s, cap);
         } while (err == NULL && errno == ERANGE);
 
         if (err == NULL) {
@@ -284,36 +314,6 @@ char *get_absolute_path(const char *path)
     s = xrealloc(s, n + 1);
     s[n] = '\0';
     return s;
-}
-
-int wcwidth(wchar_t c);
-
-int get_glyph(const char *s, size_t n, struct glyph *g)
-{
-    size_t          c;
-    wchar_t         wc;
-    mbstate_t       mbs;
-
-    if (s[0] == '\0') {
-        g->wc = L'\0';
-        g->n = 1;
-        g->w = 1;
-        return 1;
-    }
-
-    memset(&mbs, 0, sizeof(mbs));
-    c = mbrtowc(&wc, &s[0], n, &mbs);
-    if (c == (size_t) -1 || c == (size_t) -2) {
-        g->wc = s[0];
-        g->n = 1;
-        g->w = 1;
-        return -1;
-    }
-
-    g->wc = wc;
-    g->n = c;
-    g->w = wcwidth(wc);
-    return c;
 }
 
 ssize_t get_line(char **p_s, size_t *p_a, FILE *fp)

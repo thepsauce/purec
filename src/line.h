@@ -1,15 +1,15 @@
 #ifndef LINE_H
 #define LINE_H
 
+#include "util.h"
+
 #include <stdlib.h>
 
-#include <ncurses.h>
-
 struct raw_line {
-    /// data of the line
+    /// data of the line in utf8 format
     char *s;
     /// number of bytes on this line
-    size_t n;
+    col_t n;
 };
 
 /**
@@ -22,7 +22,7 @@ struct raw_line {
 #define init_raw_line(l, str, nstr) do { \
     struct raw_line *const _l = (l); \
     const char *const _s = (str); \
-    const size_t _n = (nstr); \
+    const int _n = (nstr); \
     _l->n = _n; \
     _l->s = xmalloc(_n); \
     if (_s != NULL) { \
@@ -37,10 +37,10 @@ struct raw_line {
 } while (0)
 
 struct line {
-    /// data of the line
+    /// data of the line in utf8 format
     char *s;
     /// number of bytes on this line
-    size_t n;
+    col_t n;
     /// syntax highlighting state at the beginning of the next line
     unsigned state;
     /// rendering highlights

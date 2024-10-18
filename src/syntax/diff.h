@@ -1,6 +1,6 @@
-size_t diff_state_start(struct state_ctx *ctx)
+col_t diff_state_start(struct state_ctx *ctx)
 {
-    size_t n;
+    col_t           n;
 
     if (ctx->pos.col > 0) {
         ctx->hi = HI_NORMAL;

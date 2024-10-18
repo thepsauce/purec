@@ -1,6 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <limits.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -38,12 +39,49 @@
  */
 #define CONTROL(k) ((k)-'A'+1)
 
+typedef long line_t;
+typedef int col_t;
+
+/* this is not needed anywhere so ovrewrite the name */
+#undef LINE_MAX
+
+#define LINE_MAX LONG_MAX
+#define COL_MAX INT_MAX
+
+#define PRLINE "%ld"
+#define PRCOL "%d"
+
+struct glyph {
+    /// the wide char representation of this glyph
+    wchar_t wc;
+    /// number of bytes when this glyph is represented as multi byte string
+    col_t n;
+    /// the width this glyph occupies
+    int w;
+};
+
+/**
+ * Gets the first glyph of the multi byte string `s`.
+ *
+ * This function assumes that there is a "next glyph" and does not handle the
+ * case where n==0 or, n==SIZE_MAX and s[0]=='\0'.
+ *
+ * @param s The multi byte string to extract the first glyph from.
+ * @param n The length of the multi byte string, use `SIZE_MAX` for null
+ *          terminated strings, this values must be greater than 0.
+ * @param g The pointer to store the glyph data in.
+ *
+ * @return -1 if the multi byte sequence is invalid, otherwise the length of
+ *         the multi byte sequence.
+ */
+int get_glyph(const char *s, size_t n, struct glyph *g);
+
 /**
  * Position within "something".
  */
 struct pos {
-    size_t line;
-    size_t col;
+    line_t line;
+    col_t col;
 };
 
 /**
@@ -144,31 +182,6 @@ char *get_relative_path(const char *path/*, const char *from*/);
  * @return The allocated string.
  */
 char *get_absolute_path(const char *path/*, const char *from*/);
-
-struct glyph {
-    /// the wide char representation of this glyph
-    wchar_t wc;
-    /// number of bytes when this glyph is represented as multi byte string
-    int n;
-    /// the width this glyph occupies
-    int w;
-};
-
-/**
- * Gets the first glyph of the multi byte string `s`.
- *
- * This function assumes that there is a "next glyph" and does not handle the
- * case where n==0 or, n==SIZE_MAX and s[0]=='\0'.
- *
- * @param s The multi byte string to extract the first glyph from.
- * @param n The length of the multi byte string, use `SIZE_MAX` for null
- *          terminated strings, this values must be greater than 0.
- * @param g The pointer to store the glyph data in.
- *
- * @return -1 if the multi byte sequence is invalid, otherwise the length of
- *         the multi byte sequence.
- */
-int get_glyph(const char *s, size_t n, struct glyph *g);
 
 /**
  * Gets characters until the first new line character.

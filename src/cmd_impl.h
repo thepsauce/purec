@@ -62,8 +62,8 @@ int cmd_colorscheme(struct cmd_data *cd)
 
 int cmd_colorschemeindex(struct cmd_data *cd)
 {
-    int index;
-    int num;
+    int             index;
+    int             num;
 
     if (cd->arg[0] != '\0') {
         index = -1;
@@ -93,10 +93,10 @@ int cmd_colorschemeindex(struct cmd_data *cd)
  */
 static int save_buffer(struct cmd_data *cd, struct buf *buf)
 {
-    FILE *fp;
-    const char *file;
-    struct stat st;
-    size_t num_bytes;
+    FILE            *fp;
+    const char      *file;
+    struct stat     st;
+    size_t          num_bytes;
 
     file = cd->arg;
 
@@ -128,7 +128,7 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
 
     if (!cd->has_range && !cd->has_number) {
         cd->from = 0;
-        cd->to = SIZE_MAX;
+        cd->to = LINE_MAX;
     }
 
     fp = fopen(file, "w");

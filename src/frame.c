@@ -479,7 +479,7 @@ int adjust_scroll(struct frame *frame)
 
     if (frame->cur.col < frame->scroll.col) {
         frame->scroll.col = frame->cur.col;
-        if ((size_t) MIN(w / 3, 25) >= frame->scroll.col) {
+        if ((col_t) MIN(w / 3, 25) >= frame->scroll.col) {
             frame->scroll.col = 0;
         } else {
             frame->scroll.col -= MIN(w / 3, 25);
@@ -492,7 +492,7 @@ int adjust_scroll(struct frame *frame)
 
     if (frame->cur.line < frame->scroll.line) {
         frame->scroll.line = frame->cur.line;
-        if ((size_t) (h / 3) >= frame->scroll.line) {
+        if ((line_t) (h / 3) >= frame->scroll.line) {
             frame->scroll.line = 0;
         } else {
             frame->scroll.line -= h / 3;
@@ -506,13 +506,13 @@ int adjust_scroll(struct frame *frame)
     return r;
 }
 
-int scroll_frame(struct frame *frame, size_t dist, int dir)
+int scroll_frame(struct frame *frame, line_t dist)
 {
-    size_t old_scroll;
+    line_t          old_scroll;
 
     old_scroll = frame->scroll.line;
-    if (dir < 0) {
-        dist = MIN(frame->scroll.line, dist);
+    if (dist < 0) {
+        dist = MIN(frame->scroll.line, -dist);
         frame->scroll.line -= dist;
         frame->cur.line -= dist;
     } else {
@@ -532,7 +532,7 @@ int scroll_frame(struct frame *frame, size_t dist, int dir)
 
 void clip_column(struct frame *frame)
 {
-    size_t end;
+    col_t           end;
 
     end = get_mode_line_end(&frame->buf->lines[frame->cur.line]);
     frame->cur.col = MIN(frame->cur.col, end);
@@ -540,8 +540,8 @@ void clip_column(struct frame *frame)
 
 void set_cursor(struct frame *frame, const struct pos *pos)
 {
-    struct line *line;
-    struct pos new_cur;
+    struct line     *line;
+    struct pos      new_cur;
 
     new_cur = *pos;
 
@@ -622,12 +622,12 @@ int prepare_motion(struct frame *frame, int motion_key)
     struct pos new_cur;
     size_t new_vct;
     struct buf *buf;
-    size_t n;
+    col_t n;
     struct line *line;
     int c;
     int s, o_s;
     size_t index;
-    size_t col;
+    col_t col;
     int r;
 
     new_cur = frame->cur;
@@ -640,7 +640,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.col == 0) {
             return 0;
         }
-        if (new_cur.col < Core.counter) {
+        if ((size_t) new_cur.col < Core.counter) {
             new_cur.col = 0;
         } else {
             new_cur.col -= Core.counter;
@@ -654,7 +654,7 @@ int prepare_motion(struct frame *frame, int motion_key)
     case 'l':
     case 'a':
         n = buf->lines[new_cur.line].n;
-        if (SIZE_MAX - Core.counter < new_cur.col) {
+        if (SIZE_MAX - Core.counter < (size_t) new_cur.col) {
             new_cur.col = n;
         } else {
             new_cur.col += Core.counter;
@@ -673,7 +673,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.line == 0) {
             return 0;
         }
-        if (new_cur.line < Core.counter) {
+        if ((size_t) new_cur.line < Core.counter) {
             new_cur.line = 0;
         } else {
             new_cur.line -= Core.counter;
@@ -685,7 +685,7 @@ int prepare_motion(struct frame *frame, int motion_key)
     /* move {count} times down */
     case KEY_DOWN:
     case 'j':
-        if (SIZE_MAX - Core.counter < new_cur.line) {
+        if (SIZE_MAX - Core.counter < (size_t) new_cur.line) {
             new_cur.line = buf->num_lines - 1;
         } else {
             new_cur.line += Core.counter;
@@ -720,12 +720,13 @@ int prepare_motion(struct frame *frame, int motion_key)
         break;
 
     /* move back {count} characters, a line end counts as one character */
+    case 0x7f:
     case KEY_BACKSPACE:
         if (new_cur.col == 0 && new_cur.line == 0) {
             return 0;
         }
 
-        while (new_cur.col < Core.counter) {
+        while ((size_t) new_cur.col < Core.counter) {
             Core.counter -= new_cur.col + 1;
             if (new_cur.line == 0) {
                 break;
@@ -733,7 +734,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             new_cur.line--;
             new_cur.col = get_mode_line_end(&buf->lines[new_cur.line]);
         }
-        if (new_cur.col < Core.counter) {
+        if ((size_t) new_cur.col < Core.counter) {
             new_cur.col = 0;
         } else {
             new_cur.col -= Core.counter;
@@ -747,7 +748,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         while (new_cur.line != buf->num_lines - 1) {
             n = get_mode_line_end(&buf->lines[new_cur.line]);
             n -= new_cur.col;
-            if (Core.counter <= n) {
+            if (Core.counter <= (size_t) n) {
                 break;
             }
             Core.counter -= n + 1;
@@ -755,7 +756,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             new_cur.line++;
         }
         n = buf->lines[new_cur.line].n;
-        if (SIZE_MAX - Core.counter < new_cur.col) {
+        if (SIZE_MAX - Core.counter < (size_t) new_cur.col) {
             new_cur.col = n;
         } else {
             new_cur.col += Core.counter;
@@ -815,8 +816,8 @@ int prepare_motion(struct frame *frame, int motion_key)
         switch (motion_key) {
         /* ...the line at {counter} */
         case 'g':
-            Core.counter = MIN(Core.counter - 1, buf->num_lines - 1);
-            if (new_cur.line == Core.counter) {
+            Core.counter = MIN(Core.counter - 1, (size_t) buf->num_lines - 1);
+            if ((size_t) new_cur.line == Core.counter) {
                 return 0;
             }
             new_cur.col = frame->vct;
@@ -824,7 +825,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             break;
 
         case 'G':
-            if (Core.counter >= buf->num_lines) {
+            if (Core.counter >= (size_t) buf->num_lines) {
                 new_cur.line = 0;
             } else {
                 new_cur.line = buf->num_lines - Core.counter;
@@ -862,7 +863,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         n = frame->h * 2 / 3;
         n = MAX(n, 1);
         n = safe_mul(Core.counter, n);
-        if (SIZE_MAX - n < new_cur.line) {
+        if (LINE_MAX - n < new_cur.line) {
             new_cur.line = buf->num_lines - 1;
         } else {
             new_cur.line += n;
@@ -1010,13 +1011,14 @@ int prepare_motion(struct frame *frame, int motion_key)
             }
         }
 
-        if (is_point_equal(&frame->cur, &new_cur)) {
-            return 0;
-        }
-
-        if (Core.counter > 1) {
+        if (Core.counter > 1 && (new_cur.col < line->n ||
+                                 new_cur.line + 1 < frame->buf->num_lines)) {
             Core.counter--;
             goto again_next;
+        }
+
+        if (is_point_equal(&frame->cur, &new_cur)) {
+            return 0;
         }
         new_vct = new_cur.col;
         r = 1;
@@ -1064,13 +1066,14 @@ int prepare_motion(struct frame *frame, int motion_key)
             new_cur.col--;
         }
 
-        if (is_point_equal(&frame->cur, &new_cur)) {
-            return 0;
-        }
-
-        if (Core.counter > 1) {
+        if (Core.counter > 1 && (new_cur.col + 1 < line->n ||
+                                 new_cur.line + 1 < frame->buf->num_lines)) {
             Core.counter--;
             goto again_end;
+        }
+
+        if (is_point_equal(&frame->cur, &new_cur)) {
+            return 0;
         }
         new_vct = new_cur.col;
         r = 2;
@@ -1079,6 +1082,7 @@ int prepare_motion(struct frame *frame, int motion_key)
     /* move back {count} words */
     case 'B':
     case 'b':
+    case '\b':
         line = &frame->buf->lines[new_cur.line];
 
     again_prev:
@@ -1112,13 +1116,13 @@ int prepare_motion(struct frame *frame, int motion_key)
             s = o_s;
         }
 
-        if (is_point_equal(&frame->cur, &new_cur)) {
-            return 0;
-        }
-
-        if (Core.counter > 1) {
+        if (Core.counter > 1 && (new_cur.line > 0 || new_cur.col > 0)) {
             Core.counter--;
             goto again_prev;
+        }
+
+        if (is_point_equal(&frame->cur, &new_cur)) {
+            return 0;
         }
         new_vct = new_cur.col;
         r = 1;
@@ -1162,7 +1166,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             Core.counter--;
         }
         Core.counter %= buf->num_matches;
-        if (Core.counter > index) {
+        if ((size_t) Core.counter > index) {
             index = buf->num_matches - Core.counter;
         } else {
             index -= Core.counter;
@@ -1200,7 +1204,7 @@ int prepare_motion(struct frame *frame, int motion_key)
 
 int apply_motion(struct frame *frame)
 {
-    size_t max_col;
+    col_t           max_col;
 
     max_col = get_mode_line_end(&frame->buf->lines[frame->next_cur.line]);
     frame->cur.col = MIN(frame->next_cur.col, max_col);
@@ -1210,21 +1214,23 @@ int apply_motion(struct frame *frame)
     return 1;
 }
 
-int do_action_till(struct frame *frame, int action, size_t min_line,
-                   size_t max_line)
+int do_action_till(struct frame *frame, int action, line_t min_line,
+                   line_t max_line)
 {
-    struct buf *buf;
-    bool update;
-    size_t n;
-    struct pos p1, p2;
-    struct raw_line *lines, *line;
-    struct undo_event *ev;
+    struct buf          *buf;
+    bool                update;
+    col_t               n;
+    line_t              i;
+    col_t               c;
+    struct pos          p1, p2;
+    struct raw_line     *lines, *line;
+    struct undo_event   *ev;
 
     buf = frame->buf;
     update = false;
     if (action == '>') {
         lines = xreallocarray(NULL, sizeof(*lines), max_line - min_line + 1);
-        for (size_t i = min_line; i <= max_line; i++) {
+        for (i = min_line; i <= max_line; i++) {
             line = &lines[i - min_line];
             if (buf->lines[i].n == 0) {
                 /* do not indent empty lines */
@@ -1235,8 +1241,8 @@ int do_action_till(struct frame *frame, int action, size_t min_line,
             update = true;
             line->s = xmalloc(Core.tab_size);
             line->n = Core.tab_size;
-            for (int s = 0; s < Core.tab_size; s++) {
-                line->s[s] = ' ';
+            for (c = 0; c < Core.tab_size; c++) {
+                line->s[c] = ' ';
             }
         }
         if (!update) {
@@ -1255,7 +1261,7 @@ int do_action_till(struct frame *frame, int action, size_t min_line,
         }
         return UPDATE_UI;
     } else if (action == '<') {
-        if (frame->cur.col > (size_t) Core.tab_size) {
+        if (frame->cur.col > Core.tab_size) {
             frame->cur.col -= Core.tab_size;
         } else {
             frame->cur.col = 0;
@@ -1275,7 +1281,7 @@ int do_action_till(struct frame *frame, int action, size_t min_line,
                 ev->cur = frame->cur;
                 if (min_line == frame->cur.line) {
                     if ((ev->flags & IS_DELETION)) {
-                        if (ev->seg->data_len > frame->cur.col) {
+                        if (ev->seg->data_len > (size_t) frame->cur.col) {
                             frame->cur.col = 0;
                         } else {
                             frame->cur.col -= ev->seg->data_len;
@@ -1291,7 +1297,7 @@ int do_action_till(struct frame *frame, int action, size_t min_line,
 
         case '<':
             for (n = 0; n < buf->lines[min_line].n; n++) {
-                if (n == (size_t) Core.tab_size) {
+                if (n == Core.tab_size) {
                     break;
                 }
                 if (buf->lines[min_line].s[n] != ' ') {

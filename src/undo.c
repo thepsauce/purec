@@ -52,26 +52,29 @@ static int compare_segments(struct undo_seg *a, struct undo_seg *b)
     return cmp;
 }
 
-struct undo_seg *save_lines(struct raw_line *lines, size_t num_lines)
+struct undo_seg *save_lines(struct raw_line *lines, line_t num_lines)
 {
     struct undo_seg new_seg;
-    char *new_s;
-    size_t l, m, r;
-    int cmp;
-    time_t cur_time;
-    struct tm *tm;
+    line_t          i;
+    col_t           j;
+    char            *new_s;
+    size_t          l, m, r;
+    int             cmp;
+    time_t          cur_time;
+    struct tm       *tm;
     struct undo_seg *p_seg;
+    char            *name;
 
     new_seg.data = lines[0].s;
     new_seg.data_len = lines[0].n;
 
-    for (size_t i = 1; i < num_lines; i++) {
+    for (i = 1; i < num_lines; i++) {
         new_seg.data_len += 1 + lines[i].n;
     }
 
     new_seg.data = xrealloc(new_seg.data, new_seg.data_len);
     lines[0].s = new_seg.data;
-    for (size_t i = 1, j = lines[0].n; i < num_lines; i++) {
+    for (i = 1, j = lines[0].n; i < num_lines; i++) {
         new_seg.data[j++] = '\n';
 
         new_s = memcpy(&new_seg.data[j], lines[i].s, lines[i].n);
@@ -119,17 +122,17 @@ struct undo_seg *save_lines(struct raw_line *lines, size_t num_lines)
             cur_time = time(NULL);
             tm = localtime(&cur_time);
 
-            new_s = xasprintf("/tmp/undo_data_%04d-%02d-%02d_%02d-%02d-%02d",
+            name = xasprintf("/tmp/undo_data_%04d-%02d-%02d_%02d-%02d-%02d",
                     Core.cache_dir,
                     tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
                     tm->tm_hour, tm->tm_min, tm->tm_sec);
-            Undo.fp = fopen(new_s, "w+");
-            free(new_s);
+            Undo.fp = fopen(name, "w+");
+            free(name);
         }
         fseek(Undo.fp, 0, SEEK_END);
         fgetpos(Undo.fp, &new_seg.file_pos);
         fwrite(new_seg.data, 1, new_seg.data_len, Undo.fp);
-        for (size_t i = 0; i < new_seg.num_lines; i++) {
+        for (i = 0; i < new_seg.num_lines; i++) {
             new_seg.lines[i].s -= (size_t) new_seg.data;
         }
         free(new_seg.data);
@@ -148,11 +151,13 @@ struct undo_seg *save_lines(struct raw_line *lines, size_t num_lines)
 
 void load_undo_data(struct undo_seg *seg)
 {
+    line_t          i;
+
     seg->load_count++;
     if (seg->data == NULL) {
         seg->data = xmalloc(seg->data_len);
 
-        for (size_t i = 0; i < seg->num_lines; i++) {
+        for (i = 0; i < seg->num_lines; i++) {
             seg->lines[i].s += (size_t) seg->data;
         }
 
@@ -163,9 +168,11 @@ void load_undo_data(struct undo_seg *seg)
 
 void unload_undo_data(struct undo_seg *seg)
 {
+    line_t          i;
+
     seg->load_count--;
     if (seg->data_len > HUGE_UNDO_THRESHOLD && seg->load_count == 0) {
-        for (size_t i = 0; i < seg->num_lines; i++) {
+        for (i = 0; i < seg->num_lines; i++) {
             seg->lines[i].s -= (size_t) seg->data;
         }
         free(seg->data);
@@ -174,10 +181,11 @@ void unload_undo_data(struct undo_seg *seg)
 }
 
 struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
-        struct raw_line *lines, size_t num_lines)
+        struct raw_line *lines, line_t num_lines)
 {
     struct undo_event *ev;
-    size_t max_n;
+    col_t           max_n;
+    line_t          i;
 
     if (buf->event_i + 1 >= buf->a_events) {
         buf->a_events *= 2;
@@ -198,7 +206,7 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
     if ((flags & IS_BLOCK)) {
         ev->end.line = ev->pos.line + num_lines - 1;
         max_n = 0;
-        for (size_t i = 0; i < num_lines; i++) {
+        for (i = 0; i < num_lines; i++) {
             max_n = MAX(max_n, lines[i].n);
         }
         ev->end.col = ev->pos.col + max_n - 1;
@@ -219,7 +227,8 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
 {
     struct undo_seg *seg;
     struct line     *line;
-    size_t          i, j;
+    line_t          i;
+    col_t           j;
     bool            r;
 
     if ((flags & IS_DELETION)) {
@@ -235,8 +244,8 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
     load_undo_data(seg);
     if ((flags & IS_REPLACE)) {
         line = &buf->lines[ev->pos.line];
-        for (i = 0; i < seg->lines[0].n; i++) {
-            line->s[ev->pos.col + i] ^= seg->lines[0].s[i];
+        for (j = 0; j < seg->lines[0].n; j++) {
+            line->s[ev->pos.col + j] ^= seg->lines[0].s[j];
         }
         for (i = 1; i < seg->num_lines; i++) {
             line = &buf->lines[ev->pos.line + i];

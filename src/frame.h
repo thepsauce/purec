@@ -35,9 +35,9 @@ struct frame {
     /// offset of the text origin
     struct pos scroll;
     /// vertical column tracking
-    size_t vct;
+    col_t vct;
     /// the next value for `vct`
-    size_t next_vct;
+    col_t next_vct;
     /// next frame in the linked list
     struct frame *next;
 };
@@ -181,9 +181,8 @@ int adjust_scroll(struct frame *frame);
  *
  * @param frame Frame to scroll.
  * @param dist  Distance to scroll.
- * @param dir   The direction to go.
  */
-int scroll_frame(struct frame *frame, size_t dist, int dir);
+int scroll_frame(struct frame *frame, line_t dist);
 
 /**
  * Places the cursor at `vct` and places it in bound vertically.
@@ -251,8 +250,8 @@ int apply_motion(struct frame *frame);
  *
  * @return Whether something changed.
  */
-int do_action_till(struct frame *frame, int action, size_t min_line,
-                   size_t max_line);
+int do_action_till(struct frame *frame, int action, line_t min_line,
+                   line_t max_line);
 
 /**
  * Gets a motion from a keybind.
@@ -264,60 +263,5 @@ int do_action_till(struct frame *frame, int action, size_t min_line,
  * @return The corresponding motion or 0 if nothing bound to that key.
  */
 int get_binded_motion(int c);
-
-/**
- * Moves the cursor in horizontal direct but also vertically across lines.
- *
- * @param frame Frame to move the cursor within.
- * @param dist  Distance to move.
- * @param dir   Direction of the movement (negative or positive).
- *
- * @return 1 if a movement occured, 0 otherwise.
- */
-int move_dir(struct frame *frame, size_t dist, int dir);
-
-/**
- * Moves the cursor in vertical direction (up and down) and returns true if
- * there was movement.
- *
- * @param frame Frame to move the cursor within.
- * @param dist  Distance to move.
- * @param dir   Direction of the movement (negative or positive).
- *
- * @return 1 if a movement occured, 0 otherwise.
- */
-int move_vert(struct frame *frame, size_t dist, int dir);
-
-/**
- * Sets the line of the cursor to given line (clipped).
- *
- * @param frame Frame to move the cursor in.
- * @param line  Line to move to.
- *
- * @return Whether movement occured.
- */
-int set_vert(struct frame *frame, size_t line);
-
-/**
- * Moves the cursor in horizontal direction (left and right) and returns true if
- * there was movement.
- *
- * @param frame Frame to move the cursor within.
- * @param dist  Distance to move.
- * @param dir   Direction of the movement (negative or positive).
- *
- * @return 1 if a movement occured, 0 otherwise.
- */
-int move_horz(struct frame *frame, size_t dist, int dir);
-
-/**
- * Sets the column of the cursor to given column (clipped).
- *
- * @param frame Frame to move the cursor in.
- * @param col   Column to move to.
- *
- * @return Whether movement occured.
- */
-int set_horz(struct frame *frame, size_t col);
 
 #endif

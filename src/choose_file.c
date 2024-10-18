@@ -18,6 +18,7 @@ char *last_dir;
 static void update_files(void)
 {
     DIR             *dir;
+    line_t          i;
     struct dirent   *ent;
 
     ChooseFile.inp.s[ChooseFile.inp.prefix - 1] = '\0';
@@ -27,7 +28,7 @@ static void update_files(void)
         return;
     }
  
-    for (size_t i = 0; i < ChooseFile.num_entries; i++) {
+    for (i = 0; i < ChooseFile.num_entries; i++) {
         free(ChooseFile.entries[i].name);
     }
     ChooseFile.num_entries = 0;
@@ -184,12 +185,8 @@ char *choose_file(const char *dir)
             /* fall through */
         default:
             switch (send_to_fuzzy(&ChooseFile, c)) {
-            case -1:
-                return NULL;
-            case 0:
-                return ChooseFile.inp.s;
-            case 1:
-                break;
+            case INP_CANCELLED: return NULL;
+            case INP_FINISHED: return ChooseFile.inp.s;
             }
         }
     }

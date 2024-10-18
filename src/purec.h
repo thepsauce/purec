@@ -55,7 +55,7 @@ extern WINDOW *OffScreen;
  */
 extern struct core {
     /// size of a tab in spaces
-    int tab_size;
+    col_t tab_size;
 
     /**
      * Message that is rendered at the bottom of the screen.
@@ -101,7 +101,7 @@ extern struct core {
     /// event from which the last insert mode started
     size_t ev_from_ins;
     /// how many times to move down and repeat the insertion
-    size_t move_down_count;
+    line_t move_down_count;
 
     /// saved positions within a buffer
     struct mark {
@@ -183,7 +183,7 @@ int copy_clipboard(struct undo_seg *seg, int primary);
  *
  * @return The lines read, they shall NOT be freed or modified.
  */
-struct raw_line *paste_clipboard(size_t *p_num_lines, int primary);
+struct raw_line *paste_clipboard(line_t *p_num_lines, int primary);
 
 /**
  * Sets the string shown in the message window.
@@ -263,7 +263,7 @@ int get_extra_char(void);
  *
  * @return Index of the line ending.
  */
-size_t get_mode_line_end(struct line *line);
+col_t get_mode_line_end(struct line *line);
 
 /**
  * Sets the new mode and does any transition needed like changing cursor shape.

@@ -35,7 +35,7 @@ extern struct undo {
         /// lines within the segment
         struct raw_line *lines;
         /// number of lines
-        size_t num_lines;
+        line_t num_lines;
         /// position within the file `fp`
         fpos_t file_pos;
         /// how many times this segment was loaded without unloading
@@ -149,9 +149,9 @@ struct buf {
     /// lines within this buffer
     struct line *lines;
     /// number of lines
-    size_t num_lines;
+    line_t num_lines;
     /// number of allocated lines
-    size_t a_lines;
+    line_t a_lines;
 
     /// all parentheses within the buffer
     struct paren *parens;
@@ -276,7 +276,7 @@ size_t get_buffer_count(void);
  *
  * @return The number of bytes written.
  */
-size_t write_file(struct buf *buf, size_t from, size_t to, FILE *fp);
+size_t write_file(struct buf *buf, line_t from, line_t to, FILE *fp);
 
 /**
  * NOTE: The below functions that return a `struct undo_event *` do not set the
@@ -304,7 +304,7 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp);
  *
  * @return Number of leading blank characters (' ' or '\t').
  */
-size_t get_line_indent(struct buf *buf, size_t line_i);
+size_t get_line_indent(struct buf *buf, line_t line_i);
 
 /**
  * Sets the `min_dirty_i` and `max_dirty_i` values within a buffer.
@@ -313,7 +313,7 @@ size_t get_line_indent(struct buf *buf, size_t line_i);
  * @param from  The first line.
  * @param to    The last line.
  */
-void mark_dirty(struct buf *buf, size_t from, size_t to);
+void mark_dirty(struct buf *buf, line_t from, line_t to);
 
 /**
  * Insert lines starting from a given position.
@@ -331,7 +331,7 @@ void mark_dirty(struct buf *buf, size_t from, size_t to);
  * @return The event generated from this insertion (may be `NULL`).
  */
 struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, size_t num_lines, size_t repeat);
+        const struct raw_line *lines, line_t num_lines, line_t repeat);
 
 /**
  * Insert given number of lines starting from given position.
@@ -344,7 +344,7 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
  * @param num_lines Number of lines to insert.
  */
 void _insert_lines(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, size_t num_lines);
+        const struct raw_line *lines, line_t num_lines);
 
 /**
  * Insert lines in block mode starting from a given position.
@@ -362,7 +362,7 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
  * @return The event generated from this insertion (may be `NULL`).
  */
 struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, size_t num_lines, size_t repeat);
+        const struct raw_line *lines, line_t num_lines, line_t repeat);
 
 /**
  * Insert lines in block mode starting from a given position.
@@ -375,7 +375,7 @@ struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
  * @param num_lines Number of lines to insert.
  */
 void _insert_block(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, size_t num_lines);
+        const struct raw_line *lines, line_t num_lines);
 
 /**
  * Breaks the line at given position by inserting '\n' and indents the line
@@ -398,7 +398,7 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos);
  *
  * @return The index of the match.
  */
-size_t get_match_line(struct buf *buf, size_t line_i);
+size_t get_match_line(struct buf *buf, line_t line_i);
 
 /**
  * Inserts given number of lines starting from given index.
@@ -412,7 +412,7 @@ size_t get_match_line(struct buf *buf, size_t line_i);
  *
  * @return First line that was inserted.
  */
-struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines);
+struct line *grow_lines(struct buf *buf, line_t line_i, line_t num_lines);
 
 /**
  * Removes the given lines from the buffer.
@@ -423,7 +423,7 @@ struct line *grow_lines(struct buf *buf, size_t line_i, size_t num_lines);
  * @param line_i    The index to the first line to remove.
  * @param num_lines The number of lines to delete.
  */
-void remove_lines(struct buf *buf, size_t line_i, size_t num_lines);
+void remove_lines(struct buf *buf, line_t line_i, line_t num_lines);
 
 /**
  * Indents the line at `line_i`.
@@ -436,7 +436,7 @@ void remove_lines(struct buf *buf, size_t line_i, size_t num_lines);
  *
  * @return Event generated from adding/removing spaces at the front of the line.
  */
-struct undo_event *indent_line(struct buf *buf, size_t line_i);
+struct undo_event *indent_line(struct buf *buf, line_t line_i);
 
 /**
  * Gets the lines within the buffer inside a given range.
@@ -448,7 +448,7 @@ struct undo_event *indent_line(struct buf *buf, size_t line_i);
  * @return Allocated lines, `p_num_lines` has the number of lines.
  */
 struct raw_line *get_lines(struct buf *buf, const struct pos *from,
-        const struct pos *to, size_t *p_num_lines);
+        const struct pos *to, line_t *p_num_lines);
 
 /**
  * Gets a block from within a buffer.
@@ -460,7 +460,7 @@ struct raw_line *get_lines(struct buf *buf, const struct pos *from,
  * @return Allocated lines, `p_num_lines` has the number of lines.
  */
 struct raw_line *get_block(struct buf *buf, const struct pos *from,
-        const struct pos *to, size_t *p_num_lines);
+        const struct pos *to, line_t *p_num_lines);
 
 /**
  * Deletes a range from a buffer.
@@ -564,7 +564,7 @@ void _delete_block(struct buf *buf, const struct pos *from,
  */
 struct undo_event *replace_lines(struct buf *buf, const struct pos *from,
                    const struct pos *to, const struct raw_line *lines,
-                   size_t num_lines);
+                   line_t num_lines);
 
 /// outside parameter for `conv_to_char`
 extern int ConvChar;
@@ -624,7 +624,7 @@ bool should_join(const struct undo_event *ev1, const struct undo_event *ev2);
  *
  * @return Allocated data segment.
  */
-struct undo_seg *save_lines(struct raw_line *lines, size_t num_lines);
+struct undo_seg *save_lines(struct raw_line *lines, line_t num_lines);
 
 /**
  * Loads the data of the given data segment.
@@ -653,7 +653,7 @@ void unload_undo_data(struct undo_seg *seg);
  * @return The event that was added.
  */
 struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
-        struct raw_line *lines, size_t num_lines);
+        struct raw_line *lines, line_t num_lines);
 
 /**
  * Undoes an event but ignores the transient flag.
@@ -719,7 +719,7 @@ size_t search_pattern(struct buf *buf, const char *pat);
  *
  * @return Whether this highlighting affects the next line.
  */
-bool rehighlight_line(struct buf *buf, size_t line_i);
+bool rehighlight_line(struct buf *buf, line_t line_i);
 
 /**
  * Gets the index where the given position should be inserted within the
@@ -758,7 +758,7 @@ size_t get_paren(struct buf *buf, const struct pos *pos);
  * @param buf       The buffer whose parenthesis data to modify.
  * @param line_i    The index of the line.
  */
-void clear_parens(struct buf *buf, size_t line_i);
+void clear_parens(struct buf *buf, line_t line_i);
 
 /**
  * Gets the matching parenthesis within the buffer.

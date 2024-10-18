@@ -1,4 +1,4 @@
-size_t none_state_start(struct state_ctx *ctx)
+col_t none_state_start(struct state_ctx *ctx)
 {
     ctx->hi = HI_NORMAL;
     return ctx->n;
