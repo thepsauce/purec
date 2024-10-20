@@ -459,34 +459,39 @@ void set_frame_buffer(struct frame *frame, struct buf *buf)
 
 void adjust_cursor(struct frame *frame)
 {
-    struct buf *buf;
-    struct line *line;
+    struct buf      *buf;
+    struct line     *line;
 
     buf = frame->buf;
     if (frame->cur.line >= buf->num_lines) {
         frame->cur.line = buf->num_lines - 1;
     }
     line = &buf->lines[frame->cur.line];
-    frame->cur.col = MIN(frame->vct, get_mode_line_end(line));
+    frame->cur.col = get_index(line->s, get_mode_line_end(line), frame->vct);
 }
 
 int adjust_scroll(struct frame *frame)
 {
-    int r = 0;
-    int x, y, w, h;
+    int             x, y, w, h;
+    struct line     *line;
+    int             r = 0;
+    col_t           v_x;
 
     get_text_rect(frame, &x, &y, &w, &h);
 
-    if (frame->cur.col < frame->scroll.col) {
-        frame->scroll.col = frame->cur.col;
+    line = &frame->buf->lines[frame->cur.line];
+    v_x = get_advance(line->s, line->n, frame->cur.col);
+
+    if (v_x < frame->scroll.col) {
+        frame->scroll.col = v_x;
         if ((col_t) MIN(w / 3, 25) >= frame->scroll.col) {
             frame->scroll.col = 0;
         } else {
             frame->scroll.col -= MIN(w / 3, 25);
         }
         r |= 1;
-    } else if (frame->cur.col >= frame->scroll.col + w) {
-        frame->scroll.col = frame->cur.col - w + MAX(MIN(w / 3, 25), 1);
+    } else if (v_x >= frame->scroll.col + w) {
+        frame->scroll.col = v_x - w + MAX(MIN(w / 3, 25), 1);
         r |= 1;
     }
 
@@ -504,6 +509,14 @@ int adjust_scroll(struct frame *frame)
         r |= 1;
     }
     return r;
+}
+
+col_t compute_vct(struct frame *frame, const struct pos *pos)
+{
+    struct line *line;
+
+    line = &frame->buf->lines[pos->line];
+    return get_advance(line->s, get_mode_line_end(line), pos->col);
 }
 
 int scroll_frame(struct frame *frame, line_t dist)
@@ -619,16 +632,16 @@ static size_t find_current_match(struct buf *buf, struct pos *pos)
 
 int prepare_motion(struct frame *frame, int motion_key)
 {
-    struct pos new_cur;
-    size_t new_vct;
-    struct buf *buf;
-    col_t n;
-    struct line *line;
-    int c;
-    int s, o_s;
-    size_t index;
-    col_t col;
-    int r;
+    struct pos      new_cur;
+    size_t          new_vct;
+    struct buf      *buf;
+    col_t           n;
+    struct line     *line;
+    int             c;
+    int             s, o_s;
+    size_t          index;
+    col_t           col;
+    int             r;
 
     new_cur = frame->cur;
     new_vct = frame->vct;
@@ -640,12 +653,14 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.col == 0) {
             return 0;
         }
-        if ((size_t) new_cur.col < Core.counter) {
-            new_cur.col = 0;
-        } else {
-            new_cur.col -= Core.counter;
+        for (; Core.counter > 0; Core.counter--) {
+            if (new_cur.col == 0) {
+                break;
+            }
+            new_cur.col = move_back_glyph(buf->lines[new_cur.line].s,
+                                          new_cur.col);
         }
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         r = 1;
         break;
 
@@ -653,17 +668,18 @@ int prepare_motion(struct frame *frame, int motion_key)
     case KEY_RIGHT:
     case 'l':
     case 'a':
-        n = buf->lines[new_cur.line].n;
-        if (SIZE_MAX - Core.counter < (size_t) new_cur.col) {
-            new_cur.col = n;
-        } else {
-            new_cur.col += Core.counter;
-            new_cur.col = MIN(new_cur.col, n);
-        }
-        if (new_cur.col == frame->cur.col) {
+        line = &buf->lines[new_cur.line];
+        if (new_cur.col == line->n) {
             return 0;
         }
-        new_vct = new_cur.col;
+        for (; Core.counter > 0; Core.counter--) {
+            if (new_cur.col == line->n) {
+                break;
+            }
+            new_cur.col += get_glyph_count(&line->s[new_cur.col],
+                                           line->n - new_cur.col);
+        }
+        new_vct = compute_vct(frame, &new_cur);
         r = 1;
         break;
 
@@ -678,7 +694,8 @@ int prepare_motion(struct frame *frame, int motion_key)
         } else {
             new_cur.line -= Core.counter;
         }
-        new_cur.col = frame->vct;
+        line = &buf->lines[new_cur.line];
+        new_cur.col = get_index(line->s, line->n, frame->vct);
         r = 1;
         break;
 
@@ -694,7 +711,8 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.line == frame->cur.line) {
             return 0;
         }
-        new_cur.col = frame->vct;
+        line = &buf->lines[new_cur.line];
+        new_cur.col = get_index(line->s, line->n, frame->vct);
         r = 1;
         break;
 
@@ -739,7 +757,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         } else {
             new_cur.col -= Core.counter;
         }
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         r = 1;
         break;
 
@@ -765,7 +783,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.col == frame->cur.col && new_cur.line == frame->cur.line) {
             return 0;
         }
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         r = 1;
         break;
 
@@ -820,8 +838,9 @@ int prepare_motion(struct frame *frame, int motion_key)
             if ((size_t) new_cur.line == Core.counter) {
                 return 0;
             }
-            new_cur.col = frame->vct;
             new_cur.line = Core.counter;
+            line = &buf->lines[new_cur.line];
+            new_cur.col = get_index(line->s, line->n, frame->vct);
             break;
 
         case 'G':
@@ -833,7 +852,8 @@ int prepare_motion(struct frame *frame, int motion_key)
             if (new_cur.line == frame->cur.line) {
                 return 0;
             }
-            new_cur.col = frame->vct;
+            line = &buf->lines[new_cur.line];
+            new_cur.col = get_index(line->s, line->n, frame->vct);
             break;
             
         default:
@@ -943,7 +963,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.col == frame->cur.col) {
             return 0;
         }
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         r = 2;
         break;
 
@@ -977,7 +997,8 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (new_cur.col == frame->cur.col) {
             return 0;
         }
-        new_vct = new_cur.col;
+        line = &buf->lines[new_cur.line];
+        new_cur.col = get_index(line->s, line->n, frame->vct);
         r = 1;
         break;
 
@@ -1020,7 +1041,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (is_point_equal(&frame->cur, &new_cur)) {
             return 0;
         }
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         r = 1;
         break;
 
@@ -1075,7 +1096,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (is_point_equal(&frame->cur, &new_cur)) {
             return 0;
         }
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         r = 2;
         break;
 
@@ -1124,7 +1145,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         if (is_point_equal(&frame->cur, &new_cur)) {
             return 0;
         }
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         r = 1;
         break;
 
@@ -1132,7 +1153,7 @@ int prepare_motion(struct frame *frame, int motion_key)
     case 'n':
         if (buf->num_matches == 0) {
             set_message("no matches");
-            return 0;
+            return 1;
         }
         if (Core.search_dir == -1) {
             goto go_forward;
@@ -1143,7 +1164,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         index += Core.counter % buf->num_matches;
         index %= buf->num_matches;
         new_cur = buf->matches[index].from;
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         set_message("%s [%zu/%zu]", buf->search_pat, index + 1,
                 buf->num_matches);
         r = 1;
@@ -1153,7 +1174,7 @@ int prepare_motion(struct frame *frame, int motion_key)
     case 'N':
         if (buf->num_matches == 0) {
             set_message("no matches");
-            return 0;
+            return 1;
         }
         if (Core.search_dir == -1) {
             goto go_backwards;
@@ -1173,7 +1194,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         }
         index %= frame->buf->num_matches;
         new_cur = buf->matches[index].from;
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         set_message("%s [%zu/%zu]", buf->search_pat, index + 1,
                 buf->num_matches);
         r = 1;
@@ -1190,7 +1211,7 @@ int prepare_motion(struct frame *frame, int motion_key)
             return 0;
         }
         new_cur = buf->parens[index].pos;
-        new_vct = new_cur.col;
+        new_vct = compute_vct(frame, &new_cur);
         r = 1;
         break;
 

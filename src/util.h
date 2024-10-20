@@ -61,6 +61,48 @@ struct glyph {
 };
 
 /**
+ * Get the number of bytes the glyph wants.
+ *
+ * @param s The multi byte sequence.
+ * @param
+ *
+ * @return The number of bytes.
+ */
+int get_glyph_count(const char *s, size_t n);
+
+/**
+ * Moves given index to the previous glyph.
+ *
+ * @param s The multi byte sequence.
+ * @param i The parameter after the glyph.
+ *
+ * @return The new index.
+ */
+size_t move_back_glyph(const char *s, size_t i);
+
+/**
+ * Gets the index at given x position.
+ *
+ * @param s The multi byte sequence.
+ * @param n The length of the multi byte sequence.
+ * @param w The x position.
+ *
+ * @return The index at given x position.
+ */
+size_t get_index(const char *s, size_t n, size_t x);
+
+/**
+ * Gets the x position of given index.
+ *
+ * @param s The multi byte sequence.
+ * @param n The length of the byte sequence.
+ * @param i The index.
+ *
+ * @return The x position.
+ */
+size_t get_advance(const char *s, size_t n, size_t i);
+
+/**
  * Gets the first glyph of the multi byte string `s`.
  *
  * This function assumes that there is a "next glyph" and does not handle the

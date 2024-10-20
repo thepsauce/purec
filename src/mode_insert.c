@@ -17,7 +17,7 @@ static void attempt_join(void)
     size_t              i;
     struct undo_event   *prev_ev, *ev;
 
-    for (i = Core.ev_from_ins + 1; i < SelFrame->buf->event_i; i++) {
+    for (i = Core.ev_from_insert + 1; i < SelFrame->buf->event_i; i++) {
         prev_ev = &SelFrame->buf->events[i - 1];
         ev = &SelFrame->buf->events[i];
         if (should_join(prev_ev, ev)) {
@@ -42,12 +42,12 @@ static void repeat_last_insertion(void)
     buf = SelFrame->buf;
 
     if ((Core.counter <= 1 && Core.move_down_count == 0) ||
-            Core.ev_from_ins == buf->event_i) {
+            Core.ev_from_insert == buf->event_i) {
         return;
     }
 
     /* check if there is only a SINGLE transient chain */
-    for (e = Core.ev_from_ins + 1; e < buf->event_i; e++) {
+    for (e = Core.ev_from_insert + 1; e < buf->event_i; e++) {
         ev = &buf->events[e - 1];
         if (!(ev->flags & IS_TRANSIENT)) {
             return;
@@ -55,8 +55,8 @@ static void repeat_last_insertion(void)
     }
 
     /* combine the events (we only expect insertion and deletion events) */
-    cur = buf->events[Core.ev_from_ins].pos;
-    for (e = Core.ev_from_ins; e < buf->event_i; e++) {
+    cur = buf->events[Core.ev_from_insert].pos;
+    for (e = Core.ev_from_insert; e < buf->event_i; e++) {
         ev = &buf->events[e];
         seg = ev->seg;
         load_undo_data(seg);
@@ -138,7 +138,7 @@ static void repeat_last_insertion(void)
     }
 
     buf->events[buf->event_i - 1].flags |= IS_TRANSIENT;
-    repeat = Core.counter - 1;
+    repeat = Core.repeat_insert - 1;
     for (i = 0; i <= Core.move_down_count; i++, cur.line++) {
         if (cur.line >= SelFrame->buf->num_lines) {
             break;
@@ -156,7 +156,7 @@ static void repeat_last_insertion(void)
             cur.line += repeat * (num_lines - 1);
             cur.col = lines[num_lines - 1].n;
         }
-        repeat = Core.counter;
+        repeat = Core.repeat_insert;
     }
     cur.line--;
 
@@ -174,10 +174,8 @@ int insert_handle_input(int c)
     struct buf          *buf;
     char                ch;
     size_t              n;
-    struct pos          old_cur;
     struct raw_line     lines[2];
     struct line         *line;
-    size_t              amount;
     col_t               i;
 
     buf = SelFrame->buf;
@@ -188,21 +186,13 @@ int insert_handle_input(int c)
         repeat_last_insertion();
         Core.last_insert.buf = buf;
         Core.last_insert.pos = SelFrame->cur;
-        if (SelFrame->cur.col > 0) {
-            SelFrame->cur.col--;
-            (void) adjust_scroll(SelFrame);
-        }
-        SelFrame->vct = SelFrame->cur.col;
+        (void) do_motion(SelFrame, KEY_LEFT);
         set_mode(NORMAL_MODE);
         return UPDATE_UI;
 
     case CONTROL('C'):
         attempt_join();
-        if (SelFrame->cur.col > 0) {
-            SelFrame->cur.col--;
-            (void) adjust_scroll(SelFrame);
-        }
-        SelFrame->vct = SelFrame->cur.col;
+        (void) do_motion(SelFrame, KEY_LEFT);
         set_mode(NORMAL_MODE);
         return UPDATE_UI;
 
@@ -228,54 +218,57 @@ int insert_handle_input(int c)
         return UPDATE_UI;
 
     case KEY_DC:
-        old_cur = SelFrame->cur;
-        if (old_cur.col == buf->lines[old_cur.line].n) {
-            if (old_cur.line == buf->num_lines - 1) {
+        if (SelFrame->cur.col == buf->lines[SelFrame->cur.line].n) {
+            if (SelFrame->cur.line == buf->num_lines - 1) {
                 return 0;
             }
-            old_cur.line++;
-            old_cur.col = 0;
+            SelFrame->next_cur.line = SelFrame->cur.line + 1;
+            SelFrame->next_cur.col = 0;
+            SelFrame->next_vct = 0;
         } else {
-            old_cur.col++;
+            (void) prepare_motion(SelFrame, KEY_RIGHT);
         }
-        (void) delete_range(buf, &SelFrame->cur, &old_cur);
-        SelFrame->vct = SelFrame->cur.col;
+        (void) delete_range(buf, &SelFrame->cur, &SelFrame->next_cur);
+        SelFrame->vct = SelFrame->next_vct;
         (void) adjust_scroll(SelFrame);
         return UPDATE_UI;
 
     case 0x7f:
     case KEY_BACKSPACE:
     case '\b':
-        old_cur = SelFrame->cur;
-        if (old_cur.col == 0) {
-            if (old_cur.line == 0) {
+        SelFrame->next_cur = SelFrame->cur;
+        if (SelFrame->cur.col == 0) {
+            if (SelFrame->cur.line == 0) {
                 return 0;
             }
-            SelFrame->cur.line--;
-            SelFrame->cur.col = buf->lines[SelFrame->cur.line].n;
+            SelFrame->next_cur.line--;
+            SelFrame->next_cur.col = buf->lines[SelFrame->next_cur.line].n;
+            SelFrame->next_vct = compute_vct(SelFrame, &SelFrame->next_cur);
         } else {
-            if (old_cur.col % Core.tab_size == 0) {
-                amount = Core.tab_size;
-                line = &buf->lines[old_cur.line];
-                for (i = old_cur.col; i > old_cur.col - Core.tab_size; ) {
+            if (SelFrame->cur.col % Core.tab_size == 0) {
+                Core.counter = Core.tab_size;
+                line = &buf->lines[SelFrame->cur.line];
+                for (i = SelFrame->cur.col;
+                     i > SelFrame->cur.col - Core.tab_size; ) {
                     i--;
                     if (line->s[i] != ' ') {
-                        amount = 1;
+                        Core.counter = 1;
                         break;
                     }
                 }
             } else {
-                amount = 1;
+                Core.counter = 1;
             }
-            SelFrame->cur.col -= amount;
+            (void) prepare_motion(SelFrame, KEY_LEFT);
         }
-        (void) delete_range(buf, &SelFrame->cur, &old_cur);
-        SelFrame->vct = SelFrame->cur.col;
+        (void) delete_range(buf, &SelFrame->next_cur, &SelFrame->cur);
+        SelFrame->cur = SelFrame->next_cur;
+        SelFrame->vct = SelFrame->next_vct;
         (void) adjust_scroll(SelFrame);
         return UPDATE_UI;
     }
 
-    if (c >= ' ') {
+    if (c >= ' ' && c < 0x100) {
         lines[0].s = &ch;
         lines[0].n = 1;
         (void) insert_lines(buf, &SelFrame->cur, lines, 1, 1);

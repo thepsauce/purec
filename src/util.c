@@ -1,4 +1,5 @@
 #include "util.h"
+#include "purec.h"
 #include "xalloc.h"
 
 #include <ctype.h>
@@ -6,36 +7,146 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
-#include <wchar.h>
+
+int get_glyph_count(const char *s, size_t n)
+{
+    if (n >= 4 && (s[0] & 0xf8) == 0xf0) {
+        if ((s[1] & 0xc0) != 0x80 ||
+                (s[2] & 0xc0) != 0x80 ||
+                (s[3] & 0xc0) != 0x80) {
+            return 1;
+        }
+        return 4;
+    }
+
+    if (n >= 3 && (s[0] & 0xf0) == 0xe0) {
+        if ((s[1] & 0xc0) != 0x80 ||
+                (s[2] & 0xc0) != 0x80) {
+            return 1;
+        }
+        return 3;
+    }
+
+    if (n >= 2 && (s[0] & 0xe0) == 0xc0) {
+        if ((s[1] & 0xc0) != 0x80) {
+            return 1;
+        }
+        return 2;
+    }
+    return 1;
+}
+
+size_t move_back_glyph(const char *s, size_t i)
+{
+    size_t          n;
+
+    if (i == 0) {
+        return 0;
+    }
+
+    for (n = 1; (s[i - n] & 0xc0) == 0x80; n++) {
+        if (n == 4 || i - n == 0) {
+            /* this happens when there is an invalid utf8 sequence */
+            return i - 1;
+        }
+    }
+    return i - n;
+}
+
+size_t get_index(const char *s, size_t n, size_t target_x)
+{
+    struct glyph    g;
+    size_t          i, x;
+
+    for (i = 0, x = 0; i < n && x < target_x; i += g.n, x += g.w) {
+        if (s[i] == '\t') {
+            g.n = 1;
+            g.w = Core.tab_size - x % Core.tab_size;
+        } else {
+            (void) get_glyph(&s[i], n - i, &g);
+        }
+    }
+    return i;
+}
+
+size_t get_advance(const char *s, size_t n, size_t i)
+{
+    size_t          j, x;
+    struct glyph    g;
+
+    i = MIN(i, n);
+    for (j = 0, x = 0; j < i; ) {
+        if (s[j] == '\t') {
+            g.n = 1;
+            g.w = Core.tab_size - x % Core.tab_size;
+        } else {
+            (void) get_glyph(&s[j], n - j, &g);
+        }
+        j += g.n;
+        x += g.w;
+    }
+    return x;
+}
 
 int wcwidth(wchar_t c);
 
 int get_glyph(const char *s, size_t n, struct glyph *g)
 {
-    size_t          c;
     wchar_t         wc;
-    mbstate_t       mbs;
 
-    if (s[0] < ' ' || s[0] == 0x7f) {
-        g->wc = L'?';
+    if ((s[0] >= '\0' && s[0] < ' ') || s[0] == 0x7f) {
+        g->wc = s[0];
         g->n = 1;
-        g->w = 1;
-        return -1;
+        g->w = 2;
+        return 1;
     }
 
-    memset(&mbs, 0, sizeof(mbs));
-    c = mbrtowc(&wc, &s[0], n, &mbs);
-    if (c == (size_t) -1 || c == (size_t) -2) {
-        g->wc = L'?';
+    if ((s[0] & 0x80) == 0) {
+        g->wc = s[0];
         g->n = 1;
         g->w = 1;
-        return -1;
+        return 1;
     }
 
+    if (n >= 4 && (s[0] & 0xf8) == 0xf0) {
+        if ((s[1] & 0xc0) != 0x80 ||
+                (s[2] & 0xc0) != 0x80 ||
+                (s[3] & 0xc0) != 0x80) {
+            goto err;
+        }
+        wc = (s[0] & 0x07) << 18;
+        wc |= (s[1] & 0x3f) << 12;
+        wc |= (s[2] & 0x3f) << 6;
+        wc |= (s[3] & 0x3f);
+        g->n = 4;
+    } else if (n >= 3 && (s[0] & 0xf0) == 0xe0) {
+        if ((s[1] & 0xc0) != 0x80 ||
+                (s[2] & 0xc0) != 0x80) {
+            goto err;
+        }
+        wc = (s[0] & 0x0f) << 12;
+        wc |= (s[1] & 0x3f) << 6;
+        wc |= (s[2] & 0x3f);
+        g->n = 3;
+    } else if (n >= 2 && (s[0] & 0xe0) == 0xc0) {
+        if ((s[1] & 0xc0) != 0x80) {
+            goto err;
+        }
+        wc = (s[0] & 0x1f) << 6;
+        wc |= (s[1] & 0x3f);
+        g->n = 2;
+    } else {
+        goto err;
+    }
     g->wc = wc;
-    g->n = c;
     g->w = wcwidth(wc);
-    return c;
+    return g->n;
+
+err:
+    g->wc = s[0];
+    g->n = 1;
+    g->w = 1;
+    return -1;
 }
 
 bool is_point_equal(const struct pos *p1, const struct pos *p2)

@@ -11,6 +11,11 @@ struct render_info {
     /// the language to use
     size_t lang;
 
+    /// the offset in x direction of the rendering
+    int off_x;
+    /// the offset in y direction of the rendering
+    int off_y;
+
     /// the origin of the line rendering
     col_t x;
     /// the maximum width of the line rendering
@@ -82,41 +87,49 @@ static void render_line(struct render_info *ri)
     struct pos      p;
     struct glyph    g;
     bool            err;
+    int             c;
 
     p.line = ri->line_i;
     for (p.col = 0, x = 0; p.col < ri->line->n && x < ri->w;) {
         err = get_glyph(&ri->line->s[p.col], ri->line->n - p.col, &g) == -1;
-        if (x >= ri->x) {
+        if (x + g.w > ri->x) {
             hi = ri->line->attribs[p.col];
+            c = ri->line->s[p.col];
+            if (c == '\t') {
+                p.col++;
+                x += Core.tab_size - x % Core.tab_size;
+                continue;
+            }
+
+            if (x < ri->x) {
+                set_highlight(stdscr, HI_COMMENT);
+                mvaddch(ri->off_y, ri->off_x + ri->x, '<');
+                p.col += g.n;
+                x = ri->x + 1;
+                continue;
+            }
+
+            if (x + g.w > ri->w) {
+                set_highlight(stdscr, HI_COMMENT);
+                mvaddch(ri->off_y, ri->off_x + x, '>');
+                break;
+            }
+
             if (err) {
-                attr_set(A_REVERSE, 0, NULL);
-                addch('?');
+                set_highlight(stdscr, HI_COMMENT);
+                mvaddch(ri->off_y, ri->off_x + x, '?');
+            } else if ((c >= '\0' && c < ' ') || c == 0x7f) {
+                set_highlight(stdscr, HI_COMMENT);
+                mvaddch(ri->off_y, ri->off_x + x, '^');
+                addch(c == 0x7f ? '?' : c + '@');
             } else {
                 set_highlight(stdscr, hi);
-                addnstr(&ri->line->s[p.col], g.n);
+                mvaddnstr(ri->off_y, ri->off_x + x, &ri->line->s[p.col], g.n);
             }
         }
         p.col += g.n;
         x += g.w;
     }
-}
-
-/**
- * Puts the visual position of given position into `p_x`, `p_y` and returns
- * whether the visual position is visible.
- */
-static inline bool translate_pos(struct frame *frame, struct pos *pos,
-        int x, int y, int w, int h, int *p_x, int *p_y)
-{
-    if (pos->col >= frame->scroll.col &&
-            pos->line >= frame->scroll.line &&
-            pos->col - frame->scroll.col < (col_t) w &&
-            pos->line - frame->scroll.line < (line_t) h) {
-        *p_x = frame->x + x + pos->col - frame->scroll.col;
-        *p_y = frame->y + y + pos->line - frame->scroll.line;
-        return true;
-    }
-    return false;
 }
 
 void render_frame(struct frame *frame)
@@ -136,6 +149,7 @@ void render_frame(struct frame *frame)
     size_t              paren_i, match_i;
     struct pos          p;
     int                 p_x, p_y;
+    int                 hi;
 
     buf = frame->buf;
 
@@ -163,13 +177,14 @@ void render_frame(struct frame *frame)
 
     /* render the lines */
     ri.cur_line = &buf->lines[frame->cur.line];
+    ri.off_x = frame->x + x - frame->scroll.col;
     ri.x = frame->scroll.col;
     ri.w = frame->scroll.col + w;
 
     last_line = frame->scroll.line + frame->h - 1;
     last_line = MIN(last_line, buf->num_lines);
     for (l = frame->scroll.line; l < last_line; l++) {
-        move(frame->y + l - frame->scroll.line, frame->x + x);
+        ri.off_y = frame->y + l - frame->scroll.line;
         ri.line_i = l;
         ri.line = &buf->lines[l];
         render_line(&ri);
@@ -221,16 +236,15 @@ void render_frame(struct frame *frame)
         paren_i = get_paren(buf, &frame->cur);
         if (paren_i != SIZE_MAX) {
             match_i = get_matching_paren(buf, paren_i);
-            set_highlight(stdscr, match_i == SIZE_MAX ? HI_ERROR :
-                          HI_PAREN_MATCH);
+            hi = match_i == SIZE_MAX ? HI_ERROR : HI_PAREN_MATCH;
             p = buf->parens[paren_i].pos;
-            if (translate_pos(frame, &p, x, y, w, h, &p_x, &p_y)) {
-                mvaddch(p_y, p_x, buf->lines[p.line].s[p.col]);
+            if (get_visual_pos(frame, &p, &p_x, &p_y)) {
+                mvchgat(p_y, p_x, 1, get_attrib_of(hi), hi, NULL);
             }
             if (match_i != SIZE_MAX) {
                 p = buf->parens[match_i].pos;
-                if (translate_pos(frame, &p, x, y, w, h, &p_x, &p_y)) {
-                    mvaddch(p_y, p_x, buf->lines[p.line].s[p.col]);
+                if (get_visual_pos(frame, &p, &p_x, &p_y)) {
+                    mvchgat(p_y, p_x, 1, get_attrib_of(hi), hi, NULL);
                 }
             }
         }
@@ -282,9 +296,9 @@ void render_frame(struct frame *frame)
 void get_text_rect(const struct frame *frame,
         int *p_x, int *p_y, int *p_w, int *p_h)
 {
-    int x, w, h;
-    int dg_cnt;
-    size_t n;
+    int             x, w, h;
+    int             dg_cnt;
+    line_t          n;
 
     dg_cnt = 0;
     n = frame->buf->num_lines;
@@ -308,17 +322,22 @@ void get_text_rect(const struct frame *frame,
     *p_h = MAX(h - 1, 0);
 }
 
-bool get_visual_cursor(const struct frame *frame, int *p_x, int *p_y)
+bool get_visual_pos(const struct frame *frame, const struct pos *pos,
+                    int *p_x, int *p_y)
 {
-    int x, y, w, h;
+    int             x, y, w, h;
+    struct line     *line;
+    size_t          v_x;
 
     get_text_rect(frame, &x, &y, &w, &h);
 
-    *p_x = frame->x + x + frame->cur.col - frame->scroll.col;
-    *p_y = frame->y + y + frame->cur.line - frame->scroll.line;
+    line = &frame->buf->lines[pos->line];
+    v_x = get_advance(line->s, line->n, pos->col);
+    *p_x = frame->x + x + v_x - frame->scroll.col;
+    *p_y = frame->y + y + pos->line - frame->scroll.line;
 
-    return frame->cur.col >= frame->scroll.col &&
-            frame->cur.line >= frame->scroll.line &&
-            frame->cur.col - frame->scroll.col < (col_t) w &&
-            frame->cur.line - frame->scroll.line < (line_t) h;
+    return pos->col >= frame->scroll.col &&
+            pos->line >= frame->scroll.line &&
+            pos->col - frame->scroll.col < (col_t) w &&
+            pos->line - frame->scroll.line < (line_t) h;
 }

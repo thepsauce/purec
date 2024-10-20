@@ -85,7 +85,7 @@ static struct frame *do_binded_frame_movement(int c)
     case CONTROL('H'):
     case 'h':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-            if (!get_visual_cursor(frame, &x, &y)) {
+            if (!get_visual_pos(frame, &frame->cur, &x, &y)) {
                 y = frame->y;
             }
             f = get_frame_at(frame->x - 1, y);
@@ -100,7 +100,7 @@ static struct frame *do_binded_frame_movement(int c)
     case CONTROL('J'):
     case 'j':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-            if (!get_visual_cursor(frame, &x, &y)) {
+            if (!get_visual_pos(frame, &frame->cur, &x, &y)) {
                 x = frame->x;
             }
             f = get_frame_at(x, frame->y + frame->h);
@@ -115,7 +115,7 @@ static struct frame *do_binded_frame_movement(int c)
     case CONTROL('K'):
     case 'k':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-            if (!get_visual_cursor(frame, &x, &y)) {
+            if (!get_visual_pos(frame, &frame->cur, &x, &y)) {
                 x = frame->x;
             }
             f = get_frame_at(x, frame->y - 1);
@@ -130,7 +130,7 @@ static struct frame *do_binded_frame_movement(int c)
     case CONTROL('L'):
     case 'l':
         for (frame = SelFrame; Core.counter > 0; Core.counter--) {
-            if (!get_visual_cursor(frame, &x, &y)) {
+            if (!get_visual_pos(frame, &frame->cur, &x, &y)) {
                 y = frame->y;
             }
             f = get_frame_at(frame->x + frame->w, y);
@@ -324,11 +324,13 @@ int normal_handle_input(int c)
         return UPDATE_UI | DO_RECORD;
 
     /* delete current character on the current line */
+    case KEY_DC:
     case 'x':
     case 's': /* also enter insert mode */
-        cur = SelFrame->cur;
-        cur.col = safe_add(cur.col, Core.counter);
-        ev = delete_range(buf, &SelFrame->cur, &cur);
+        if (prepare_motion(SelFrame, KEY_RIGHT) == 0) {
+            return 0;
+        }
+        ev = delete_range(buf, &SelFrame->cur, &SelFrame->next_cur);
         if (ev != NULL) {
             yank_data(ev->seg, 0);
             r = UPDATE_UI;
@@ -340,23 +342,19 @@ int normal_handle_input(int c)
         } else {
             clip_column(SelFrame);
         }
-        SelFrame->vct = cur.col;
+        SelFrame->vct = SelFrame->next_vct;
+        (void) adjust_scroll(SelFrame);
         return r | DO_RECORD;
 
     /* delete the previous character on the current line */
     case 'X':
-        cur = SelFrame->cur;
-        if (cur.col == 0) {
+        if (prepare_motion(SelFrame, KEY_LEFT) == 0) {
             return 0;
         }
-        if ((size_t) cur.col < Core.counter) {
-            SelFrame->cur.col = 0;
-        } else {
-            SelFrame->cur.col -= Core.counter;
-        }
-        ev = delete_range(buf, &SelFrame->cur, &cur);
+        ev = delete_range(buf, &SelFrame->next_cur, &SelFrame->cur);
         yank_data(ev->seg, 0);
-        SelFrame->vct = SelFrame->cur.col;
+        SelFrame->cur = SelFrame->next_cur;
+        SelFrame->vct = SelFrame->next_vct;
         (void) adjust_scroll(SelFrame);
         return UPDATE_UI | DO_RECORD;
 

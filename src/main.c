@@ -139,6 +139,7 @@ int main(int argc, char **argv)
             rec = get_playback();
             next_dot_i = rec == NULL ? Core.rec_len : rec->index;
             if (Core.mode == INSERT_MODE) {
+                Core.counter = 1;
                 c = get_ch();
             } else {
                 Core.move_down_count = 0;

@@ -143,7 +143,7 @@ col_t get_mode_line_end(struct line *line)
         return line->n;
     }
     /* adjustment for normal mode */
-    return line->n == 0 ? 0 : line->n - 1;
+    return line->n == 0 ? 0 : move_back_glyph(line->s, line->n);
 }
 
 void set_mode(int mode)
@@ -168,7 +168,8 @@ void set_mode(int mode)
     if (mode == NORMAL_MODE) {
         clip_column(SelFrame);
     } else if (mode == INSERT_MODE) {
-        Core.ev_from_ins = SelFrame->buf->event_i;
+        Core.ev_from_insert = SelFrame->buf->event_i;
+        Core.repeat_insert = Core.counter;
     }
 
     Core.msg_state = MSG_TO_DEFAULT;
@@ -573,7 +574,7 @@ void render_all(void)
     copywin(Core.msg_win, stdscr, 0, 0, LINES - 1, 0, LINES - 1,
             MIN(COLS - 1, getmaxx(Core.msg_win) - 1), 0);
 
-    if (get_visual_cursor(SelFrame, &cur_x, &cur_y)) {
+    if (get_visual_pos(SelFrame, &SelFrame->cur, &cur_x, &cur_y)) {
         move(cur_y, cur_x);
         printf("\x1b[%c q", cursors[Core.mode]);
         fflush(stdout);

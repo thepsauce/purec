@@ -99,7 +99,9 @@ extern struct core {
     struct pos pos;
 
     /// event from which the last insert mode started
-    size_t ev_from_ins;
+    size_t ev_from_insert;
+    /// how many times to repeat the insertion
+    size_t repeat_insert;
     /// how many times to move down and repeat the insertion
     line_t move_down_count;
 

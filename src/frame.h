@@ -102,13 +102,14 @@ void get_text_rect(const struct frame *frame,
 /**
  * Gets the cursor position relative to the screen origin.
  *
- * @param frame The frame to get the cursor from.
+ * @param frame The frame containing the position.
  * @param p_x   The resulting x position.
  * @param p_y   The resulting y position.
  *
  * @return Whether the cursor is visible.
  */
-bool get_visual_cursor(const struct frame *frame, int *p_x, int *p_y);
+bool get_visual_pos(const struct frame *frame, const struct pos *pos,
+                    int *p_x, int *p_y);
 
 /**
  * Gets the number of frames visible by iterating the frame linked list.
@@ -175,6 +176,16 @@ void set_frame_buffer(struct frame *frame, struct buf *buf);
  * @return Whether scrolling occured.
  */
 int adjust_scroll(struct frame *frame);
+
+/**
+ * Wrapper around `get_advance()`.
+ *
+ * @param frame The frame whose buffer to use.
+ * @param pos   The position of the line and column index.
+ *
+ * @return The horizontal advancement of the position.
+ */
+col_t compute_vct(struct frame *frame, const struct pos *pos);
 
 /**
  * Scrolls the frame by a distance in a direction.
