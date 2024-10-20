@@ -64,9 +64,7 @@ extern const struct named_color {
  */
 int get_number_of_themes(void);
 
-extern int Theme;
-
-#define get_attrib_of(hi) (Themes[Theme].attribs[hi][2])
+#define get_attrib_of(hi) (Themes[Core.theme].attribs[hi][2])
 
 /**
  * Initializes the colors.

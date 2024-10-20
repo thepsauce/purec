@@ -13,7 +13,10 @@
 
 WINDOW *OffScreen;
 
-struct core Core;
+struct core Core = {
+    .tab_size = 4,
+    .theme = 31
+};
 
 static struct program_arguments {
     bool needs_help;
@@ -477,8 +480,6 @@ int init_purec(int argc, char **argv)
     init_colors();
     init_clipboard();
 
-    Core.tab_size = 4;
-
     Core.msg_win = newpad(1, 128);
     OffScreen = newpad(1, 512);
     
@@ -557,7 +558,7 @@ void render_all(void)
     };
 
     int             cur_x, cur_y;
-    struct frame *frame;
+    struct frame    *frame;
     
     curs_set(0);
 

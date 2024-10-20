@@ -26,8 +26,8 @@ SOURCES := $(filter-out $(MAIN_SOURCE),$(shell find $(SRC) -name '*.c'))
 OBJECTS := $(patsubst $(SRC)/%.c,$(OUT)/%.o,$(SOURCES))
 
 # Get test sources and main sources
-TEST_MAIN_SOURCES=$(TESTS)/rel.c $(TESTS)/main.c
-TEST_SOURCES=$(TESTS)/buf.c $(TESTS)/test.c
+TEST_MAIN_SOURCES=$(TESTS)/buf.c $(TESTS)/rel.c $(TESTS)/main.c
+TEST_SOURCES=$(TESTS)/test.c
 # Get the corresponding test object paths
 TEST_OBJECTS := $(patsubst %.c,$(OUT)/%.o,$(TEST_SOURCES))
 TEST_BINARIES := $(patsubst %.c,$(OUT)/%,$(TEST_MAIN_SOURCES))
@@ -61,13 +61,13 @@ $(OUT)/$(TESTS)/%: $(OBJECTS) $(TEST_OBJECTS) $(OUT)/$(TESTS)/%.o $(TESTS)/test.
 build: $(OUT)/$(RUN)
 
 run: build
-	./$(OUT)/$(RUN)
+	./$(OUT)/$(RUN) 2>asan.txt
 
 gdb: build
 	gdb $(OUT)/$(RUN)
 
 test: build $(TEST_BINARIES)
-	./$(OUT)/$(TESTS)/$(t)
+	./$(OUT)/$(TESTS)/$(t) 2>asan.txt
 
 release:
 	mkdir -p $(RELEASE)

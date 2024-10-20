@@ -78,7 +78,7 @@ void init_clipboard(void)
 
 static void *x_thread(void *_unused)
 {
-    XEvent xev;
+    XEvent          xev;
 
     while (XNextEvent(X.dpy_copy, &xev), 1) {
         if (xev.type == SelectionRequest) {
@@ -93,7 +93,7 @@ static void *x_thread(void *_unused)
 
 int copy_clipboard(struct undo_seg *seg, int primary)
 {
-    Atom clipboard;
+    Atom            clipboard;
 
     if (X.dpy_copy == NULL) {
         return -1;
@@ -121,9 +121,9 @@ int copy_clipboard(struct undo_seg *seg, int primary)
 
 static void handle_sel_request(XEvent *e)
 {
-    XSelectionRequestEvent *xsre;
-    XSelectionEvent xev;
-    Atom targets, target, clipboard;
+    XSelectionRequestEvent  *xsre;
+    XSelectionEvent         xev;
+    Atom                    targets, target, clipboard;
 
     xsre = (XSelectionRequestEvent*) e;
     xev.type = SelectionNotify;
@@ -168,8 +168,8 @@ static void handle_sel_request(XEvent *e)
 
 struct raw_line *paste_clipboard(line_t *p_num_lines, int primary)
 {
-    Atom clipboard, target;
-    XEvent xev;
+    Atom            clipboard, target;
+    XEvent          xev;
 
     if (X.dpy_paste == NULL) {
         *p_num_lines = 0;
@@ -207,10 +207,10 @@ struct raw_line *paste_clipboard(line_t *p_num_lines, int primary)
 
 static void handle_sel_notify(XEvent *e)
 {
-    unsigned long nitems, ofs, rem;
-    int format;
-    unsigned char *data, *last, *repl, *st;
-    Atom type, property = None;
+    unsigned long   nitems, ofs, rem;
+    int             format;
+    unsigned char   *data, *last, *repl, *st;
+    Atom            type, property = None;
 
     ofs = 0;
     property = e->xselection.property;

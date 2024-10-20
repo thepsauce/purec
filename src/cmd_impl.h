@@ -64,11 +64,12 @@ int cmd_colorschemeindex(struct cmd_data *cd)
 {
     int             index;
     int             num;
+    int             t;
 
     if (cd->arg[0] != '\0') {
         index = -1;
         num = get_number_of_themes();
-        for (int t = 0; t < num; t++) {
+        for (t = 0; t < num; t++) {
             if (strcasecmp(Themes[t].name, cd->arg) == 0) {
                 index = t;
             }
@@ -77,7 +78,7 @@ int cmd_colorschemeindex(struct cmd_data *cd)
             return -1;
         }
     } else {
-        index = Theme;
+        index = Core.theme;
     }
     set_message("Theme index: %d", index);
     return 0;

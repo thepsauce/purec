@@ -555,6 +555,7 @@ void set_cursor(struct frame *frame, const struct pos *pos)
 {
     struct line     *line;
     struct pos      new_cur;
+    col_t           n;
 
     new_cur = *pos;
 
@@ -565,10 +566,11 @@ void set_cursor(struct frame *frame, const struct pos *pos)
 
     /* clip column */
     line = &frame->buf->lines[new_cur.line];
-    new_cur.col = MIN(new_cur.col, get_mode_line_end(line));
+    n = get_mode_line_end(line);
+    new_cur.col = MIN(new_cur.col, n);
 
     /* set vct */
-    frame->vct = new_cur.col;
+    frame->vct = get_advance(line->s, n, new_cur.col);
 
     frame->prev_cur = frame->cur;
     frame->cur = new_cur;
@@ -1227,6 +1229,14 @@ int apply_motion(struct frame *frame)
 {
     col_t           max_col;
 
+    /* save the cursor if it moved enough */
+    if (frame->cur.line > frame->next_cur.line) {
+        if (frame->cur.line - frame->next_cur.line > MAX(frame->h, 2)) {
+            frame->prev_cur = frame->cur;
+        }
+    } else if (frame->next_cur.line - frame->cur.line > MAX(frame->h, 2)) {
+        frame->prev_cur = frame->cur;
+    }
     max_col = get_mode_line_end(&frame->buf->lines[frame->next_cur.line]);
     frame->cur.col = MIN(frame->next_cur.col, max_col);
     frame->cur.line = frame->next_cur.line;

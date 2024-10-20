@@ -1,5 +1,4 @@
 #include "buf.h"
-#include "cmd.h"
 #include "frame.h"
 #include "fuzzy.h"
 #include "purec.h"

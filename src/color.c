@@ -1,5 +1,5 @@
 #include "color.h"
-#include "util.h"
+#include "purec.h"
 
 #include <string.h>
 
@@ -5850,8 +5850,6 @@ int get_number_of_themes(void)
     return ARRAY_SIZE(Themes);
 }
 
-int Theme = 31;
-
 const char *HiNames[] = {
     [HI_DEFAULT] = "Default",
     [HI_NORMAL] = "Normal",
@@ -5878,7 +5876,8 @@ const char *HiNames[] = {
     [HI_CHANGED] = "Changed",
     [HI_PAREN_MATCH] = "ParenMatch",
     [HI_SEARCH] = "Search",
-    [HI_VISUAL] = "Visual"
+    [HI_VISUAL] = "Visual",
+    [HI_TODO] = "Todo"
 };
 
 const struct named_color ColorMap[] = {
@@ -5922,7 +5921,7 @@ static void init_theme(void)
     int r, g, b;
     int i, j;
 
-    t = &Themes[Theme];
+    t = &Themes[Core.theme];
     if (can_change_color()) {
         for (i = 0; i < t->colors_needed; i++) {
             if (t->term_colors[i] == NULL) {
@@ -5962,9 +5961,11 @@ void init_colors(void)
 
 int set_theme(const char *name)
 {
-    for (int t = 0; t < (int) ARRAY_SIZE(Themes); t++) {
+    int             t;
+
+    for (t = 0; t < (int) ARRAY_SIZE(Themes); t++) {
         if (strcasecmp(Themes[t].name, name) == 0) {
-            Theme = t;
+            Core.theme = t;
             init_theme();
             return 0;
         }
