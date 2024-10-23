@@ -2,6 +2,7 @@
 #include "parse.h"
 #include "xalloc.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -129,54 +130,83 @@ int string_plus_string(struct value *v, struct value *values)
     return 0;
 }
 
-static int operate(struct value *v, struct value *values, size_t n, int opr)
+int operate_tolower(struct value *v, struct value *values)
 {
-    static int (*single_operators[GROUP_MAX][VALUE_MAX])(struct value *v, struct value *values) = {
-        [GROUP_POSITIVE][VALUE_NUMBER] = pass_single,
+    size_t          i;
 
-        [GROUP_NEGATE][VALUE_NUMBER] = number_negate,
-        [GROUP_NOT][VALUE_NUMBER] = bool_not,
-
-        [GROUP_ROUND][VALUE_BOOL] = pass_single,
-        [GROUP_ROUND][VALUE_NUMBER] = pass_single,
-        [GROUP_ROUND][VALUE_STRING] = pass_single
-    };
-
-    static int (*double_operators[GROUP_MAX][VALUE_MAX][VALUE_MAX])(struct value *v, struct value *values) = {
-        [GROUP_PLUS][VALUE_NUMBER][VALUE_NUMBER] = number_plus_number,
-        [GROUP_MINUS][VALUE_NUMBER][VALUE_NUMBER] = number_minus_number,
-        [GROUP_MULTIPLY][VALUE_NUMBER][VALUE_NUMBER] = number_multiply_number,
-        [GROUP_DIVIDE][VALUE_NUMBER][VALUE_NUMBER] = number_divide_number,
-
-        [GROUP_PLUS][VALUE_STRING][VALUE_STRING] = string_plus_string,
-        [GROUP_MULTIPLY][VALUE_STRING][VALUE_STRING] = string_plus_string,
-
-        [GROUP_AND][VALUE_BOOL][VALUE_BOOL] = bool_and_bool,
-        [GROUP_OR][VALUE_BOOL][VALUE_BOOL] = bool_or_bool,
-        [GROUP_XOR][VALUE_BOOL][VALUE_BOOL] = bool_xor_bool,
-
-        [GROUP_LESS][VALUE_NUMBER][VALUE_NUMBER] = number_less_number,
-        [GROUP_LESS_EQUAL][VALUE_NUMBER][VALUE_NUMBER] = number_less_equal_number,
-        [GROUP_GREATER][VALUE_NUMBER][VALUE_NUMBER] = number_greater_number,
-        [GROUP_GREATER_EQUAL][VALUE_NUMBER][VALUE_NUMBER] = number_greater_equal_number,
-        [GROUP_EQUAL][VALUE_NUMBER][VALUE_NUMBER] = number_equal_number,
-        [GROUP_NOT_EQUAL][VALUE_NUMBER][VALUE_NUMBER] = number_not_equal_number,
-    };
-
-    int (*op)(struct value *v, struct value *vs);
-
-    switch (n) {
-    case 1: op = single_operators[opr][values[0].type]; break;
-    case 2: op = double_operators[opr][values[0].type][values[1].type]; break;
-    default:
-        op = NULL;
+    v->type = VALUE_STRING;
+    v->v.s.n = values[0].v.s.n;
+    v->v.s.p = xmalloc(v->v.s.n);
+    for (i = 0; i < v->v.s.n; i++) {
+        v->v.s.p[i] = tolower(values[0].v.s.p[i]);
     }
+    return 0;
+}
 
-    if (op == NULL) {
-        set_error("operator not defined");
+int operate_toupper(struct value *v, struct value *values)
+{
+    size_t          i;
+
+    v->type = VALUE_STRING;
+    v->v.s.n = values[0].v.s.n;
+    v->v.s.p = xmalloc(v->v.s.n);
+    for (i = 0; i < v->v.s.n; i++) {
+        v->v.s.p[i] = toupper(values[0].v.s.p[i]);
+    }
+    return 0;
+}
+
+int operate_substr1(struct value *v, struct value *values)
+{
+    size_t          from;
+
+    if (values[1].type != VALUE_NUMBER) {
+        set_error("substr() expects a number as 2nd operand");
         return -1;
     }
-    return (*op)(v, values);
+    v->type = VALUE_STRING;
+    from = roundl(values[1].v.f);
+    if (from >= values[0].v.s.n) {
+        v->v.s.n = 0;
+        v->v.s.p = NULL;
+        return 0;
+    }
+    v->v.s.n = values[0].v.s.n - from;
+    v->v.s.p = xmemdup(&values[0].v.s.p[from], v->v.s.n);
+    return 0;
+}
+
+int operate_substr2(struct value *v, struct value *values)
+{
+    size_t          from, to;
+
+    if (values[1].type != VALUE_NUMBER || values[2].type != VALUE_NUMBER) {
+        set_error("substr() expects a number as 2nd and 3rd argument");
+        return -1;
+    }
+    v->type = VALUE_STRING;
+    from = roundl(values[1].v.f);
+    to = roundl(values[2].v.f);
+    to = MIN(values[0].v.s.n, to);
+    if (from >= to) {
+        v->v.s.n = 0;
+        v->v.s.p = NULL;
+        return 0;
+    }
+    v->v.s.n = to - from;
+    v->v.s.p = xmemdup(&values[0].v.s.p[from], v->v.s.n);
+    return 0;
+}
+
+int operate_len(struct value *v, struct value *values)
+{
+    if (values[0].type != VALUE_STRING) {
+        set_error("len() expects a string as first argument");
+        return -1;
+    }
+    v->type = VALUE_NUMBER;
+    v->v.f = values[0].v.s.n;
+    return 0;
 }
 
 int operate_num(struct value *v, struct value *values)
@@ -299,6 +329,162 @@ int operate_sqrt(struct value *v, struct value *values)
     return 0;
 }
 
+int operate_cbrt(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = cbrtl(values[0].v.f);
+    return 0;
+}
+
+int operate_root(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = powl(values[0].v.f, 1 / values[1].v.f);
+    return 0;
+}
+
+int operate_max(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = fmaxl(values[0].v.f, values[0].v.f);
+    return 0;
+}
+
+int operate_min(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = fminl(values[0].v.f, values[0].v.f);
+    return 0;
+}
+
+int operate_floor(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = floorl(values[0].v.f);
+    return 0;
+}
+
+int operate_ceil(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = ceill(values[0].v.f);
+    return 0;
+}
+
+int operate_erf(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = erfl(values[0].v.f);
+    return 0;
+}
+
+int operate_erfc(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = erfcl(values[0].v.f);
+    return 0;
+}
+
+int operate_pow(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = powl(values[0].v.f, values[1].v.f);
+    return 0;
+}
+
+int operate_tgamma(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = tgammal(values[0].v.f);
+    return 0;
+}
+
+int operate_trunc(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = truncl(values[0].v.f);
+    return 0;
+}
+
+int operate_round(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = roundl(values[0].v.f);
+    return 0;
+}
+
+int operate_raise2(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = values[0].v.f * values[0].v.f;
+    return 0;
+}
+
+int operate_raise3(struct value *v, struct value *values)
+{
+    v->type = VALUE_NUMBER;
+    v->v.f = values[0].v.f * values[0].v.f * values[0].v.f;
+    return 0;
+}
+
+static int operate(struct value *v, struct value *values, size_t n, int opr)
+{
+    static int (*single_operators[GROUP_MAX][VALUE_MAX])(struct value *v, struct value *values) = {
+        [GROUP_POSITIVE][VALUE_NUMBER] = pass_single,
+
+        [GROUP_NEGATE][VALUE_NUMBER] = number_negate,
+        [GROUP_NOT][VALUE_NUMBER] = bool_not,
+
+        [GROUP_ROUND][VALUE_BOOL] = pass_single,
+        [GROUP_ROUND][VALUE_NUMBER] = pass_single,
+        [GROUP_ROUND][VALUE_STRING] = pass_single,
+
+        [GROUP_SQRT][VALUE_NUMBER] = operate_sqrt,
+        [GROUP_CBRT][VALUE_NUMBER] = operate_cbrt,
+
+        [GROUP_RAISE2][VALUE_NUMBER] = operate_raise2,
+        [GROUP_RAISE3][VALUE_NUMBER] = operate_raise3,
+    };
+
+    static int (*double_operators[GROUP_MAX][VALUE_MAX][VALUE_MAX])(struct value *v, struct value *values) = {
+        [GROUP_PLUS][VALUE_NUMBER][VALUE_NUMBER] = number_plus_number,
+        [GROUP_MINUS][VALUE_NUMBER][VALUE_NUMBER] = number_minus_number,
+        [GROUP_MULTIPLY][VALUE_NUMBER][VALUE_NUMBER] = number_multiply_number,
+        [GROUP_DIVIDE][VALUE_NUMBER][VALUE_NUMBER] = number_divide_number,
+        [GROUP_MOD][VALUE_NUMBER][VALUE_NUMBER] = operate_mod,
+        [GROUP_RAISE][VALUE_NUMBER][VALUE_NUMBER] = operate_pow,
+
+        [GROUP_PLUS][VALUE_STRING][VALUE_STRING] = string_plus_string,
+        [GROUP_MULTIPLY][VALUE_STRING][VALUE_STRING] = string_plus_string,
+
+        [GROUP_AND][VALUE_BOOL][VALUE_BOOL] = bool_and_bool,
+        [GROUP_OR][VALUE_BOOL][VALUE_BOOL] = bool_or_bool,
+        [GROUP_XOR][VALUE_BOOL][VALUE_BOOL] = bool_xor_bool,
+
+        [GROUP_LESS][VALUE_NUMBER][VALUE_NUMBER] = number_less_number,
+        [GROUP_LESS_EQUAL][VALUE_NUMBER][VALUE_NUMBER] = number_less_equal_number,
+        [GROUP_GREATER][VALUE_NUMBER][VALUE_NUMBER] = number_greater_number,
+        [GROUP_GREATER_EQUAL][VALUE_NUMBER][VALUE_NUMBER] = number_greater_equal_number,
+        [GROUP_EQUAL][VALUE_NUMBER][VALUE_NUMBER] = number_equal_number,
+        [GROUP_NOT_EQUAL][VALUE_NUMBER][VALUE_NUMBER] = number_not_equal_number,
+    };
+
+    int (*op)(struct value *v, struct value *vs);
+
+    switch (n) {
+    case 1: op = single_operators[opr][values[0].type]; break;
+    case 2: op = double_operators[opr][values[0].type][values[1].type]; break;
+    default:
+        op = NULL;
+    }
+
+    if (op == NULL) {
+        set_error("operator not defined");
+        return -1;
+    }
+    return (*op)(v, values);
+}
+
 struct {
     const char *name;
     size_t num_args;
@@ -320,7 +506,24 @@ struct {
     { "exp", 1, operate_exp },
     { "ln", 1, operate_ln },
     { "sqrt", 1, operate_sqrt },
+    { "cbrt", 1, operate_cbrt },
+    { "root", 2, operate_root },
+    { "max", 2, operate_max },
+    { "min", 2, operate_min },
+    { "ceil", 1, operate_ceil },
+    { "floor", 1, operate_floor },
+    { "erf", 1, operate_erf },
+    { "erfc", 1, operate_erfc },
+    { "pow", 2, operate_pow },
+    { "tgamma", 1, operate_tgamma },
+    { "trunc", 1, operate_trunc },
+    { "round", 1, operate_round },
     { "num", 1, operate_num },
+    { "tolower", 1, operate_tolower },
+    { "toupper", 1, operate_toupper },
+    { "substr", 2, operate_substr1 },
+    { "substr", 3, operate_substr2 },
+    { "len", 1, operate_len },
 };
 
 bool has_system_function(const char *name)
@@ -341,10 +544,8 @@ int compute_system_function(const char *name, struct value *values,
     unsigned        i;
 
     for (i = 0; i < ARRAY_SIZE(system_functions); i++) {
-        if (strcmp(system_functions[i].name, name) == 0) {
-            if (system_functions[i].num_args != num_values) {
-                return 1;
-            }
+        if (strcmp(system_functions[i].name, name) == 0 &&
+                system_functions[i].num_args == num_values) {
             break;
         }
     }
@@ -488,6 +689,7 @@ static int compute_deep_value(struct group *g, struct value *v)
     size_t          var_i;
     struct value    *values;
     int             err;
+    struct group    *arg;
 
     switch (g->type) {
     case GROUP_NUMBER:
@@ -525,8 +727,9 @@ static int compute_deep_value(struct group *g, struct value *v)
             if ((var_i != SIZE_MAX || has_system_function(g->v.w)) &&
                     (g->children[1].type == GROUP_ROUND || var_i == SIZE_MAX ||
                      Parser.vars[var_i].items[0].num_args > 0)) {
-                return compute_function_call(g->v.w, var_i, g->children[1].type == GROUP_ROUND ?
-                                             &g->children[1].children[0] : &g->children[1], v);
+                arg = g->children[1].type == GROUP_ROUND ?
+                        &g->children[1].children[0] : &g->children[1];
+                return compute_function_call(g->v.w, var_i, arg, v);
             }
         }
         if (compute_values(g, &values) == -1) {
@@ -637,39 +840,4 @@ int compute_value(struct group *g, struct value *v)
         break;
     }
     return compute_deep_value(g, v);
-}
-
-void output_value(struct value *v)
-{
-    size_t          i;
-
-    switch (v->type) {
-    case VALUE_NULL:
-        /* nothing, but problem.. */
-        break;
-
-    case VALUE_BOOL:
-        printf("%s", v->v.b ? "true" : "false");
-        break;
-
-    case VALUE_NUMBER:
-        printf("%Lf", v->v.f);
-        break;
-
-    case VALUE_STRING:
-        printf("\"");
-        for (i = 0; i < v->v.s.n; i++) {
-            if (v->v.s.p[i] == '\"') {
-                printf("\\\"");
-            } else {
-                putc(v->v.s.p[i], stdout);
-            }
-        }
-        printf("\"");
-        break;
-
-    case VALUE_MAX:
-        /* nothing */
-        break;
-    }
 }

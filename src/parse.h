@@ -195,25 +195,30 @@ struct local_var {
     struct value    value;
 };
 
-/*
+/**
  * Computes the value of the group.
+ *
+ * @param group The group to compute.
+ * @param value The resulting value.
+ *
+ * @return -1 if an error occured, 0 otherwise.
  */
 int compute_value(/* const */ struct group *group, struct value *value);
 
-/*
+/**
  * Copies src into dest, allocates new memory so they are independent.
+ *
+ * @param dest  The destination of the value.
+ * @param src   The source to copy from.
  */
 void copy_value(struct value *dest, const struct value *src);
 
-/*
+/**
  * Frees resources associated with this value.
+ *
+ * @param value The value whose resource to free.
  */
 void clear_value(struct value *value);
-
-/*
- * Outputs the value neatly into stdout.
- */
-void output_value(struct value *value);
 
 /* * * Parser * * */
 
