@@ -4,6 +4,7 @@
 #include "fuzzy.h"
 #include "input.h"
 #include "lang.h"
+#include "parse.h"
 #include "purec.h"
 #include "xalloc.h"
 
@@ -17,9 +18,13 @@
 #define ACCEPTS_NUMBER  0x2
 
 struct cmd_data {
+    /// the argument after the command name
     char *arg;
+    /// the range supplied to the command
     line_t from, to;
+    /// if the command was supplied with a number or range
     bool has_number, has_range;
+    /// if ! comes after the command name
     bool force;
 };
 
@@ -34,6 +39,7 @@ struct input Cmd;
 #define TAB_COLOR       3
 #define TAB_SYNTAX      4
 #define TAB_HIGHLIGHT   5
+#define TAB_EVAL        6
 
 static const struct cmd {
     /// name of the command
@@ -66,6 +72,8 @@ static const struct cmd {
     { "e", 0, cmd_edit, TAB_PATH },
     { "edit", 0, cmd_edit, TAB_PATH },
 
+    { "eval", 0, cmd_eval, TAB_EVAL },
+
     { "exi", 0, cmd_exit, 0 },
     { "exit", 0, cmd_exit, 0 },
     { "exita", 0, cmd_exit_all, 0 },
@@ -89,6 +97,7 @@ static const struct cmd {
     { "read", 0, cmd_read, TAB_PATH },
 
     { "s", ACCEPTS_RANGE, cmd_substitute, 0 },
+    { "set", 0, cmd_eval, TAB_EVAL },
     { "substitute", ACCEPTS_RANGE, cmd_substitute, 0 },
 
     { "syn", 0, cmd_syntax, TAB_SYNTAX },

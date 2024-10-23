@@ -462,7 +462,7 @@ static char get_pat_char(const char *s, const char **e)
 {
     char            ch;
 
-    if (s[0] != '\\') {
+    if (s[0] != '\\' || s[1] == '\0') {
         *e = s;
         return s[0];
     }
@@ -576,16 +576,8 @@ size_t match_pattern(const char *s, size_t i, size_t s_len, const char *pat)
             if (pat[j] == '\0') {
                 goto mismatch;
             }
-            if (pat[j] == '\\') {
-                switch (pat[j + 1]) {
-                case 'c':
-                    ignore_case = false;
-                    break;
-
-                case 'i':
-                    ignore_case = true;
-                    break;
-                }
+            if (pat[j] == '\\' && (pat[j + 1] == 'c' || pat[j + 1] == 'i')) {
+                ignore_case = pat[j + 1] == 'i';
                 j += 2;
                 break;
             }

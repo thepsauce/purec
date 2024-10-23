@@ -183,6 +183,55 @@ int cmd_edit(struct cmd_data *cd)
     return 0;
 }
 
+int cmd_eval(struct cmd_data *cd)
+{
+    struct group    *group;
+    struct value    val;
+    size_t          i;
+    char            ch;
+
+    if (cd->arg[0] == '\0') {
+        return -1;
+    }
+    group = parse(cd->arg);
+    if (group == NULL) {
+        return -1;
+    }
+    if (compute_value(group, &val) == -1) {
+        return -1;
+    }
+    switch (val.type) {
+    case VALUE_BOOL:
+        set_message("%s", val.v.b ? "true" : "false");
+        break;
+
+    case VALUE_NUMBER:
+        set_message("%Lf", val.v.f);
+        break;
+
+    case VALUE_STRING:
+        set_message("\"");
+        for (i = 0; i < val.v.s.n; i++) {
+            ch = val.v.s.p[i];
+            if (ch == '\"') {
+                set_highlight(Core.msg_win, HI_COMMENT);
+                waddch(Core.msg_win, '\"');
+            } else if ((ch >= 0 && ch < ' ') || ch == 0x7f) {
+                set_highlight(Core.msg_win, HI_COMMENT);
+                waddch(Core.msg_win, '^');
+                waddch(Core.msg_win, ch == 0x7f ? '?' : '@' + ch);
+            } else {
+                set_highlight(Core.msg_win, HI_CMD);
+                waddch(Core.msg_win, ch);
+            }
+        }
+        set_highlight(Core.msg_win, HI_CMD);
+        waddstr(Core.msg_win, "\"");
+        break;
+    }
+    return 0;
+}
+
 int cmd_exit(struct cmd_data *cd)
 {
     if (save_buffer(cd, SelFrame->buf) != 0) {

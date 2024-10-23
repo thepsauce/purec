@@ -9,6 +9,7 @@
 
 #define C_PAREN_STRING_MASK     0x100
 #define C_PAREN_COMMENT_MASK    0x200
+#define C_PAREN_MASK            0x300
 
 const char *c_types[] = {
     "FILE",
@@ -93,7 +94,7 @@ col_t c_indentor(struct buf *buf, line_t line_i)
 
     for (c = 0; index > 0; index--) {
         par = &buf->parens[index - 1];
-        if ((par->type & FOPEN_PAREN)) {
+        if ((par->type & FOPEN_PAREN) && !(par->type & C_PAREN_MASK)) {
             if (c == 0) {
                 break;
             }

@@ -4,7 +4,7 @@ C_FLAGS := -Isrc -std=gnu99 -Wall -Wextra -Wpedantic
 RELEASE_FLAGS := -O3
 
 # Libraries
-C_LIBS := -lncursesw -lX11
+C_LIBS := -lncursesw -lX11 -lm
 
 # Input
 SRC := src
@@ -26,7 +26,7 @@ SOURCES := $(filter-out $(MAIN_SOURCE),$(shell find $(SRC) -name '*.c'))
 OBJECTS := $(patsubst $(SRC)/%.c,$(OUT)/%.o,$(SOURCES))
 
 # Get test sources and main sources
-TEST_MAIN_SOURCES=$(TESTS)/buf.c $(TESTS)/rel.c $(TESTS)/main.c
+TEST_MAIN_SOURCES=$(TESTS)/buf.c $(TESTS)/rel.c $(TESTS)/main.c $(TESTS)/parse.c
 TEST_SOURCES=$(TESTS)/test.c
 # Get the corresponding test object paths
 TEST_OBJECTS := $(patsubst %.c,$(OUT)/%.o,$(TEST_SOURCES))
