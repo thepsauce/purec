@@ -350,58 +350,27 @@ int cmd_read(struct cmd_data *cd)
     return 0;
 }
 
-static struct raw_line *gen_lines(const char *s, size_t *p_num_lines)
+static struct raw_line *gen_lines(const char *s, size_t n, line_t *p_num_lines)
 {
     struct raw_line *lines;
-    size_t          num_lines;
-    char            ch;
-    char            *p;
-    size_t          a, n;
+    line_t          num_lines;
+    const char      *e;
 
     lines = NULL;
     num_lines = 0;
 
-    p = NULL;
-    a = 0;
-    n = 0;
-    for (; s[0] != '\0'; s++) {
-        if (s[0] == '\\') {
-            s++;
-            switch (s[0]) {
-            case 'a': ch = '\a'; break;
-            case 'b': ch = '\b'; break;
-            case 'f': ch = '\f'; break;
-            case 'n': ch = '\n'; break;
-            case 'r': ch = '\r'; break;
-            case 't': ch = '\t'; break;
-            case 'v': ch = '\v'; break;
-            default:
-                ch = s[0];
+    while (n > 0) {
+        for (e = s; n > 0; e++, n--) {
+            if (e[0] == '\n') {
+                break;
             }
-        } else {
-            ch = s[0];
         }
-        if (ch == '\n') {
-            lines = xreallocarray(lines, sizeof(*lines), num_lines + 1);
-            lines[num_lines].s = xmemdup(p, n);
-            lines[num_lines].n = n;
-            num_lines++;
-            n = 0;
-            continue;
-        }
-        if (a == n) {
-            a *= 2;
-            a++;
-            p = xrealloc(p, a);
-        }
-        p[n++] = ch;
+        lines = xreallocarray(lines, sizeof(*lines), num_lines + 1);
+        lines[num_lines].s = xmemdup(s, e - s);
+        lines[num_lines].n = e - s;
+        num_lines++;
+        s = e;
     }
-    lines = xreallocarray(lines, sizeof(*lines), num_lines + 1);
-    lines[num_lines].s = xmemdup(p, n);
-    lines[num_lines].n = n;
-    num_lines++;
-
-    free(p);
 
     *p_num_lines = num_lines;
     return lines;
@@ -411,11 +380,19 @@ int cmd_substitute(struct cmd_data *cd)
 {
     char                sep;
     char                *e1, *e2;
+    char                *repl;
+    size_t              repl_len;
     struct buf          *buf;
+    struct group        *group;
+    struct value        loc;
+    struct value        val;
     struct raw_line     *lines;
-    size_t              num_lines;
+    line_t              num_lines;
+    struct raw_line     *res_lines;
+    line_t              num_res_lines;
     struct match        *m;
-    size_t              i;
+    char                *pat;
+    line_t              i;
 
     sep = cd->arg[0];
     if (sep == '\0') {
@@ -440,11 +417,22 @@ int cmd_substitute(struct cmd_data *cd)
     *e1 = '\0';
     *e2 = '\0';
 
+    if (e1[1] == '\\' && e1[2] == '=') {
+        group = parse(&e1[3]);
+        if (group == NULL) {
+            return -1;
+        }
+    } else {
+        group = NULL;
+        repl = parse_string(&e1[1], &e1, &repl_len, '\0');
+        lines = gen_lines(repl, repl_len, &num_lines);
+    }
     buf = SelFrame->buf;
     search_pattern(buf, &cd->arg[1]);
-    lines = gen_lines(&e1[1], &num_lines);
     m = &buf->matches[buf->num_matches];
     /* make sure the buffer does not move the matches */
+    pat = buf->search_pat;
+    buf->search_pat = NULL;
     buf->num_matches = 0;
     /* do it in reverse */
     for (; m != buf->matches; ) {
@@ -456,13 +444,45 @@ int cmd_substitute(struct cmd_data *cd)
         if (m->from.line > cd->to) {
             continue;
         }
-        (void) replace_lines(buf, &m->from, &m->to, lines, num_lines);
+        if (group != NULL) {
+            lines = get_lines(buf, &m->from, &m->to, &num_lines);
+            loc.type = VALUE_STRING;
+            loc.v.s.n = lines[0].n;
+            loc.v.s.p = lines[0].s;
+            push_local_variable(save_word("\\0", 2), &loc);
+            (void) delete_range(buf, &m->from, &m->to);
+            if (compute_value(group, &val) == 0) {
+                if (val.type != VALUE_STRING) {
+                    set_error("got value that is not a string");
+                } else {
+                    res_lines = gen_lines(val.v.s.p, val.v.s.n, &num_res_lines);
+                    (void) insert_lines(buf, &m->from, res_lines,
+                                        num_res_lines, 1);
+                    for (i = 0; i < num_res_lines; i++) {
+                        free(res_lines[i].s);
+                    }
+                    free(res_lines);
+                }
+                clear_value(&val);
+            }
+            for (i = 0; i < num_lines; i++) {
+                free(lines[i].s);
+            }
+            free(lines);
+        } else {
+            (void) replace_lines(buf, &m->from, &m->to, lines, num_lines);
+        }
     }
+    clip_column(SelFrame);
 
-    for (i = 0; i < num_lines; i++) {
-        free(lines[i].s);
+    buf->search_pat = pat;
+
+    if (group == NULL) {
+        for (i = 0; i < num_lines; i++) {
+            free(lines[i].s);
+        }
+        free(lines);
     }
-    free(lines);
     return 0;
 }
 

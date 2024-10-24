@@ -242,7 +242,7 @@ extern struct parser {
 } Parser;
 
 /**
- * Parser a number in the parser format.
+ * Parse a number in the parser format.
  *
  * @param s     The string containing the number at the front.
  * @param n     The length of `s`, use `SIZE_MAX` for null terminated strings.
@@ -252,6 +252,17 @@ extern struct parser {
  * @return 0 if the number was read or -1 if there is no number.
  */
 int parse_number(char *s, size_t n, char **p_end, long double *p_f);
+
+/**
+ * Parse a string in the parser format.
+ *
+ * @param s     The string containing the string at the front.
+ * @param p_end The end position of the string.
+ * @param p_n   The length of the string.
+ *
+ * @return A pointer to the allocated string.
+ */
+char *parse_string(char *s, char **p_end, size_t *p_n, char term);
 
 /**
  * Parse given string.
@@ -264,6 +275,16 @@ int parse_number(char *s, size_t n, char **p_end, long double *p_f);
  * @return The parsed group.
  */
 struct group *parse(const char *s);
+
+/**
+ * Save a word in the parse, needed for below functions.
+ *
+ * @param word  The string to save.
+ * @param len   The length of the word.
+ *
+ * @return A pointer to the internal saved word, do not free.
+ */
+char *save_word(const char *word, size_t len);
 
 /**
  * Get the first variable index in the list.

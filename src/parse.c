@@ -243,45 +243,46 @@ int parse_number(char *s, size_t n, char **p_end, long double *p_f)
     return 0;
 }
 
-static int read_string(void)
+char *parse_string(char *s, char **p_end, size_t *p_n, char term)
 {
-    char            *s;
+    char            *p;
     size_t          a, n;
     int             hexa;
     int             c;
 
-    /* skip over " */
-    Parser.p++;
-    s = NULL;
+    p = NULL;
     n = 0;
     a = 0;
-    while (Parser.p[0] != '\"' && Parser.p[0] != '\0') {
-        if (Parser.p[0] == '\\') {
-            Parser.p++;
-            if (Parser.p[0] == 'x' ||
-                    Parser.p[0] == 'u' ||
-                    Parser.p[0] == 'U') {
-                hexa = Parser.p[0] == 'x' ? 2 :
-                        Parser.p[0] == 'u' ? 4 : 8;
-                c = 0;
-                Parser.p++;
-                for (; hexa > 0 && Parser.p[0] != '\0'; hexa--, Parser.p++) {
+    while (s[0] != term && s[0] != '\0') {
+        if (s[0] == '\\') {
+            s++;
+            if (s[0] == 'x' ||
+                    s[0] == 'u' ||
+                    s[0] == 'U') {
+                hexa = s[0] == 'x' ? 2 :
+                        s[0] == 'u' ? 4 : 8;
+                s++;
+                if (n + hexa > a) {
+                    a *= 2;
+                    a += hexa;
+                    p = xrealloc(p, a);
+                }
+                for (c = 0; hexa > 0 && s[0] != '\0'; hexa--, s++) {
                     c <<= 4;
-                    c |= isalpha(Parser.p[0]) ? tolower(Parser.p[0]) - 'a' + 10 :
-                        Parser.p[0] - '0';
+                    c |= isalpha(s[0]) ? tolower(s[0]) - 'a' + 10 :
+                        s[0] - '0';
                     if (hexa % 2 == 1) {
-                        if (a == n) {
-                            a *= 2;
-                            a++;
-                            s = xrealloc(s, a);
-                        }
-                        s[n++] = c;
+                        p[n++] = c;
                         c = 0;
                     }
                 }
                 continue;
             }
-            switch (Parser.p[0]) {
+            switch (s[0]) {
+            case '\0':
+                s--;
+                c = '\\';
+                break;
             case '0': c = '\0'; break;
             case 'a': c = '\a'; break;
             case 'b': c = '\b'; break;
@@ -291,29 +292,22 @@ static int read_string(void)
             case 'v': c = '\v'; break;
             case 't': c = '\t'; break;
             default:
-                c = Parser.p[0];
+                c = s[0];
             }
         } else {
-            c = Parser.p[0];
+            c = s[0];
         }
-        if (a == n) {
+        if (n == a) {
             a *= 2;
             a++;
-            s = xrealloc(s, a);
+            p = xrealloc(p, a);
         }
-        s[n++] = c;
-        Parser.p++;
+        p[n++] = c;
+        s++;
     }
-    if (Parser.p[0] != '\"') {
-        free(s);
-        return -1;
-    }
-    Parser.p++;
-
-    Parser.str.p = xmemdup(s, n);
-    Parser.str.n = n;
-    free(s);
-    return 0;
+    *p_end = s;
+    *p_n = n;
+    return xrealloc(p, n);
 }
 
 static size_t begins_with(const char *s)
@@ -625,12 +619,17 @@ beg:
         Parser.p = end;
         Parser.stack[Parser.num_stack - 1]->type = GROUP_NUMBER;
     } else if (Parser.p[0] == '\"') {
-        if (read_string() == -1) {
-            set_error("misformatted string");
-            return NULL;
+        Parser.p++;
+        Parser.str.p = parse_string(Parser.p, &Parser.p, &Parser.str.n, '\"');
+        if (Parser.p[0] == '\"') {
+            Parser.p++;
         }
         Parser.stack[Parser.num_stack - 1]->type = GROUP_STRING;
         Parser.stack[Parser.num_stack - 1]->v.s = Parser.str;
+    } else if (Parser.p[0] == '\\' && isdigit(Parser.p[1])) {
+        Parser.stack[Parser.num_stack - 1]->type = GROUP_VARIABLE;
+        Parser.stack[Parser.num_stack - 1]->v.w = save_word(Parser.p, 2);
+        Parser.p += 2;
     } else if (Parser.p[0] != '\0') {
         Parser.stack[Parser.num_stack - 1]->type = GROUP_VARIABLE;
         Parser.w = Parser.p;
