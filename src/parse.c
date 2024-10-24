@@ -329,14 +329,104 @@ static size_t begins_with(const char *s)
     return n;
 }
 
-static void walk_up_precedences(int p)
+void copy_group(struct group *dest, const struct group *src)
 {
-    while (Parser.cur->parent != NULL) {
-        if (Precedences[Parser.cur->parent->type] < p) {
+    dest->type = src->type;
+    dest->v = src->v;
+    dest->left = NULL;
+    dest->right = NULL;
+    switch (src->type) {
+    case GROUP_NUMBER:
+        dest->v.f = src->v.f;
+        break;
+
+    case GROUP_VARIABLE:
+        dest->v.w = src->v.w;
+        break;
+
+    case GROUP_STRING:
+        dest->v.s.p = xmemdup(src->v.s.p, src->v.s.n);
+        dest->v.s.n = src->v.s.n;
+        break;
+
+    default:
+        if (src->left != NULL) {
+            dest->left  = xmalloc(sizeof(*dest->left));
+            copy_group(dest->left, src->left);
+        }
+        if (src->right != NULL) {
+            dest->right = xmalloc(sizeof(*dest->right));
+            copy_group(dest->right, src->right);
+        }
+    }
+}
+
+void clear_group(struct group *group)
+{
+    if (group->type == GROUP_STRING) {
+        free(group->v.s.p);
+    }
+    if (group->left != NULL) {
+        free_group(group->left);
+    }
+    if (group->right != NULL) {
+        free_group(group->right);
+    }
+}
+
+void free_group(struct group *group)
+{
+    clear_group(group);
+    free(group);
+}
+
+static void walk_up_precedences(int prec)
+{
+    while (Parser.num_stack > 1) {
+        if (Precedences[Parser.stack[Parser.num_stack - 2]->type] < prec) {
             break;
         }
-        Parser.cur = Parser.cur->parent;
+        Parser.num_stack--;
     }
+}
+
+static void enter_group(int group_type)
+{
+    struct group    *group;
+
+    Parser.stack = xreallocarray(Parser.stack, Parser.num_stack + 1,
+                                 sizeof(*Parser.stack));
+    group = xcalloc(1, sizeof(*group));
+    group->type = group_type;
+    Parser.stack[Parser.num_stack - 1]->right = group;
+    Parser.stack[Parser.num_stack++] = group;
+}
+
+static void walk_down(void)
+{
+    Parser.stack = xreallocarray(Parser.stack, Parser.num_stack + 1,
+                                 sizeof(*Parser.stack));
+    Parser.stack[Parser.num_stack] = Parser.stack[Parser.num_stack - 1]->left;
+    Parser.num_stack++;
+}
+
+static void exchange_group(int group_type)
+{
+    struct group    *group;
+    struct group    *parent;
+
+    group = xcalloc(1, sizeof(*group));
+    group->type = group_type;
+    group->left = Parser.stack[Parser.num_stack - 1];
+    if (Parser.num_stack > 1) {
+        parent = Parser.stack[Parser.num_stack - 2];
+        if (parent->right != NULL) {
+            parent->right = group;
+        } else {
+            parent->left = group;
+        }
+    }
+    Parser.stack[Parser.num_stack - 1] = group;
 }
 
 static char *search_entry(const char *word, size_t len, size_t *pIndex)
@@ -371,7 +461,7 @@ static char *search_entry(const char *word, size_t len, size_t *pIndex)
     return NULL;
 }
 
-char *dict_put(const char *word, size_t len)
+char *save_word(const char *word, size_t len)
 {
     char *w;
     char **words;
@@ -488,14 +578,19 @@ struct group *parse(const char *s)
 
     size_t          i, n;
     char            *end;
-    struct group    *g;
+    size_t          ns;
 
     Parser.s = (char*) s;
     Parser.p = Parser.s;
-    Parser.cur = &Parser.root;
 
-    clear_group(&Parser.root);
-    memset(&Parser.root, 0, sizeof(Parser.root));
+    if (Parser.num_stack > 0) {
+        clear_group(Parser.stack[0]);
+        memset(Parser.stack[0], 0, sizeof(*Parser.stack[0]));
+    } else {
+        Parser.stack = xmalloc(sizeof(*Parser.stack));
+        Parser.stack[0] = xcalloc(1, sizeof(*Parser.stack[0]));
+    }
+    Parser.num_stack = 1;
 
 beg:
     skip_space();
@@ -504,7 +599,8 @@ beg:
         n = begins_with(prefixes[i].s);
         if (n > 0) {
             Parser.p += n;
-            Parser.cur = surround_group(Parser.cur, prefixes[i].t, 1);
+            exchange_group(prefixes[i].t);
+            walk_down();
             goto beg;
         }
     }
@@ -513,28 +609,30 @@ beg:
         n = begins_with(matches[i].l);
         if (n > 0) {
             Parser.p += n;
-            Parser.cur = surround_group(Parser.cur, matches[i].t, 1);
+            exchange_group(matches[i].t);
+            walk_down();
             goto beg;
         }
     }
 
     if (isalpha(Parser.p[0])) {
         read_word();
-        Parser.cur->type = GROUP_VARIABLE;
-        Parser.cur->v.w = dict_put(Parser.w, Parser.n);
+        Parser.stack[Parser.num_stack - 1]->type = GROUP_VARIABLE;
+        Parser.stack[Parser.num_stack - 1]->v.w = save_word(Parser.w, Parser.n);
     } else if ((isdigit(Parser.p[0]) || Parser.p[0] == '.') &&
-               parse_number(Parser.p, SIZE_MAX, &end, &Parser.cur->v.f) == 0) {
+               parse_number(Parser.p, SIZE_MAX, &end,
+                            &Parser.stack[Parser.num_stack - 1]->v.f) == 0) {
         Parser.p = end;
-        Parser.cur->type = GROUP_NUMBER;
+        Parser.stack[Parser.num_stack - 1]->type = GROUP_NUMBER;
     } else if (Parser.p[0] == '\"') {
         if (read_string() == -1) {
             set_error("misformatted string");
             return NULL;
         }
-        Parser.cur->type = GROUP_STRING;
-        Parser.cur->v.s = Parser.str;
+        Parser.stack[Parser.num_stack - 1]->type = GROUP_STRING;
+        Parser.stack[Parser.num_stack - 1]->v.s = Parser.str;
     } else if (Parser.p[0] != '\0') {
-        Parser.cur->type = GROUP_VARIABLE;
+        Parser.stack[Parser.num_stack - 1]->type = GROUP_VARIABLE;
         Parser.w = Parser.p;
         if (!(Parser.p[0] & 0x80)) {
             Parser.p++;
@@ -544,7 +642,7 @@ beg:
             }
         }
         Parser.n = Parser.p - Parser.w;
-        Parser.cur->v.w = dict_put(Parser.w, Parser.n);
+        Parser.stack[Parser.num_stack - 1]->v.w = save_word(Parser.w, Parser.n);
     } else {
         set_error("missing operand");
         return NULL;
@@ -553,7 +651,7 @@ beg:
 infix:
     skip_space();
     if (Parser.p[0] == '\0') {
-        return &Parser.root;
+        return Parser.stack[0];
     }
 
     /* this must come before infixes because otherwise
@@ -563,22 +661,22 @@ infix:
         n = begins_with(matches[i].r);
         if (n > 0) {
             /* find matching left bracket */
-            g = Parser.cur;
-            if (Precedences[g->type] == 0) {
-                g = g->parent;
+            ns = Parser.num_stack;
+            if (Precedences[Parser.stack[ns - 1]->type] == 0) {
+                ns--;
             }
-            while (g != NULL) {
-                if (Precedences[g->type] == 0) {
-                    break;
+            while (ns > 0) {
+                if (Precedences[Parser.stack[ns - 1]->type] == 0) {
+                   break;
                 }
-                g = g->parent;
+                ns--;
             }
-            if (g == NULL) {
+            if (ns == 0) {
                 set_error("not open: '%s' needs matching '%s'",
                         matches[i].r, matches[i].l);
                 return NULL;
             }
-            if (g->type != matches[i].t) {
+            if (Parser.stack[ns - 1]->type != matches[i].t) {
                 if (matches[i].l == matches[i].r) {
                     goto beg;
                 }
@@ -587,7 +685,7 @@ infix:
             }
 
             Parser.p += n;
-            Parser.cur = g;
+            Parser.num_stack = ns;
             goto infix;
         }
     }
@@ -597,7 +695,8 @@ infix:
         if (n > 0) {
             Parser.p += n;
             walk_up_precedences(Precedences[infixes[i].t]);
-            Parser.cur = surround_group(Parser.cur, infixes[i].t, 2);
+            exchange_group(infixes[i].t);
+            enter_group(GROUP_NULL);
             goto beg;
         }
     }
@@ -605,9 +704,9 @@ infix:
     for (i = 0; i < ARRAY_SIZE(suffixes); i++) {
         n = begins_with(suffixes[i].s);
         if (n > 0) {
-            walk_up_precedences(Precedences[suffixes[i].t]);
             Parser.p += n;
-            surround_group(Parser.cur, suffixes[i].t, 1);
+            walk_up_precedences(Precedences[suffixes[i].t]);
+            exchange_group(suffixes[i].t);
             goto infix;
         }
     }
@@ -617,7 +716,8 @@ infix:
      * a function needing one argument
      */
     walk_up_precedences(Precedences[GROUP_IMPLICIT] + 1);
-    Parser.cur = surround_group(Parser.cur, GROUP_IMPLICIT, 2);
+    exchange_group(GROUP_IMPLICIT);
+    enter_group(0);
     goto beg;
 }
 

@@ -92,12 +92,10 @@ struct val_string {
 struct group {
     /// type of this group
     int             type;
-    /// children of the group
-    struct group    *children;
-    /// number of children
-    size_t          num_children;
-    /// parent of the group
-    struct group    *parent;
+    /// left group
+    struct group    *left;
+    /// right group
+    struct group    *right;
     union {
         /// variable name for GROUP_VARIABLE
         char                *w;
@@ -115,18 +113,6 @@ struct group {
  * @param src   The source to copy from.
  */
 void copy_group(struct group *dest, const struct group *src);
-
-/**
- * Make the group a parent group with n children 0the first child will be the
- * group itself and the parent will have type type.
- *
- * @param group The group to surround.
- * @param type  The type to set the parent to.
- * @param n     The number of children the parent will have.
- *
- * @return The allocated surrounding group.
- */
-struct group *surround_group(struct group *group, int type, size_t n);
 
 /**
  * Cleared the memory used by a group, this does not free the group pointer.
@@ -235,10 +221,10 @@ extern struct parser {
     /// read_string uses this
     struct val_string str;
 
-    /// root group
-    struct group root;
-    /// deepest group
-    struct group *cur;
+    /// working groups
+    struct group **stack;
+    /// number of groups being worked on
+    size_t num_stack;
 
     /// words cached
     char **words;
