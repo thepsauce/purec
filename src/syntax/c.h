@@ -79,7 +79,7 @@ const char *c_preproc[] = {
 col_t c_indentor(struct buf *buf, line_t line_i)
 {
     struct pos      p;
-    size_t          index;
+    size_t          index, m_i;
     col_t           c;
     struct paren    *par;
     struct line     *line;
@@ -92,15 +92,12 @@ col_t c_indentor(struct buf *buf, line_t line_i)
     p.line = line_i;
     index = get_next_paren_index(buf, &p);
 
-    for (c = 0; index > 0; index--) {
-        par = &buf->parens[index - 1];
-        if ((par->type & FOPEN_PAREN) && !(par->type & C_PAREN_MASK)) {
-            if (c == 0) {
-                break;
-            }
-            c--;
+    while (index > 0 && !(buf->parens[index - 1].type & FOPEN_PAREN)) {
+        m_i = get_matching_paren(buf, index - 1);
+        if (m_i == SIZE_MAX) {
+            index--;
         } else {
-            c++;
+            index = m_i;
         }
     }
 
@@ -108,6 +105,7 @@ col_t c_indentor(struct buf *buf, line_t line_i)
         return 0;
     }
 
+    par = &buf->parens[index - 1];
     line = &buf->lines[par->pos.line];
     if (par->pos.col + 1 != line->n) {
         return par->pos.col + 1;
@@ -127,9 +125,9 @@ col_t c_indentor(struct buf *buf, line_t line_i)
     }
 
     line = &buf->lines[line_i];
-    for (i = 0; i < line->n; i++) {
+    for (i = 1; i < line->n; i++) {
         if (line->attribs[i] == HI_OPERATOR) {
-            if (i > 0 && line->s[i - 1] != ' ' && line->s[i] == ':') {
+            if (line->s[i - 1] != ' ' && line->s[i] == ':') {
                 return get_line_indent(buf, par->pos.line);
             }
         }

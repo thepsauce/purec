@@ -414,7 +414,8 @@ int cmd_substitute(struct cmd_data *cd)
     struct buf          *buf;
     struct raw_line     *lines;
     size_t              num_lines;
-    struct undo_event   *ev;
+    struct match        *m;
+    size_t              i;
 
     sep = cd->arg[0];
     if (sep == '\0') {
@@ -442,20 +443,23 @@ int cmd_substitute(struct cmd_data *cd)
     buf = SelFrame->buf;
     search_pattern(buf, &cd->arg[1]);
     lines = gen_lines(&e1[1], &num_lines);
+    m = &buf->matches[buf->num_matches];
+    /* make sure the buffer does not move the matches */
+    buf->num_matches = 0;
     /* do it in reverse */
-    for (struct match *m = &buf->matches[buf->num_matches];
-            m != buf->matches; ) {
+    for (; m != buf->matches; ) {
         m--;
         /* skip matches that are out of range */
-        if (m->from.line > cd->to ||
-                m->to.line < cd->from) {
+        if (m->to.line < cd->from) {
+            break;
+        }
+        if (m->from.line > cd->to) {
             continue;
         }
-        ev = replace_lines(buf, &m->from, &m->to, lines, num_lines);
-        ev->cur = SelFrame->cur;
+        (void) replace_lines(buf, &m->from, &m->to, lines, num_lines);
     }
 
-    for (size_t i = 0; i < num_lines; i++) {
+    for (i = 0; i < num_lines; i++) {
         free(lines[i].s);
     }
     free(lines);
