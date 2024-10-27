@@ -24,9 +24,7 @@ static struct x_data {
     /// segment to send to requestors
     struct undo_seg *seg;
     /// the lines currently being worked on by paste
-    struct raw_line *lines;
-    /// the number of lines
-    line_t num_lines;
+    struct text text;
 } X;
 
 /**
@@ -166,14 +164,13 @@ static void handle_sel_request(XEvent *e)
     (void) XSendEvent(xsre->display, xsre->requestor, True, 0, (XEvent*) &xev);
 }
 
-struct raw_line *paste_clipboard(line_t *p_num_lines, int primary)
+bool paste_clipboard(struct text *text, int primary)
 {
     Atom            clipboard, target;
     XEvent          xev;
 
     if (X.dpy_paste == NULL) {
-        *p_num_lines = 0;
-        return NULL;
+        return false;
     }
 
     if (primary == 0) {
@@ -188,12 +185,12 @@ struct raw_line *paste_clipboard(line_t *p_num_lines, int primary)
     XConvertSelection(X.dpy_paste, clipboard, target, clipboard,
                 X.win_paste, CurrentTime);
 
-    if (X.lines != NULL) {
-        save_lines(X.lines, X.num_lines);
+    if (X.text.lines != NULL) {
+        save_lines(&X.text);
     }
 
-    X.lines = NULL;
-    X.num_lines = 0;
+    X.text.lines = NULL;
+    X.text.num_lines = 0;
 
     /* get the next selection notify event */
     while (XNextEvent(X.dpy_paste, &xev), xev.type != SelectionNotify) {
@@ -201,8 +198,8 @@ struct raw_line *paste_clipboard(line_t *p_num_lines, int primary)
     }
     handle_sel_notify(&xev);
 
-    *p_num_lines = X.num_lines;
-    return X.lines;
+    *text = X.text;
+    return true;
 }
 
 static void handle_sel_notify(XEvent *e)
@@ -211,6 +208,7 @@ static void handle_sel_notify(XEvent *e)
     int             format;
     unsigned char   *data, *last, *repl, *st;
     Atom            type, property = None;
+    struct line     *line;
 
     ofs = 0;
     property = e->xselection.property;
@@ -231,10 +229,9 @@ static void handle_sel_notify(XEvent *e)
             if (repl == NULL) {
                 repl = last;
             }
-            X.lines = xreallocarray(X.lines, X.num_lines + 1, sizeof(*X.lines));
-            X.lines[X.num_lines].s = xmemdup(st, repl - st);
-            X.lines[X.num_lines].n = repl - st;
-            X.num_lines++;
+            line = insert_blank(&X.text, X.text.num_lines, 1);
+            line->s = xmemdup(st, repl - st);
+            line->n = repl - st;
             if (repl == last) {
                 break;
             }

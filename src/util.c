@@ -8,6 +8,13 @@
 #include <string.h>
 #include <unistd.h>
 
+int get_expected_bytes(char ch)
+{
+    return ((ch & 0xf8) == 0xf0) ? 4 :
+           ((ch & 0xf0) == 0xe0) ? 3 :
+           ((ch & 0xe0) == 0xc0) ? 2 : 1;
+}
+
 int get_glyph_count(const char *s, size_t n)
 {
     if (n >= 4 && (s[0] & 0xf8) == 0xf0) {

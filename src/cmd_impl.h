@@ -149,8 +149,8 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
         set_message("nothing to write");
     } else {
         set_message("%s %zuL, %zuB written", get_pretty_path(file),
-                MIN(buf->num_lines - 1, cd->to) -
-                    MIN(buf->num_lines - 1, cd->from) + 1,
+                MIN(buf->text.num_lines - 1, cd->to) -
+                    MIN(buf->text.num_lines - 1, cd->from) + 1,
                 num_bytes);
     }
     return 0;
@@ -350,32 +350,6 @@ int cmd_read(struct cmd_data *cd)
     return 0;
 }
 
-static struct raw_line *gen_lines(const char *s, size_t n, line_t *p_num_lines)
-{
-    struct raw_line *lines;
-    line_t          num_lines;
-    const char      *e;
-
-    lines = NULL;
-    num_lines = 0;
-
-    while (n > 0) {
-        for (e = s; n > 0; e++, n--) {
-            if (e[0] == '\n') {
-                break;
-            }
-        }
-        lines = xreallocarray(lines, sizeof(*lines), num_lines + 1);
-        lines[num_lines].s = xmemdup(s, e - s);
-        lines[num_lines].n = e - s;
-        num_lines++;
-        s = e;
-    }
-
-    *p_num_lines = num_lines;
-    return lines;
-}
-
 int cmd_substitute(struct cmd_data *cd)
 {
     char                sep;
@@ -386,13 +360,10 @@ int cmd_substitute(struct cmd_data *cd)
     struct group        *group;
     struct value        loc;
     struct value        val;
-    struct raw_line     *lines;
-    line_t              num_lines;
-    struct raw_line     *res_lines;
-    line_t              num_res_lines;
+    struct text         text;
+    struct text         res;
     struct match        *m;
     char                *pat;
-    line_t              i;
 
     sep = cd->arg[0];
     if (sep == '\0') {
@@ -425,7 +396,7 @@ int cmd_substitute(struct cmd_data *cd)
     } else {
         group = NULL;
         repl = parse_string(&e1[1], &e1, &repl_len, '\0');
-        lines = gen_lines(repl, repl_len, &num_lines);
+        str_to_text(repl, repl_len, &text);
     }
     buf = SelFrame->buf;
     search_pattern(buf, &cd->arg[1]);
@@ -445,32 +416,26 @@ int cmd_substitute(struct cmd_data *cd)
             continue;
         }
         if (group != NULL) {
-            lines = get_lines(buf, &m->from, &m->to, &num_lines);
+            get_text(&buf->text, &m->from, &m->to, &text);
             loc.type = VALUE_STRING;
-            loc.v.s.n = lines[0].n;
-            loc.v.s.p = lines[0].s;
+            loc.v.s.p = text_to_str(&text, &loc.v.s.n);
             push_local_variable(save_word("\\0", 2), &loc);
             (void) delete_range(buf, &m->from, &m->to);
             if (compute_value(group, &val) == 0) {
                 if (val.type != VALUE_STRING) {
                     set_error("got value that is not a string");
                 } else {
-                    res_lines = gen_lines(val.v.s.p, val.v.s.n, &num_res_lines);
-                    (void) insert_lines(buf, &m->from, res_lines,
-                                        num_res_lines, 1);
-                    for (i = 0; i < num_res_lines; i++) {
-                        free(res_lines[i].s);
-                    }
-                    free(res_lines);
+                    str_to_text(val.v.s.p, val.v.s.n, &res);
+                    (void) insert_lines(buf, &m->from, &res, 1);
+                    clear_text(&res);
                 }
                 clear_value(&val);
             }
-            for (i = 0; i < num_lines; i++) {
-                free(lines[i].s);
-            }
-            free(lines);
+            Parser.num_locals--;
+            clear_value(&Parser.locals[Parser.num_locals].value);
+            clear_text(&text);
         } else {
-            (void) replace_lines(buf, &m->from, &m->to, lines, num_lines);
+            (void) replace_lines(buf, &m->from, &m->to, &text);
         }
     }
     clip_column(SelFrame);
@@ -478,10 +443,7 @@ int cmd_substitute(struct cmd_data *cd)
     buf->search_pat = pat;
 
     if (group == NULL) {
-        for (i = 0; i < num_lines; i++) {
-            free(lines[i].s);
-        }
-        free(lines);
+        clear_text(&text);
     }
     return 0;
 }

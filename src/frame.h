@@ -35,9 +35,9 @@ struct frame {
     /// offset of the text origin
     struct pos scroll;
     /// vertical column tracking
-    col_t vct;
+    size_t vct;
     /// the next value for `vct`
-    col_t next_vct;
+    size_t next_vct;
     /// next frame in the linked list
     struct frame *next;
 };

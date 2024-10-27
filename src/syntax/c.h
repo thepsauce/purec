@@ -106,7 +106,7 @@ col_t c_indentor(struct buf *buf, line_t line_i)
     }
 
     par = &buf->parens[index - 1];
-    line = &buf->lines[par->pos.line];
+    line = &buf->text.lines[par->pos.line];
     if (par->pos.col + 1 != line->n) {
         return par->pos.col + 1;
     }
@@ -124,9 +124,9 @@ col_t c_indentor(struct buf *buf, line_t line_i)
         break;
     }
 
-    line = &buf->lines[line_i];
+    line = &buf->text.lines[line_i];
     for (i = 1; i < line->n; i++) {
-        if (line->attribs[i] == HI_OPERATOR) {
+        if (buf->attribs[line_i][i] == HI_OPERATOR) {
             if (line->s[i - 1] != ' ' && line->s[i] == ':') {
                 return get_line_indent(buf, par->pos.line);
             }

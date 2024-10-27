@@ -191,11 +191,6 @@ bool get_selection(struct selection *sel)
         sel->beg = SelFrame->cur;
         sel->end = Core.pos;
         sort_positions(&sel->beg, &sel->end);
-        if (Core.mode == VISUAL_LINE_MODE) {
-            sel->beg.col = 0;
-            sel->end.col = 0;
-            sel->end.line++;
-        }
     }
     return IS_VISUAL(Core.mode);
 }

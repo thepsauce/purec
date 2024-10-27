@@ -298,9 +298,9 @@ int run_command(char *s_cmd)
         }
 
         buf = SelFrame->buf;
-        data.to = MIN(data.to, buf->num_lines - 1);
+        data.to = MIN(data.to, buf->text.num_lines - 1);
         for (i = data.from; i <= data.to; i++) {
-            fwrite(buf->lines[i].s, buf->lines[i].n, 1, pp);
+            fwrite(buf->text.lines[i].s, buf->text.lines[i].n, 1, pp);
             fputc('\n', pp);
         }
         pclose(pp);

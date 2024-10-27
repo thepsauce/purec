@@ -33,7 +33,7 @@ extern struct undo {
         /// length of `data`
         size_t data_len;
         /// lines within the segment
-        struct raw_line *lines;
+        struct line *lines;
         /// number of lines
         line_t num_lines;
         /// position within the file `fp`
@@ -146,12 +146,12 @@ struct buf {
     /// the index of the highlighting machine
     size_t lang;
 
-    /// lines within this buffer
-    struct line *lines;
-    /// number of lines
-    line_t num_lines;
-    /// number of allocated lines
-    line_t a_lines;
+    /// the text within the buffer
+    struct text text;
+    /// states at the start of each line
+    size_t *states;
+    /// attributes
+    int **attribs;
 
     /// all parentheses within the buffer
     struct paren *parens;
@@ -307,15 +307,6 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp);
 size_t get_line_indent(struct buf *buf, line_t line_i);
 
 /**
- * Sets the `min_dirty_i` and `max_dirty_i` values within a buffer.
- *
- * @param buf   The buffer to set values in.
- * @param from  The first line.
- * @param to    The last line.
- */
-void mark_dirty(struct buf *buf, line_t from, line_t to);
-
-/**
  * Insert lines starting from a given position.
  *
  * All added lines are initialized to given lines and an event is added.
@@ -331,7 +322,7 @@ void mark_dirty(struct buf *buf, line_t from, line_t to);
  * @return The event generated from this insertion (may be `NULL`).
  */
 struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, line_t num_lines, line_t repeat);
+                                const struct text *text, size_t repeat);
 
 /**
  * Insert given number of lines starting from given position.
@@ -344,7 +335,7 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
  * @param num_lines Number of lines to insert.
  */
 void _insert_lines(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, line_t num_lines);
+                   const struct text *text);
 
 /**
  * Insert lines in block mode starting from a given position.
@@ -362,7 +353,7 @@ void _insert_lines(struct buf *buf, const struct pos *pos,
  * @return The event generated from this insertion (may be `NULL`).
  */
 struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, line_t num_lines, line_t repeat);
+                                const struct text *text, size_t repeat);
 
 /**
  * Insert lines in block mode starting from a given position.
@@ -375,7 +366,7 @@ struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
  * @param num_lines Number of lines to insert.
  */
 void _insert_block(struct buf *buf, const struct pos *pos,
-        const struct raw_line *lines, line_t num_lines);
+                   const struct text *text);
 
 /**
  * Breaks the line at given position by inserting '\n' and indents the line
@@ -401,29 +392,25 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos);
 size_t get_match_line(struct buf *buf, line_t line_i);
 
 /**
- * Inserts given number of lines starting from given index.
+ * Called after inserting lines into `buf->text` to update all other data
+ * structures.
  *
- * This simply inserts uninitialized lines after given index. NO clipping and NO
- * adding of an event.
- *
- * @param buf       Buffer to delete within.
- * @param line_i    Line index to append to.
- * @param num_lines Number of lines to insert.
- *
- * @return First line that was inserted.
+ * @param buf       Buffer to make it notice.
+ * @param line_i    Line index the insertion took place.
+ * @param num_lines Number of lines inserted.
  */
-struct line *grow_lines(struct buf *buf, line_t line_i, line_t num_lines);
+void notice_line_growth(struct buf *buf, line_t line_i, line_t num_lines);
 
 /**
- * Removes the given lines from the buffer.
+ * Called after deleting lines from `buf->text`.
  *
  * This does NOT add an event and does NO clipping.
  *
- * @param buf       The buffer whose lines to delete.
- * @param line_i    The index to the first line to remove.
- * @param num_lines The number of lines to delete.
+ * @param buf       The buffer 
+ * @param line_i    The index to the first line deleted.
+ * @param num_lines The number of lines deleted.
  */
-void remove_lines(struct buf *buf, line_t line_i, line_t num_lines);
+void notice_line_removal(struct buf *buf, line_t line_i, line_t num_lines);
 
 /**
  * Indents the line at `line_i`.
@@ -437,30 +424,6 @@ void remove_lines(struct buf *buf, line_t line_i, line_t num_lines);
  * @return Event generated from adding/removing spaces at the front of the line.
  */
 struct undo_event *indent_line(struct buf *buf, line_t line_i);
-
-/**
- * Gets the lines within the buffer inside a given range.
- *
- * @param buf   Buffer to get lines from.
- * @param from  Start of the range.
- * @param to    End of the range.
- *
- * @return Allocated lines, `p_num_lines` has the number of lines.
- */
-struct raw_line *get_lines(struct buf *buf, const struct pos *from,
-        const struct pos *to, line_t *p_num_lines);
-
-/**
- * Gets a block from within a buffer.
- *
- * @param buf   Buffer to get the block from.
- * @param from  Upper left corner of the block.
- * @param to    Lower right corner of the block.
- *
- * @return Allocated lines, `p_num_lines` has the number of lines.
- */
-struct raw_line *get_block(struct buf *buf, const struct pos *from,
-        const struct pos *to, line_t *p_num_lines);
 
 /**
  * Deletes a range from a buffer.
@@ -484,8 +447,9 @@ struct raw_line *get_block(struct buf *buf, const struct pos *from,
  *
  * @see _delete_range()
  */
-struct undo_event *delete_range(struct buf *buf, const struct pos *from,
-        const struct pos *to);
+struct undo_event *delete_range(struct buf *buf,
+                                const struct pos *from,
+                                const struct pos *to);
 
 /**
  * Same as delete_range() but no clipping and no event adding.
@@ -511,7 +475,9 @@ struct undo_event *delete_range(struct buf *buf, const struct pos *from,
  *
  * @see delete_range()
  */
-void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *pto);
+void _delete_range(struct buf *buf,
+                   const struct pos *from,
+                   const struct pos *to);
 
 /**
  * Deletes given inclusive block.
@@ -533,8 +499,9 @@ void _delete_range(struct buf *buf, const struct pos *pfrom, const struct pos *p
  *
  * @return The event generated from this deletion (may be `NULL`).
  */
-struct undo_event *delete_block(struct buf *buf, const struct pos *from,
-        const struct pos *to);
+struct undo_event *delete_block(struct buf *buf,
+                                const struct pos *from,
+                                const struct pos *to);
 
 /**
  * Deletes given inclusive block.
@@ -545,8 +512,9 @@ struct undo_event *delete_block(struct buf *buf, const struct pos *from,
  * @param from  Start of deletion.
  * @param to    End of deletion.
  */
-void _delete_block(struct buf *buf, const struct pos *from,
-        const struct pos *to);
+void _delete_block(struct buf *buf,
+                   const struct pos *from,
+                   const struct pos *to);
 
 /**
  * Deletes given range and inserts given lines.
@@ -562,9 +530,10 @@ void _delete_block(struct buf *buf, const struct pos *from,
  *
  * @return The first added event.
  */
-struct undo_event *replace_lines(struct buf *buf, const struct pos *from,
-                   const struct pos *to, const struct raw_line *lines,
-                   line_t num_lines);
+struct undo_event *replace_lines(struct buf *buf,
+                                 const struct pos *from,
+                                 const struct pos *to,
+                                 const struct text *text);
 
 /// outside parameter for `conv_to_char`
 extern int ConvChar;
@@ -624,7 +593,7 @@ bool should_join(const struct undo_event *ev1, const struct undo_event *ev2);
  *
  * @return Allocated data segment.
  */
-struct undo_seg *save_lines(struct raw_line *lines, line_t num_lines);
+struct undo_seg *save_lines(struct text *text);
 
 /**
  * Loads the data of the given data segment.
@@ -653,7 +622,7 @@ void unload_undo_data(struct undo_seg *seg);
  * @return The event that was added.
  */
 struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
-        struct raw_line *lines, line_t num_lines);
+                             struct text *text);
 
 /**
  * Undoes an event but ignores the transient flag.

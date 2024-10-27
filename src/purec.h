@@ -13,7 +13,7 @@
  * PPP         UUUUUU    RR    R    EEEEEEEE     CCCCC  *
  ********************************************************/
 
-#include "line.h"
+#include "text.h"
 #include "util.h"
 
 #include <ncurses.h>
@@ -188,7 +188,7 @@ int copy_clipboard(struct undo_seg *seg, int primary);
  *
  * @return The lines read, they shall NOT be freed or modified.
  */
-struct raw_line *paste_clipboard(line_t *p_num_lines, int primary);
+bool paste_clipboard(struct text *text, int primary);
 
 /**
  * Sets the string shown in the message window.

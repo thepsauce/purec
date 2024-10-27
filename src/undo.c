@@ -52,7 +52,7 @@ static int compare_segments(struct undo_seg *a, struct undo_seg *b)
     return cmp;
 }
 
-struct undo_seg *save_lines(struct raw_line *lines, line_t num_lines)
+struct undo_seg *save_lines(struct text *text)
 {
     struct undo_seg new_seg;
     line_t          i;
@@ -65,28 +65,30 @@ struct undo_seg *save_lines(struct raw_line *lines, line_t num_lines)
     struct undo_seg *p_seg;
     char            *name;
 
-    new_seg.data = lines[0].s;
-    new_seg.data_len = lines[0].n;
+    new_seg.data = text->lines[0].s;
+    new_seg.data_len = text->lines[0].n;
 
-    for (i = 1; i < num_lines; i++) {
-        new_seg.data_len += 1 + lines[i].n;
+    for (i = 1; i < text->num_lines; i++) {
+        new_seg.data_len += 1 + text->lines[i].n;
     }
 
     new_seg.data = xrealloc(new_seg.data, new_seg.data_len);
-    lines[0].s = new_seg.data;
-    for (i = 1, j = lines[0].n; i < num_lines; i++) {
+    text->lines[0].s = new_seg.data;
+    for (i = 1, j = text->lines[0].n; i < text->num_lines; i++) {
         new_seg.data[j++] = '\n';
 
-        new_s = memcpy(&new_seg.data[j], lines[i].s, lines[i].n);
-        j += lines[i].n;
+        new_s = memcpy(&new_seg.data[j],
+                       text->lines[i].s,
+                       text->lines[i].n);
+        j += text->lines[i].n;
 
-        free(lines[i].s);
+        free(text->lines[i].s);
 
-        lines[i].s = new_s;
+        text->lines[i].s = new_s;
     }
 
-    new_seg.lines = lines;
-    new_seg.num_lines = num_lines;
+    new_seg.lines = text->lines;
+    new_seg.num_lines = text->num_lines;
     new_seg.load_count = 0;
 
     l = 0;
@@ -122,7 +124,7 @@ struct undo_seg *save_lines(struct raw_line *lines, line_t num_lines)
             cur_time = time(NULL);
             tm = localtime(&cur_time);
 
-            name = xasprintf("/tmp/undo_data_%04d-%02d-%02d_%02d-%02d-%02d",
+            name = xasprintf("%s/undo_data_%04d-%02d-%02d_%02d-%02d-%02d",
                     Core.cache_dir,
                     tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
                     tm->tm_hour, tm->tm_min, tm->tm_sec);
@@ -181,7 +183,7 @@ void unload_undo_data(struct undo_seg *seg)
 }
 
 struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
-        struct raw_line *lines, line_t num_lines)
+                             struct text *text)
 {
     struct undo_event *ev;
     col_t           max_n;
@@ -204,21 +206,21 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
     ev->flags = flags | IS_TRANSIENT;
     ev->pos = *pos;
     if ((flags & IS_BLOCK)) {
-        ev->end.line = ev->pos.line + num_lines - 1;
+        ev->end.line = ev->pos.line + text->num_lines - 1;
         max_n = 0;
-        for (i = 0; i < num_lines; i++) {
-            max_n = MAX(max_n, lines[i].n);
+        for (i = 0; i < text->num_lines; i++) {
+            max_n = MAX(max_n, text->lines[i].n);
         }
         ev->end.col = ev->pos.col + max_n - 1;
     } else {
-        ev->end.line = ev->pos.line + num_lines - 1;
-        ev->end.col = lines[num_lines - 1].n;
+        ev->end.line = ev->pos.line + text->num_lines - 1;
+        ev->end.col = text->lines[text->num_lines - 1].n;
         if (ev->end.line == ev->pos.line) {
             ev->end.col += ev->pos.col;
         }
     }
     ev->time = time(NULL);
-    ev->seg = save_lines(lines, num_lines);
+    ev->seg = save_lines(text);
     ev->cur = SelFrame->cur;
     return ev;
 }
@@ -230,6 +232,7 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
     line_t          i;
     col_t           j;
     bool            r;
+    struct text     text;
 
     if ((flags & IS_DELETION)) {
         if ((flags & IS_BLOCK)) {
@@ -243,12 +246,12 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
     seg = ev->seg;
     load_undo_data(seg);
     if ((flags & IS_REPLACE)) {
-        line = &buf->lines[ev->pos.line];
+        line = &buf->text.lines[ev->pos.line];
         for (j = 0; j < seg->lines[0].n; j++) {
             line->s[ev->pos.col + j] ^= seg->lines[0].s[j];
         }
         for (i = 1; i < seg->num_lines; i++) {
-            line = &buf->lines[ev->pos.line + i];
+            line = &buf->text.lines[ev->pos.line + i];
             for (j = 0; j < seg->lines[i].n; j++) {
                 line->s[j] ^= seg->lines[i].s[j];
             }
@@ -263,10 +266,11 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
             i++;
         }
     } else {
+        make_text(&text, seg->lines, seg->num_lines);
         if ((flags & IS_BLOCK)) {
-            _insert_block(buf, &ev->pos, seg->lines, seg->num_lines);
+            _insert_block(buf, &ev->pos, &text);
         } else {
-            _insert_lines(buf, &ev->pos, seg->lines, seg->num_lines);
+            _insert_lines(buf, &ev->pos, &text);
         }
     }
     unload_undo_data(seg);

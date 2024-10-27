@@ -4,9 +4,10 @@
 #include "xalloc.h"
 
 #include <ctype.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <limits.h>
+#include <string.h>
 
 struct frame *FirstFrame;
 struct frame *SelFrame;
@@ -463,10 +464,10 @@ void adjust_cursor(struct frame *frame)
     struct line     *line;
 
     buf = frame->buf;
-    if (frame->cur.line >= buf->num_lines) {
-        frame->cur.line = buf->num_lines - 1;
+    if (frame->cur.line >= buf->text.num_lines) {
+        frame->cur.line = buf->text.num_lines - 1;
     }
-    line = &buf->lines[frame->cur.line];
+    line = &buf->text.lines[frame->cur.line];
     frame->cur.col = get_index(line->s, get_mode_line_end(line), frame->vct);
 }
 
@@ -479,7 +480,7 @@ int adjust_scroll(struct frame *frame)
 
     get_text_rect(frame, &x, &y, &w, &h);
 
-    line = &frame->buf->lines[frame->cur.line];
+    line = &frame->buf->text.lines[frame->cur.line];
     v_x = get_advance(line->s, line->n, frame->cur.col);
 
     if (v_x < frame->scroll.col) {
@@ -505,7 +506,8 @@ int adjust_scroll(struct frame *frame)
         r |= 1;
     } else if (frame->cur.line >= frame->scroll.line + h) {
         frame->scroll.line = frame->cur.line - 2 * h / 3;
-        frame->scroll.line = MIN(frame->scroll.line, frame->buf->num_lines - h);
+        frame->scroll.line = MIN(frame->scroll.line,
+                                 frame->buf->text.num_lines - h);
         r |= 1;
     }
     return r;
@@ -515,7 +517,7 @@ col_t compute_vct(struct frame *frame, const struct pos *pos)
 {
     struct line *line;
 
-    line = &frame->buf->lines[pos->line];
+    line = &frame->buf->text.lines[pos->line];
     return get_advance(line->s, get_mode_line_end(line), pos->col);
 }
 
@@ -530,11 +532,11 @@ int scroll_frame(struct frame *frame, line_t dist)
         frame->cur.line -= dist;
     } else {
         frame->scroll.line = safe_add(frame->scroll.line, dist);
-        if (frame->scroll.line >= frame->buf->num_lines) {
-            frame->scroll.line = frame->buf->num_lines - 1;
+        if (frame->scroll.line >= frame->buf->text.num_lines) {
+            frame->scroll.line = frame->buf->text.num_lines - 1;
         }
         frame->cur.line += frame->scroll.line - old_scroll;
-        frame->cur.line = MIN(frame->cur.line, frame->buf->num_lines - 1);
+        frame->cur.line = MIN(frame->cur.line, frame->buf->text.num_lines - 1);
     }
     if (old_scroll != frame->scroll.line) {
         clip_column(frame);
@@ -547,7 +549,7 @@ void clip_column(struct frame *frame)
 {
     col_t           end;
 
-    end = get_mode_line_end(&frame->buf->lines[frame->cur.line]);
+    end = get_mode_line_end(&frame->buf->text.lines[frame->cur.line]);
     frame->cur.col = MIN(frame->cur.col, end);
 }
 
@@ -560,12 +562,12 @@ void set_cursor(struct frame *frame, const struct pos *pos)
     new_cur = *pos;
 
     /* clip line */
-    if (new_cur.line >= frame->buf->num_lines) {
-        new_cur.line = frame->buf->num_lines - 1;
+    if (new_cur.line >= frame->buf->text.num_lines) {
+        new_cur.line = frame->buf->text.num_lines - 1;
     }
 
     /* clip column */
-    line = &frame->buf->lines[new_cur.line];
+    line = &frame->buf->text.lines[new_cur.line];
     n = get_mode_line_end(line);
     new_cur.col = MIN(new_cur.col, n);
 
@@ -588,6 +590,657 @@ int get_char_state(char ch)
         return 1;
     }
     return 0;
+}
+
+static int move_left(struct frame *frame)
+{
+    col_t           col;
+    struct line     *line;
+
+    col = frame->cur.col;
+    if (col == 0) {
+        return 0;
+    }
+    frame->next_cur.line = frame->cur.line;
+    line = &frame->buf->text.lines[frame->next_cur.line];
+    for (; Core.counter > 0; Core.counter--) {
+        if (col == 0) {
+            break;
+        }
+        col = move_back_glyph(line->s, col);
+    }
+    frame->next_cur.col = col;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return UPDATE_UI;
+}
+
+static int move_right(struct frame *frame)
+{
+    col_t           col;
+    struct line     *line;
+
+    col = frame->cur.col;
+    line = &frame->buf->text.lines[frame->cur.line];
+    if (col == line->n) {
+        return 0;
+    }
+    for (; Core.counter > 0; Core.counter--) {
+        if (col == line->n) {
+            break;
+        }
+        col += get_glyph_count(&line->s[col], line->n - col);
+    }
+    frame->next_cur.col = col;
+    frame->next_cur.line = frame->cur.line;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return UPDATE_UI;
+}
+
+static int move_up(struct frame *frame)
+{
+    struct line     *line;
+
+    if (frame->cur.line == 0) {
+        return 0;
+    }
+    if ((size_t) frame->cur.line < Core.counter) {
+        frame->next_cur.line = 0;
+    } else {
+        frame->next_cur.line = frame->cur.line - Core.counter;
+    }
+    line = &frame->buf->text.lines[frame->next_cur.line];
+    frame->next_cur.col = get_index(line->s, line->n, frame->vct);
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_down(struct frame *frame)
+{
+    struct line     *line;
+
+    if (SIZE_MAX - Core.counter < (size_t) frame->cur.line) {
+        frame->next_cur.line = frame->buf->text.num_lines - 1;
+    } else {
+        frame->next_cur.line = frame->cur.line + Core.counter;
+        frame->next_cur.line = MIN(frame->next_cur.line,
+                                   frame->buf->text.num_lines - 1);
+    }
+    if (frame->next_cur.line == frame->cur.line) {
+        return 0;
+    }
+    line = &frame->buf->text.lines[frame->next_cur.line];
+    frame->next_cur.col = get_index(line->s, line->n, frame->vct);
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_home(struct frame *frame)
+{
+    if (frame->cur.col == 0) {
+        return 0;
+    }
+    frame->next_cur.col  = 0;
+    frame->next_cur.line = frame->cur.line;
+    frame->next_vct = 0;
+    return UPDATE_UI;
+}
+
+static int move_end(struct frame *frame)
+{
+    col_t           n;
+
+    frame->next_vct = SIZE_MAX;
+    n = frame->buf->text.lines[frame->cur.line].n;
+    if (frame->cur.col == n) {
+        return 0;
+    }
+    frame->next_cur.col  = n;
+    frame->next_cur.line = frame->cur.line;
+    return UPDATE_UI;
+}
+
+static int move_prev(struct frame *frame)
+{
+    col_t           col, line;
+
+    if (frame->cur.col == 0 && frame->cur.line == 0) {
+        return 0;
+    }
+
+    col = frame->cur.col;
+    line = frame->cur.line;
+    while (1) {
+        for (; Core.counter > 0; Core.counter--) {
+            if (col == 0) {
+                break;
+            }
+            col = move_back_glyph(frame->buf->text.lines[line].s, col);
+        }
+        if (Core.counter == 0 || line == 0) {
+            break;
+        }
+        line--;
+    }
+    frame->next_cur.col = col;
+    frame->next_cur.line = line;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return UPDATE_UI;
+}
+
+static int move_next(struct frame *frame)
+{
+    col_t           col;
+    line_t          line_i;
+    struct line     *line;
+
+    col = frame->cur.col;
+    line_i = frame->cur.line;
+    line = &frame->buf->text.lines[line_i];
+    while (line_i != frame->buf->text.num_lines - 1) {
+        for (; Core.counter > 0; Core.counter--) {
+            if (col == line->n) {
+                break;
+            }
+            col += get_glyph_count(&line->s[col], line->n - col);
+        }
+        if (Core.counter == 0) {
+            break;
+        }
+        col = 0;
+        line_i++;
+        line++;
+    }
+    if (col == frame->cur.col && line_i == frame->cur.line) {
+        return 0;
+    }
+    frame->next_cur.col = col;
+    frame->next_cur.line = line_i;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return UPDATE_UI;
+}
+
+static int move_frame_start(struct frame *frame)
+{
+    struct line     *line;
+
+    if (frame->cur.line == frame->scroll.line) {
+        return 0;
+    }
+    frame->next_cur.line = frame->scroll.line;
+
+    line = &frame->buf->text.lines[frame->next_cur.line];
+    frame->next_cur.col  = get_index(line->s, line->n, frame->vct);
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_frame_middle(struct frame *frame)
+{
+    struct line     *line;
+
+    frame->next_cur.line = frame->scroll.line + frame->h / 2;
+    frame->next_cur.line = MIN(frame->next_cur.line,
+                               frame->buf->text.num_lines - 1);
+    if (frame->next_cur.line == frame->cur.line) {
+        return 0;
+    }
+
+    line = &frame->buf->text.lines[frame->next_cur.line];
+    frame->next_cur.col  = get_index(line->s, line->n, frame->vct);
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_frame_end(struct frame *frame)
+{
+    struct line     *line;
+
+    frame->next_cur.line = frame->scroll.line + frame->h - 2;
+    frame->next_cur.line = MIN(frame->next_cur.line,
+                               frame->buf->text.num_lines - 1);
+    if (frame->next_cur.line == frame->cur.line) {
+        return 0;
+    }
+
+    line = &frame->buf->text.lines[frame->next_cur.line];
+    frame->next_cur.col  = get_index(line->s, line->n, frame->vct);
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_to_line_indent(struct frame *frame)
+{
+    frame->next_cur.col = get_line_indent(frame->buf, frame->cur.line);
+    frame->next_cur.line = frame->cur.line;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return UPDATE_UI;
+}
+
+static int move_to_start(struct frame *frame)
+{
+    struct line     *line;
+
+    Core.counter = MIN(Core.counter - 1,
+                       (size_t) frame->buf->text.num_lines - 1);
+    if ((size_t) frame->cur.line == Core.counter) {
+        return 0;
+    }
+    frame->next_cur.line = Core.counter;
+    line = &frame->buf->text.lines[frame->next_cur.line];
+    frame->next_cur.col = get_index(line->s, line->n, frame->vct);
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_to_end(struct frame *frame)
+{
+    struct line     *line;
+    if (Core.counter >= (size_t) frame->buf->text.num_lines) {
+        frame->next_cur.line = 0;
+    } else {
+        frame->next_cur.line = frame->buf->text.num_lines - Core.counter;
+    }
+    if (frame->next_cur.line == frame->cur.line) {
+        return 0;
+    }
+    line = &frame->buf->text.lines[frame->next_cur.line];
+    frame->next_cur.col = get_index(line->s, line->n, frame->vct);
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_to_extended(struct frame *frame)
+{
+    int             c;
+
+    c = get_extra_char();
+    switch (c) {
+    case 'g':
+        return move_to_start(frame);
+    case 'G':
+        return move_to_end(frame);
+    case 'e':
+        return 0 /* TODO: */;
+    }
+    return 0;
+}
+
+static int move_page_up(struct frame *frame)
+{
+    line_t          n;
+
+    if (frame->next_cur.line == 0) {
+        return 0;
+    }
+    n = frame->h * 2 / 3;
+    n = MAX(n, 1);
+    n = safe_mul(Core.counter, n);
+    if (frame->next_cur.line <= n) {
+        frame->next_cur.line = 0;
+    } else {
+        frame->next_cur.line -= n;
+    }
+    frame->next_cur.col = frame->cur.col;
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_page_down(struct frame *frame)
+{
+    line_t          n;
+
+    n = frame->h * 2 / 3;
+    n = MAX(n, 1);
+    n = safe_mul(Core.counter, n);
+    if (LINE_MAX - n < frame->next_cur.line) {
+        frame->next_cur.line = frame->buf->text.num_lines - 1;
+    } else {
+        frame->next_cur.line += n;
+        frame->next_cur.line = MIN(frame->next_cur.line,
+                                  frame->buf->text.num_lines - 1);
+    }
+    if (frame->next_cur.line == frame->cur.line) {
+        return 0;
+    }
+    frame->next_cur.col = frame->cur.col;
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_up_paragraph(struct frame *frame)
+{
+    line_t          line;
+
+    line = frame->cur.line;
+    if (line == 0) {
+        return 0;
+    }
+    while (line > 0) {
+        line--;
+        if (frame->buf->text.lines[line].n == 0) {
+            if (Core.counter > 1) {
+                Core.counter--;
+                continue;
+            }
+            break;
+        }
+    }
+    frame->next_cur.col = 0;
+    frame->next_cur.line = line;
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int move_down_paragraph(struct frame *frame)
+{
+    line_t          line;
+
+    line = frame->cur.line;
+    if (line + 1 == frame->buf->text.num_lines) {
+        return 0;
+    }
+    while (line + 1 != frame->buf->text.num_lines) {
+        line++;
+        if (frame->buf->text.lines[line].n == 0) {
+            if (Core.counter > 1) {
+                Core.counter--;
+                continue;
+            }
+            break;
+        }
+    }
+    frame->next_cur.col = 0;
+    frame->next_cur.line = line;
+    frame->next_vct = frame->vct;
+    return UPDATE_UI;
+}
+
+static int get_additional_char(char *buf)
+{
+    int             c;
+    int             e;
+    int             n;
+
+    do {
+        c = get_ch();
+        /* skip over resize events */
+    } while (c == -1);
+
+    if (c >= 0x100) {
+        return -1;
+    }
+
+    e = get_expected_bytes(c);
+    while (1) {
+        buf[n++] = c;
+        if (n == e) {
+            break;
+        }
+        do {
+            c = get_ch();
+        } while (c == -1);
+    }
+    return n;
+}
+
+static int find_prev_char(struct frame *frame, bool excl)
+{
+    char            buf[4];
+    int             n;
+    col_t           col;
+    struct line     *line;
+    col_t           new_col;
+
+    /* the glyph to look for */
+    n = get_additional_char(buf);
+    if (n < 0) {
+        return -1;
+    }
+
+    col = frame->cur.col;
+    new_col = col;
+    line = &frame->buf->text.lines[frame->cur.line];
+    if (excl && col > 0) {
+        col = move_back_glyph(line->s, col);
+    }
+    while (col >= (col_t) n) {
+        if (memcmp(&line->s[col - n], buf, n) == 0) {
+            if (Core.counter > 1) {
+                Core.counter--;
+                continue;
+            }
+            new_col = col;
+            if (!excl) {
+                new_col -= n;
+            }
+            break;
+        }
+        col--;
+    }
+    if (new_col == frame->cur.col) {
+        return 0;
+    }
+    frame->next_cur.col = new_col;
+    frame->next_cur.line = frame->cur.line;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return UPDATE_UI;
+}
+
+static int find_prev_character(struct frame *frame)
+{
+    return find_prev_char(frame, false);
+}
+
+static int find_prev_character_excl(struct frame *frame)
+{
+    return find_prev_char(frame, true);
+}
+
+static int find_next_char(struct frame *frame, bool excl)
+{
+    char            buf[4];
+    int             n;
+    col_t           col;
+    struct line     *line;
+    col_t           new_col;
+
+    /* the glyph to look for */
+    n = get_additional_char(buf);
+    if (n < 0) {
+        return -1;
+    }
+
+    line = &frame->buf->text.lines[frame->cur.line];
+    col = frame->cur.col;
+    new_col = col;
+    if (excl) {
+        /* make sure when the cursor is right before a match already, that
+         * it is not taken again
+         */
+        col += get_glyph_count(&line->s[col], line->n - col);
+    }
+    while (col++, col + n <= line->n) {
+        if (memcmp(&line->s[col], buf, n) == 0) {
+            if (Core.counter > 1) {
+                Core.counter--;
+                continue;
+            }
+            new_col = col;
+            if (excl) {
+                new_col = move_back_glyph(line->s, new_col);
+            }
+            break;
+        }
+    }
+    if (new_col == frame->cur.col) {
+        return 0;
+    }
+    frame->next_cur.col = new_col;
+    frame->next_cur.line = frame->cur.line;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return 2;
+}
+
+static int find_next_character(struct frame *frame)
+{
+    return find_next_char(frame, false);
+}
+
+static int find_next_character_excl(struct frame *frame)
+{
+    return find_next_char(frame, true);
+}
+
+static int move_to_prev_word(struct frame *frame)
+{
+    struct pos      p;
+    struct line     *line;
+    int             s, o_s;
+
+    p = frame->cur;
+    line = &frame->buf->text.lines[p.line];
+
+    do {
+        for (; p.col > 0; p.col--) {
+            if (!isblank(line->s[p.col - 1])) {
+                break;
+            }
+        }
+
+        if (p.col == 0) {
+            if (p.line > 0) {
+                line--;
+                p.line--;
+                p.col = line->n;
+            }
+        }
+
+        for (; p.col > 0; p.col--) {
+            if (!isblank(line->s[p.col - 1])) {
+                break;
+            }
+        }
+
+        s = -1;
+        while (p.col > 0) {
+            o_s = get_char_state(line->s[p.col - 1]);
+            if (s >= 0 && s != o_s) {
+                break;
+            }
+            p.col--;
+            s = o_s;
+        }
+        Core.counter--;
+    } while (Core.counter > 0 && (p.line > 0 || p.col > 0));
+
+    frame->next_cur = p;
+    if (is_point_equal(&frame->cur, &p)) {
+        return 0;
+    }
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return UPDATE_UI;
+}
+
+static int move_to_next_word_excl(struct frame *frame)
+{
+    struct pos      p;
+    struct line     *line;
+    int             s, o_s;
+
+    p = frame->cur;
+    line = &frame->buf->text.lines[p.line];
+
+    do {
+        p.col++;
+        while (1) {
+            for (; p.col < line->n; p.col++) {
+                if (!isblank(line->s[p.col])) {
+                    break;
+                }
+            }
+
+            if (p.col < line->n) {
+                break;
+            }
+
+            if (p.line + 1 >= frame->buf->text.num_lines) {
+                break;
+            }
+
+            p.line++;
+            p.col = 0;
+            line++;
+        }
+
+        s = -1;
+        while (p.col < line->n) {
+            o_s = get_char_state(line->s[p.col]);
+            if (s >= 0 && s != o_s) {
+                break;
+            }
+            s = o_s;
+            p.col++;
+        }
+
+        if (p.col > 0) {
+            p.col--;
+        }
+
+    } while (Core.counter > 0 && (p.col + 1 < line->n ||
+                                  p.line + 1 < frame->buf->text.num_lines));
+
+    if (is_point_equal(&frame->cur, &p)) {
+        return 0;
+    }
+    frame->next_cur = p;
+    frame->next_vct = compute_vct(frame, &p);
+    return 2;
+}
+
+static int move_to_next_word(struct frame *frame)
+{
+    struct pos      p;
+    struct line     *line;
+    int             s, o_s;
+
+    p = frame->cur;
+    line = &frame->buf->text.lines[p.line];
+
+    do {
+        s = -1;
+        while (p.col < line->n) {
+            o_s = get_char_state(line->s[p.col]);
+            if (s >= 0 && s != o_s) {
+                break;
+            }
+            p.col++;
+            s = o_s;
+        }
+
+        if (p.col == line->n) {
+            if (p.line + 1 < frame->buf->text.num_lines) {
+                p.line++;
+                p.col = 0;
+                line++;
+            }
+        }
+
+        for (; p.col < line->n; p.col++) {
+            if (!isblank(line->s[p.col])) {
+                break;
+            }
+        }
+
+        Core.counter--;
+    } while (Core.counter > 0 && (p.col < line->n ||
+                                 p.line + 1 < frame->buf->text.num_lines));
+
+    if (is_point_equal(&frame->cur, &p)) {
+        return 0;
+    }
+    frame->next_cur = p;
+    frame->next_vct = compute_vct(frame, &p);
+    return UPDATE_UI;
 }
 
 /**
@@ -632,597 +1285,129 @@ static size_t find_current_match(struct buf *buf, struct pos *pos)
     return l == 0 ? buf->num_matches - 1 : l - 1;
 }
 
-int prepare_motion(struct frame *frame, int motion_key)
+static int _find_prev_match(struct frame *frame)
 {
-    struct pos      new_cur;
-    size_t          new_vct;
-    struct buf      *buf;
-    col_t           n;
-    struct line     *line;
-    int             c;
-    int             s, o_s;
+    struct pos      p;
     size_t          index;
-    col_t           col;
-    int             r;
 
-    new_cur = frame->cur;
-    new_vct = frame->vct;
-    buf = frame->buf;
-    switch (motion_key) {
-    /* move {count} times to the left */
-    case KEY_LEFT:
-    case 'h':
-        if (new_cur.col == 0) {
-            return 0;
-        }
-        for (; Core.counter > 0; Core.counter--) {
-            if (new_cur.col == 0) {
-                break;
-            }
-            new_cur.col = move_back_glyph(buf->lines[new_cur.line].s,
-                                          new_cur.col);
-        }
-        new_vct = compute_vct(frame, &new_cur);
-        r = 1;
-        break;
+    index = find_current_match(frame->buf, &p);
+    p = frame->buf->matches[index].from;
+    if (p.line != frame->cur.line || p.col != frame->cur.col) {
+        Core.counter--;
+    }
+    Core.counter %= frame->buf->num_matches;
+    if ((size_t) Core.counter > index) {
+        index = frame->buf->num_matches - Core.counter;
+    } else {
+        index -= Core.counter;
+    }
+    index %= frame->buf->num_matches;
+    frame->next_cur = frame->buf->matches[index].from;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    set_message("%s [%zu/%zu]", frame->buf->search_pat, index + 1,
+                frame->buf->num_matches);
+    return UPDATE_UI;
+}
 
-    /* move {count} times to the right */
-    case KEY_RIGHT:
-    case 'l':
-    case 'a':
-        line = &buf->lines[new_cur.line];
-        if (new_cur.col == line->n) {
-            return 0;
-        }
-        for (; Core.counter > 0; Core.counter--) {
-            if (new_cur.col == line->n) {
-                break;
-            }
-            new_cur.col += get_glyph_count(&line->s[new_cur.col],
-                                           line->n - new_cur.col);
-        }
-        new_vct = compute_vct(frame, &new_cur);
-        r = 1;
-        break;
+static int _find_next_match(struct frame *frame)
+{
+    size_t          index;
+    
+    index = find_current_match(frame->buf, &frame->next_cur);
+    index += Core.counter % frame->buf->num_matches;
+    index %= frame->buf->num_matches;
+    frame->next_cur = frame->buf->matches[index].from;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    set_message("%s [%zu/%zu]", frame->buf->search_pat, index + 1,
+                frame->buf->num_matches);
+    return UPDATE_UI;
+}
 
-    /* move {count} times up */
-    case KEY_UP:
-    case 'k':
-        if (new_cur.line == 0) {
-            return 0;
-        }
-        if ((size_t) new_cur.line < Core.counter) {
-            new_cur.line = 0;
-        } else {
-            new_cur.line -= Core.counter;
-        }
-        line = &buf->lines[new_cur.line];
-        new_cur.col = get_index(line->s, line->n, frame->vct);
-        r = 1;
-        break;
+static int find_prev_match(struct frame *frame)
+{
+    if (frame->buf->num_matches == 0) {
+        set_message("no matches");
+        return UPDATE_UI;
+    }
+    if (Core.search_dir == -1) {
+        return _find_next_match(frame);
+    }
+    return _find_prev_match(frame);
+}
 
-    /* move {count} times down */
-    case KEY_DOWN:
-    case 'j':
-        if (SIZE_MAX - Core.counter < (size_t) new_cur.line) {
-            new_cur.line = buf->num_lines - 1;
-        } else {
-            new_cur.line += Core.counter;
-            new_cur.line = MIN(new_cur.line, buf->num_lines - 1);
-        }
-        if (new_cur.line == frame->cur.line) {
-            return 0;
-        }
-        line = &buf->lines[new_cur.line];
-        new_cur.col = get_index(line->s, line->n, frame->vct);
-        r = 1;
-        break;
+static int find_next_match(struct frame *frame)
+{
+    if (frame->buf->num_matches == 0) {
+        set_message("no matches");
+        return UPDATE_UI;
+    }
+    if (Core.search_dir == -1) {
+        return _find_prev_match(frame);
+    }
+    return _find_next_match(frame);
+}
 
-    /* move to the start of the line */
-    case KEY_HOME:
-    case '0':
-        if (new_cur.col == 0) {
-            return 0;
-        }
-        new_cur.col = 0;
-        new_vct = 0;
-        r = 1;
-        break;
+static int goto_matching_paren(struct frame *frame)
+{
+    size_t          index;
 
-    /* move to the end of the line */
-    case KEY_END:
-    case '$':
-    case 'A':
-        n = buf->lines[new_cur.line].n;
-        new_cur.col = n;
-        new_vct = SIZE_MAX;
-        r = 1;
-        break;
-
-    /* move back {count} characters, a line end counts as one character */
-    case 0x7f:
-    case KEY_BACKSPACE:
-        if (new_cur.col == 0 && new_cur.line == 0) {
-            return 0;
-        }
-
-        while ((size_t) new_cur.col < Core.counter) {
-            Core.counter -= new_cur.col + 1;
-            if (new_cur.line == 0) {
-                break;
-            }
-            new_cur.line--;
-            new_cur.col = get_mode_line_end(&buf->lines[new_cur.line]);
-        }
-        if ((size_t) new_cur.col < Core.counter) {
-            new_cur.col = 0;
-        } else {
-            new_cur.col -= Core.counter;
-        }
-        new_vct = compute_vct(frame, &new_cur);
-        r = 1;
-        break;
-
-    /* move forward {count} characters, a line end counts as one character */
-    case ' ':
-        while (new_cur.line != buf->num_lines - 1) {
-            n = get_mode_line_end(&buf->lines[new_cur.line]);
-            n -= new_cur.col;
-            if (Core.counter <= (size_t) n) {
-                break;
-            }
-            Core.counter -= n + 1;
-            new_cur.col = 0;
-            new_cur.line++;
-        }
-        n = buf->lines[new_cur.line].n;
-        if (SIZE_MAX - Core.counter < (size_t) new_cur.col) {
-            new_cur.col = n;
-        } else {
-            new_cur.col += Core.counter;
-            new_cur.col = MIN(new_cur.col, n);
-        }
-        if (new_cur.col == frame->cur.col && new_cur.line == frame->cur.line) {
-            return 0;
-        }
-        new_vct = compute_vct(frame, &new_cur);
-        r = 1;
-        break;
-
-    /* move to the start of the frame */
-    case 'H':
-        if (new_cur.line == frame->scroll.line) {
-            return 0;
-        }
-        /* no bounds check needed */
-        new_cur.line = frame->scroll.line;
-        r = 1;
-        break;
-
-    /* move to the middle of the frame */
-    case 'M':
-        new_cur.line = frame->scroll.line + frame->h / 2;
-        new_cur.line = MIN(new_cur.line, buf->num_lines - 1);
-        if (new_cur.line == frame->cur.line) {
-            return 0;
-        }
-        r = 1;
-        break;
-
-    /* move to the end of the frame */
-    case 'L':
-        new_cur.line = frame->scroll.line + frame->h - 2;
-        new_cur.line = MIN(new_cur.line, buf->num_lines - 1);
-        if (new_cur.line == frame->cur.line) {
-            return 0;
-        }
-        r = 1;
-        break;
-
-    /* move to the start of the line but skip all indentation */
-    case 'I':
-        new_cur.col = get_line_indent(buf, new_cur.line);
-        if (new_cur.col == frame->cur.col) {
-            return 0;
-        }
-        r = 1;
-        break;
-
-    /* go to ... */
-    case 'g':
-        motion_key = get_extra_char();
-        /* fall through */
-    case 'G':
-        switch (motion_key) {
-        /* ...the line at {counter} */
-        case 'g':
-            Core.counter = MIN(Core.counter - 1, (size_t) buf->num_lines - 1);
-            if ((size_t) new_cur.line == Core.counter) {
-                return 0;
-            }
-            new_cur.line = Core.counter;
-            line = &buf->lines[new_cur.line];
-            new_cur.col = get_index(line->s, line->n, frame->vct);
-            break;
-
-        case 'G':
-            if (Core.counter >= (size_t) buf->num_lines) {
-                new_cur.line = 0;
-            } else {
-                new_cur.line = buf->num_lines - Core.counter;
-            }
-            if (new_cur.line == frame->cur.line) {
-                return 0;
-            }
-            line = &buf->lines[new_cur.line];
-            new_cur.col = get_index(line->s, line->n, frame->vct);
-            break;
-            
-        default:
-            return 0;
-        }
-        r = 1;
-        break;
-
-    /* move up {count} pages where a page is 2/3 of the frame height */
-    case KEY_PPAGE:
-        if (new_cur.line == 0) {
-            return 0;
-        }
-        n = frame->h * 2 / 3;
-        n = MAX(n, 1);
-        n = safe_mul(Core.counter, n);
-        if (new_cur.line <= n) {
-            new_cur.line = 0;
-        } else {
-            new_cur.line -= n;
-        }
-        r = 1;
-        break;
-
-    /* move down {count} pages where a page is 2/3 of the frame height */
-    case KEY_NPAGE:
-        n = frame->h * 2 / 3;
-        n = MAX(n, 1);
-        n = safe_mul(Core.counter, n);
-        if (LINE_MAX - n < new_cur.line) {
-            new_cur.line = buf->num_lines - 1;
-        } else {
-            new_cur.line += n;
-            new_cur.line = MIN(new_cur.line, buf->num_lines - 1);
-        }
-        if (new_cur.line == frame->cur.line) {
-            return 0;
-        }
-        r = 1;
-        break;
-
-    /* move up {count} paragraphs */
-    case '{':
-        if (frame->cur.line == 0) {
-            return 0;
-        }
-        while (new_cur.line > 0) {
-            new_cur.line--;
-            if (buf->lines[new_cur.line].n == 0) {
-                if (Core.counter > 1) {
-                    Core.counter--;
-                    continue;
-                }
-                break;
-            }
-        }
-        r = 1;
-        break;
-
-    /* move down {count} paragraphs */
-    case '}':
-        if (new_cur.line + 1 == buf->num_lines) {
-            return 0;
-        }
-        while (new_cur.line + 1 != buf->num_lines) {
-            new_cur.line++;
-            if (buf->lines[new_cur.line].n == 0) {
-                if (Core.counter > 1) {
-                    Core.counter--;
-                    continue;
-                }
-                break;
-            }
-        }
-        r = 1;
-        break;
-
-    /* find the {count}'th character */
-    case 'f':
-    case 't': /* this moves in an exclusive way */
-        /* the character to look for */
-        do {
-            c = get_ch();
-            /* skip over rezise events */
-        } while (c == -1);
-        col = new_cur.col;
-        if (motion_key == 't') {
-            /* make sure when the cursor is right before a match already, that
-             * it is not taken again
-             */
-            col++;
-        }
-        line = &buf->lines[new_cur.line];
-        while (col++, col < line->n) {
-            if (line->s[col] == c) {
-                if (Core.counter > 1) {
-                    Core.counter--;
-                    continue;
-                }
-                new_cur.col = col;
-                if (motion_key == 't') {
-                    new_cur.col--;
-                }
-                break;
-            }
-        }
-        if (new_cur.col == frame->cur.col) {
-            return 0;
-        }
-        new_vct = compute_vct(frame, &new_cur);
-        r = 2;
-        break;
-
-    /* find the {count}'th character backwards */
-    case 'F':
-    case 'T': /* this moves in an exclusive way */
-        /* the character to look for */
-        do {
-            c = get_ch();
-            /* skip over resize events */
-        } while (c == -1);
-        col = new_cur.col;
-        if (motion_key == 'T' && col > 0) {
-            col--;
-        }
-        line = &buf->lines[new_cur.line];
-        while (col > 0) {
-            col--;
-            if (line->s[col] == c) {
-                if (Core.counter > 1) {
-                    Core.counter--;
-                    continue;
-                }
-                new_cur.col = col;
-                if (motion_key == 'T') {
-                    new_cur.col++;
-                }
-                break;
-            }
-        }
-        if (new_cur.col == frame->cur.col) {
-            return 0;
-        }
-        line = &buf->lines[new_cur.line];
-        new_cur.col = get_index(line->s, line->n, frame->vct);
-        r = 1;
-        break;
-
-    /* move forward {count} words, skip space after a word */
-    case 'W':
-    case 'w':
-        line = &frame->buf->lines[new_cur.line];
-
-    again_next:
-        s = -1;
-        while (new_cur.col < line->n) {
-            o_s = get_char_state(line->s[new_cur.col]);
-            if (s >= 0 && s != o_s) {
-                break;
-            }
-            new_cur.col++;
-            s = o_s;
-        }
-
-        if (new_cur.col == line->n) {
-            if (new_cur.line + 1 < frame->buf->num_lines) {
-                new_cur.line++;
-                new_cur.col = 0;
-                line++;
-            }
-        }
-
-        for (; new_cur.col < line->n; new_cur.col++) {
-            if (!isblank(line->s[new_cur.col])) {
-                break;
-            }
-        }
-
-        if (Core.counter > 1 && (new_cur.col < line->n ||
-                                 new_cur.line + 1 < frame->buf->num_lines)) {
-            Core.counter--;
-            goto again_next;
-        }
-
-        if (is_point_equal(&frame->cur, &new_cur)) {
-            return 0;
-        }
-        new_vct = compute_vct(frame, &new_cur);
-        r = 1;
-        break;
-
-    /* move forward {count} words, skip space before a word */
-    case 'E':
-    case 'e':
-        new_cur = frame->cur;
-        line = &frame->buf->lines[new_cur.line];
-
-    again_end:
-        new_cur.col++;
-        s = -1;
-        while (1) {
-            for (; new_cur.col < line->n; new_cur.col++) {
-                if (!isblank(line->s[new_cur.col])) {
-                    break;
-                }
-            }
-
-            if (new_cur.col < line->n) {
-                break;
-            }
-
-            if (new_cur.line + 1 >= frame->buf->num_lines) {
-                break;
-            }
-
-            new_cur.line++;
-            new_cur.col = 0;
-            line++;
-        }
-
-        while (new_cur.col < line->n) {
-            o_s = get_char_state(line->s[new_cur.col]);
-            if (s >= 0 && s != o_s) {
-                break;
-            }
-            s = o_s;
-            new_cur.col++;
-        }
-
-        if (new_cur.col > 0) {
-            new_cur.col--;
-        }
-
-        if (Core.counter > 1 && (new_cur.col + 1 < line->n ||
-                                 new_cur.line + 1 < frame->buf->num_lines)) {
-            Core.counter--;
-            goto again_end;
-        }
-
-        if (is_point_equal(&frame->cur, &new_cur)) {
-            return 0;
-        }
-        new_vct = compute_vct(frame, &new_cur);
-        r = 2;
-        break;
-
-    /* move back {count} words */
-    case 'B':
-    case 'b':
-    case '\b':
-        line = &frame->buf->lines[new_cur.line];
-
-    again_prev:
-        for (; new_cur.col > 0; new_cur.col--) {
-            if (!isblank(line->s[new_cur.col - 1])) {
-                break;
-            }
-        }
-
-        if (new_cur.col == 0) {
-            if (new_cur.line > 0) {
-                new_cur.line--;
-                new_cur.col = frame->buf->lines[new_cur.line].n;
-                line--;
-            }
-        }
-
-        for (; new_cur.col > 0; new_cur.col--) {
-            if (!isblank(line->s[new_cur.col - 1])) {
-                break;
-            }
-        }
-
-        s = -1;
-        while (new_cur.col > 0) {
-            o_s = get_char_state(line->s[new_cur.col - 1]);
-            if (s >= 0 && s != o_s) {
-                break;
-            }
-            new_cur.col--;
-            s = o_s;
-        }
-
-        if (Core.counter > 1 && (new_cur.line > 0 || new_cur.col > 0)) {
-            Core.counter--;
-            goto again_prev;
-        }
-
-        if (is_point_equal(&frame->cur, &new_cur)) {
-            return 0;
-        }
-        new_vct = compute_vct(frame, &new_cur);
-        r = 1;
-        break;
-
-    /* go forward {count} matches */
-    case 'n':
-        if (buf->num_matches == 0) {
-            set_message("no matches");
-            return 1;
-        }
-        if (Core.search_dir == -1) {
-            goto go_forward;
-        }
-
-    go_backwards:
-        index = find_current_match(buf, &new_cur);
-        index += Core.counter % buf->num_matches;
-        index %= buf->num_matches;
-        new_cur = buf->matches[index].from;
-        new_vct = compute_vct(frame, &new_cur);
-        set_message("%s [%zu/%zu]", buf->search_pat, index + 1,
-                buf->num_matches);
-        r = 1;
-        break;
-
-    /* go backwards {count} matches */
-    case 'N':
-        if (buf->num_matches == 0) {
-            set_message("no matches");
-            return 1;
-        }
-        if (Core.search_dir == -1) {
-            goto go_backwards;
-        }
-
-    go_forward:
-        index = find_current_match(buf, &new_cur);
-        new_cur = buf->matches[index].from;
-        if (new_cur.line != frame->cur.line || new_cur.col != frame->cur.col) {
-            Core.counter--;
-        }
-        Core.counter %= buf->num_matches;
-        if ((size_t) Core.counter > index) {
-            index = buf->num_matches - Core.counter;
-        } else {
-            index -= Core.counter;
-        }
-        index %= frame->buf->num_matches;
-        new_cur = buf->matches[index].from;
-        new_vct = compute_vct(frame, &new_cur);
-        set_message("%s [%zu/%zu]", buf->search_pat, index + 1,
-                buf->num_matches);
-        r = 1;
-        break;
-
-    /* go to the matching parenthesis */
-    case '%':
-        index = get_paren(frame->buf, &new_cur);
-        if (index == SIZE_MAX) {
-            return 0;
-        }
-        index = get_matching_paren(buf, index);
-        if (index == SIZE_MAX) {
-            return 0;
-        }
-        new_cur = buf->parens[index].pos;
-        new_vct = compute_vct(frame, &new_cur);
-        r = 1;
-        break;
-
-    default:
+    index = get_paren(frame->buf, &frame->next_cur);
+    if (index == SIZE_MAX) {
         return 0;
     }
-    frame->next_cur = new_cur;
-    frame->next_vct = new_vct;
-    return r;
+    index = get_matching_paren(frame->buf, index);
+    if (index == SIZE_MAX) {
+        return 0;
+    }
+    frame->next_cur = frame->buf->parens[index].pos;
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return UPDATE_UI;
+}
+
+int prepare_motion(struct frame *frame, int motion_key)
+{
+    static int (*const binds[KEY_MAX])(struct frame *frame) = {
+        [KEY_LEFT]      = move_left,
+        ['h']           = move_left,
+        [KEY_RIGHT]     = move_right,
+        ['l']           = move_right,
+        [KEY_UP]        = move_up,
+        ['k']           = move_up,
+        [KEY_DOWN]      = move_down,
+        ['j']           = move_down,
+        [KEY_HOME]      = move_home,
+        ['0']           = move_home,
+        [KEY_END]       = move_end,
+        ['$']           = move_end,
+        [0x7f]          = move_prev,
+        [KEY_BACKSPACE] = move_prev,
+        [' ']           = move_next,
+        ['H']           = move_frame_start,
+        ['M']           = move_frame_middle,
+        ['L']           = move_frame_end,
+        ['I']           = move_to_line_indent,
+        ['g']           = move_to_extended,
+        [KEY_PPAGE]     = move_page_up,
+        [KEY_NPAGE]     = move_page_down,
+        ['{']           = move_up_paragraph,
+        ['}']           = move_down_paragraph,
+        ['F']           = find_prev_character,
+        ['T']           = find_prev_character_excl,
+        ['f']           = find_next_character,
+        ['t']           = find_next_character_excl,
+        ['B']           = move_to_prev_word,
+        ['b']           = move_to_prev_word,
+        ['\b']          = move_to_prev_word,
+        ['W']           = move_to_next_word,
+        ['w']           = move_to_next_word,
+        ['E']           = move_to_next_word_excl,
+        ['e']           = move_to_next_word_excl,
+        ['N']           = find_prev_match,
+        ['n']           = find_next_match,
+        ['%']           = goto_matching_paren,
+    };
+    (void) find_current_match;
+    return binds[motion_key] == NULL ? 0 : binds[motion_key](frame);
 }
 
 int apply_motion(struct frame *frame)
@@ -1237,7 +1422,7 @@ int apply_motion(struct frame *frame)
     } else if (frame->next_cur.line - frame->cur.line > MAX(frame->h, 2)) {
         frame->prev_cur = frame->cur;
     }
-    max_col = get_mode_line_end(&frame->buf->lines[frame->next_cur.line]);
+    max_col = get_mode_line_end(&frame->buf->text.lines[frame->next_cur.line]);
     frame->cur.col = MIN(frame->next_cur.col, max_col);
     frame->cur.line = frame->next_cur.line;
     frame->vct = frame->next_vct;
@@ -1254,16 +1439,18 @@ int do_action_till(struct frame *frame, int action, line_t min_line,
     line_t              i;
     col_t               c;
     struct pos          p1, p2;
-    struct raw_line     *lines, *line;
+    struct line         *line;
+    struct text         text;
     struct undo_event   *ev;
 
     buf = frame->buf;
     update = false;
     if (action == '>') {
-        lines = xreallocarray(NULL, sizeof(*lines), max_line - min_line + 1);
+        text.num_lines = max_line - min_line + 1;
+        text.lines = xmalloc(sizeof(*text.lines) * text.num_lines);
         for (i = min_line; i <= max_line; i++) {
-            line = &lines[i - min_line];
-            if (buf->lines[i].n == 0) {
+            line = &text.lines[i - min_line];
+            if (buf->text.lines[i].n == 0) {
                 /* do not indent empty lines */
                 line->s = NULL;
                 line->n = 0;
@@ -1278,16 +1465,15 @@ int do_action_till(struct frame *frame, int action, line_t min_line,
         }
         if (!update) {
             /* if all lines are empty, there is nothing to indent */
-            free(lines);
+            free(text.lines);
             return 0;
         }
         p1.col = 0;
         p1.line = min_line;
-        _insert_block(buf, &p1, lines, max_line - min_line + 1);
-        ev = add_event(buf, IS_BLOCK | IS_INSERTION, &p1, lines,
-                       max_line - min_line + 1);
+        _insert_block(buf, &p1, &text);
+        ev = add_event(buf, IS_BLOCK | IS_INSERTION, &p1, &text);
         ev->cur = frame->cur;
-        if (buf->lines[frame->cur.line].n > 0) {
+        if (buf->text.lines[frame->cur.line].n > 0) {
             frame->cur.col += Core.tab_size;
         }
         return UPDATE_UI;
@@ -1302,7 +1488,7 @@ int do_action_till(struct frame *frame, int action, line_t min_line,
     for (; min_line <= max_line; min_line++) {
         switch (action) {
         case '=':
-            if (buf->lines[min_line].n == 0) {
+            if (buf->text. lines[min_line].n == 0) {
                 /* skip empty lines */
                 break;
             }
@@ -1327,11 +1513,11 @@ int do_action_till(struct frame *frame, int action, line_t min_line,
             break;
 
         case '<':
-            for (n = 0; n < buf->lines[min_line].n; n++) {
+            for (n = 0; n < buf->text. lines[min_line].n; n++) {
                 if (n == Core.tab_size) {
                     break;
                 }
-                if (buf->lines[min_line].s[n] != ' ') {
+                if (buf->text. lines[min_line].s[n] != ' ') {
                     break;
                 }
             }

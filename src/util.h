@@ -61,6 +61,15 @@ struct glyph {
 };
 
 /**
+ * Gets the number of bytes a utf8 character expects.
+ *
+ * @param ch    The utf8 byte to check.
+ *
+ * @return The number of bytes this utf8 leading byte expects.
+ */
+int get_expected_bytes(char ch);
+
+/**
  * Get the number of bytes the glyph wants.
  *
  * @param s The multi byte sequence.
@@ -74,7 +83,7 @@ int get_glyph_count(const char *s, size_t n);
  * Moves given index to the previous glyph.
  *
  * @param s The multi byte sequence.
- * @param i The parameter after the glyph.
+ * @param i The index after the glyph.
  *
  * @return The new index.
  */

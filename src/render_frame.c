@@ -25,6 +25,8 @@ struct render_info {
 
     /// the line to render
     struct line *line;
+    /// the attributes of the line
+    int *attribs;
     /// the index of the line to render
     line_t line_i;
 };
@@ -93,7 +95,7 @@ static void render_line(struct render_info *ri)
     for (p.col = 0, x = 0; p.col < ri->line->n && x < ri->w;) {
         err = get_glyph(&ri->line->s[p.col], ri->line->n - p.col, &g) == -1;
         if (x + g.w > ri->x) {
-            hi = ri->line->attribs[p.col];
+            hi = ri->attribs[p.col];
             c = ri->line->s[p.col];
             if (c == '\t') {
                 p.col++;
@@ -161,7 +163,7 @@ void render_frame(struct frame *frame)
         set_highlight(stdscr, HI_LINE_NO);
         line = frame->scroll.line + 1;
         for (i = y; i < h; i++) {
-            if (line > buf->num_lines) {
+            if (line > buf->text.num_lines) {
                 set_highlight(stdscr, HI_NORMAL);
                 mvaddstr(frame->y + i, frame->x + orig_x, " ~");
                 for (j = orig_x + 2; j < x; j++) {
@@ -176,17 +178,18 @@ void render_frame(struct frame *frame)
     }
 
     /* render the lines */
-    ri.cur_line = &buf->lines[frame->cur.line];
+    ri.cur_line = &buf->text.lines[frame->cur.line];
     ri.off_x = frame->x + x - frame->scroll.col;
     ri.x = frame->scroll.col;
     ri.w = frame->scroll.col + w;
 
     last_line = frame->scroll.line + frame->h - 1;
-    last_line = MIN(last_line, buf->num_lines);
+    last_line = MIN(last_line, buf->text.num_lines);
     for (l = frame->scroll.line; l < last_line; l++) {
         ri.off_y = frame->y + l - frame->scroll.line;
         ri.line_i = l;
-        ri.line = &buf->lines[l];
+        ri.line = &buf->text.lines[l];
+        ri.attribs = buf->attribs[l];
         render_line(&ri);
     }
 
@@ -199,6 +202,7 @@ void render_frame(struct frame *frame)
         if (match->from.col >= ri.w) {
             break;
         }
+        /* TODO: translate to visual cursor */
         mvchgat(frame->y + match->from.line - frame->scroll.line,
                 frame->x + x + match->from.col - frame->scroll.col,
                 MIN((int) (match->to.col - match->from.col), w),
@@ -214,10 +218,10 @@ void render_frame(struct frame *frame)
                  l++) {
                 if (sel.is_block) {
                     start = sel.beg.col;
-                    end = MIN(sel.end.col + 1, buf->lines[l].n);
+                    end = MIN(sel.end.col + 1, buf->text.lines[l].n);
                 } else {
                     end = l == sel.end.line ? sel.end.col + 1 :
-                        buf->lines[l].n + 1;
+                        buf->text.lines[l].n + 1;
                 }
                 if (start < frame->scroll.col) {
                     start = frame->scroll.col;
@@ -255,7 +259,7 @@ void render_frame(struct frame *frame)
         set_highlight(stdscr, HI_VERT_SPLIT);
         mvvline(frame->y, frame->x, ACS_VLINE, frame->h);
     }
-    perc = 100 * (frame->cur.line + 1) / buf->num_lines;
+    perc = 100 * (frame->cur.line + 1) / buf->text.num_lines;
 
     /* render the status in two parts:
      * 1. File name on the left
@@ -280,7 +284,7 @@ void render_frame(struct frame *frame)
             frame->y + frame->h - 1, frame->x + orig_x + w - 1, 0);
 
     mvwprintw(OffScreen, 0, 0, "%d%% ¶"PRLINE"/"PRLINE"☰℅"PRCOL,
-              perc, frame->cur.line + 1, buf->num_lines,
+              perc, frame->cur.line + 1, buf->text.num_lines,
               frame->cur.col + 1);
     w = getcurx(OffScreen);
     if (w + orig_x > frame->w) {
@@ -301,7 +305,7 @@ void get_text_rect(const struct frame *frame,
     line_t          n;
 
     dg_cnt = 0;
-    n = frame->buf->num_lines;
+    n = frame->buf->text.num_lines;
     while (n > 0) {
         dg_cnt++;
         n /= 10;
@@ -331,7 +335,7 @@ bool get_visual_pos(const struct frame *frame, const struct pos *pos,
 
     get_text_rect(frame, &x, &y, &w, &h);
 
-    line = &frame->buf->lines[pos->line];
+    line = &frame->buf->text.lines[pos->line];
     v_x = get_advance(line->s, line->n, pos->col);
     *p_x = frame->x + x + v_x - frame->scroll.col;
     *p_y = frame->y + y + pos->line - frame->scroll.line;
