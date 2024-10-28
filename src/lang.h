@@ -41,6 +41,12 @@ struct state_ctx {
 typedef col_t (*state_proc_t)(struct state_ctx *ctx);
 
 /**
+ * Called before text is typed into a buffer.
+ */
+typedef void (*char_hook_t)(struct buf *buf, struct pos *pos,
+                            struct text *text);
+
+/**
  * An indentor for a language computes the indentation given line would need.
  */
 typedef col_t (*indentor_t)(struct buf *buf, line_t line_i);
@@ -53,6 +59,8 @@ extern struct lang {
     const char *name;
     /// state machine of the language
     state_proc_t *fsm;
+    //// the character type hook
+    char_hook_t char_hook;
     /// indentation computer
     indentor_t indentor;
     /// extensions a file for this language as null terminated list

@@ -1,6 +1,7 @@
 #include "xalloc.h"
 #include "frame.h"
 #include "buf.h"
+#include "lang.h"
 #include "util.h"
 #include "purec.h"
 
@@ -247,15 +248,10 @@ static int delete_prev_char(void)
 
 int insert_handle_input(int c)
 {
-    static struct line line;
-    static struct text text = {
-        .lines = &line,
-        .num_lines = 1
-    };
+    struct text     text;
+    struct pos      p;
 
-    char ch;
-
-    static int (*binds[KEY_MAX])(void) = {
+    static int (*binds[])(void) = {
         ['\x1b'] = escape_insert_mode,
         [CONTROL('C')] = cancel_insert_mode,
         ['\n'] = enter_new_line,
@@ -266,23 +262,25 @@ int insert_handle_input(int c)
         ['\b'] = delete_prev_char,
     };
 
-    if (binds[c] != NULL) {
+    if (c < (int) ARRAY_SIZE(binds) && binds[c] != NULL) {
         return binds[c]();
     }
 
     if (c >= ' ' && c < 0x100) {
-        ch = c;
-        line.s = &ch;
-        line.n = 1;
-        (void) insert_lines(SelFrame->buf, &SelFrame->cur, &text, 1);
-        SelFrame->cur.col++;
-        if (SelFrame->cur.col ==
-                SelFrame->buf->text.lines[SelFrame->cur.line].n &&
-                (ch == '}' || ch == ':')) {
-            (void) indent_line(SelFrame->buf, SelFrame->cur.line);
-            SelFrame->cur.col = SelFrame->buf->text.lines[SelFrame->cur.line].n;
-        }
-        SelFrame->vct = SelFrame->cur.col;
+        init_text(&text, 1);
+        text.lines[0].n = 1;
+        text.lines[0].s = xmalloc(1);
+        text.lines[0].s[0] = c;
+        Langs[SelFrame->buf->lang].char_hook(SelFrame->buf, &SelFrame->cur,
+                                             &text);
+        p = SelFrame->cur;
+        SelFrame->cur.col = text.num_lines == 1 ?
+                SelFrame->cur.col + text.lines[0].n :
+                text.lines[text.num_lines - 1].n;
+        SelFrame->cur.line += text.num_lines - 1;
+        (void) _insert_lines(SelFrame->buf, &p, &text);
+        (void) add_event(SelFrame->buf, IS_INSERTION, &p, &text);
+        SelFrame->vct = compute_vct(SelFrame, &SelFrame->cur);
         (void) adjust_scroll(SelFrame);
         return UPDATE_UI;
    }

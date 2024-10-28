@@ -946,7 +946,7 @@ static int play_dot_recording(void)
 
 int normal_handle_input(int c)
 {
-    static int (*const binds[KEY_MAX])(void) = {
+    static int (*const binds[])(void) = {
         ['\x1b']        = escape_normal_mode,
         [CONTROL('C')]  = notify_how_to_quit,
         ['i']           = enter_insert_mode,
@@ -997,7 +997,7 @@ int normal_handle_input(int c)
         ['.']           = play_dot_recording,
     };
 
-    if (binds[c] != NULL) {
+    if (c < (int) ARRAY_SIZE(binds) && binds[c] != NULL) {
         return binds[c]();
     }
     return do_motion(SelFrame, c);

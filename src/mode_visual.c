@@ -281,7 +281,7 @@ static int swap_cursor(void)
     return UPDATE_UI;
 }
 
-static int set_line_indent(void)
+static int reset_line_indent(void)
 {
     struct selection    sel;
 
@@ -307,7 +307,7 @@ static int increase_line_indent(void)
 
 int visual_handle_input(int c)
 {
-    static int (*const binds[KEY_MAX])(void) = {
+    static int (*const binds[])(void) = {
         ['\x1b']        = exit_visual_mode,
         [CONTROL('C')]  = exit_visual_mode,
         ['v']           = enter_visual_mode,
@@ -330,12 +330,12 @@ int visual_handle_input(int c)
         ['y']           = yank_selection,
         ['O']           = swap_corner,
         ['o']           = swap_cursor,
-        ['=']           = set_line_indent,
+        ['=']           = reset_line_indent,
         ['<']           = decrease_line_indent,
         ['>']           = increase_line_indent,
     };
 
-    if (binds[c] != NULL) {
+    if (c < (int) ARRAY_SIZE(binds) && binds[c] != NULL) {
         return binds[c]();
     }
 

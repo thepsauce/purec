@@ -320,16 +320,69 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
     return ev;
 }
 
-size_t get_line_indent(struct buf *buf, line_t line_i)
+col_t get_nolb(struct buf *buf, line_t line_i)
 {
-    col_t           col = 0;
+    col_t           col;
+    struct line     *line;
+
+    line = &buf->text.lines[line_i];
+    for (col = 0; col < line->n; col++) {
+        if (!isblank(line->s[col])) {
+            break;
+        }
+    }
+    return col;
+}
+
+col_t get_line_indent(struct buf *buf, line_t line_i)
+{
+    col_t           indent;
+    col_t           col;
     struct          line *line;
 
     line = &buf->text.lines[line_i];
-    while (col < line->n && isblank(line->s[col])) {
-        col++;
+    indent = 0;
+    col = 0;
+    for (col = 0; col < line->n; col++) {
+        if (line->s[col] == ' ') {
+            indent++;
+        } else if (line->s[col] == '\t') {
+            indent += Core.tab_size;
+        } else {
+            break;
+        }
     }
-    return col;
+    return indent;
+}
+
+struct undo_event *set_line_indent(struct buf *buf, line_t line_i, col_t indent)
+{
+    col_t               pre;
+    struct pos          pos, to;
+    struct text         text;
+
+    pre = get_nolb(buf, line_i);
+    pos.line = line_i;
+    pos.col = 0;
+    if (indent > pre) {
+        init_text(&text, 1);
+        text.lines[0].n = indent - pre;
+        text.lines[0].s = xmalloc(indent - pre);
+        memset(text.lines[0].s, ' ', text.lines[0].n);
+        _insert_lines(buf, &pos, &text);
+        return add_event(buf, IS_INSERTION, &pos, &text);
+    }
+    to.line = line_i;
+    to.col = pre - indent;
+    return delete_range(buf, &pos, &to);
+}
+
+struct undo_event *indent_line(struct buf *buf, line_t line_i)
+{
+    col_t           new_indent;
+
+    new_indent = Langs[buf->lang].indentor(buf, line_i);
+    return set_line_indent(buf, line_i, new_indent);
 }
 
 struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
@@ -596,34 +649,6 @@ void notice_line_removal(struct buf *buf, line_t line_i, line_t num_lines)
         buf->matches[index].from.line -= num_lines;
         buf->matches[index].to  .line -= num_lines;
     }
-}
-
-struct undo_event *indent_line(struct buf *buf, line_t line_i)
-{
-    col_t               cur_indent, new_indent;
-    struct pos          pos, to;
-    struct text         text;
-    struct undo_event   *ev;
-
-    new_indent = Langs[buf->lang].indentor(buf, line_i);
-    cur_indent = get_line_indent(buf, line_i);
-    pos.line = line_i;
-    pos.col = 0;
-    if (cur_indent == buf->text.lines[line_i].n) {
-        buf->ev_last_indent = buf->event_i;
-    }
-    if (new_indent > cur_indent) {
-        init_text(&text, 1);
-        text.lines[0].n = new_indent - cur_indent;
-        text.lines[0].s = xmalloc(new_indent - cur_indent);
-        memset(text.lines[0].s, ' ', text.lines[0].n);
-        ev = insert_lines(buf, &pos, &text, 1);
-        clear_text(&text);
-        return ev;
-    }
-    to.line = line_i;
-    to.col = cur_indent - new_indent;
-    return delete_range(buf, &pos, &to);
 }
 
 struct undo_event *delete_range(struct buf *buf,

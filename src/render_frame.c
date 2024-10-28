@@ -62,18 +62,27 @@ static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
 #include "syntax/commit.h"
 #include "syntax/make.h"
 
+void no_char_hook(struct buf *buf, struct pos *pos, struct text *text)
+{
+    (void) buf;
+    (void) pos;
+    (void) text;
+}
+
 col_t no_indentor(struct buf *buf, line_t line_i)
 {
     return get_line_indent(buf, line_i);
 }
 
 struct lang Langs[] = {
-    [NO_LANG] = { "None", none_lang_states, no_indentor, "\0" },
-    [C_LANG] = { "C", c_lang_states, c_indentor,
+    [NO_LANG] = { "None", none_lang_states, no_char_hook, no_indentor, "\0" },
+    [C_LANG] = { "C", c_lang_states, c_char_hook, c_indentor,
                 "*.c\0*.h\0*.cpp\0*.cxx\0*.c++\0*.hpp\0*.hxx\0*.h++\0" },
-    [DIFF_LANG] = { "Diff", diff_lang_states, no_indentor, "*.diff\0*.patch\0" },
-    [COMMIT_LANG] = { "Commit", commit_lang_states, no_indentor, "\\i*.commit*\0" },
-    [MAKE_LANG] = { "Make", make_lang_states, make_indentor,
+    [DIFF_LANG] = { "Diff", diff_lang_states, no_char_hook, no_indentor,
+                   "*.diff\0*.patch\0" },
+    [COMMIT_LANG] = { "Commit", commit_lang_states, no_char_hook, no_indentor,
+                     "\\i*.commit*\0" },
+    [MAKE_LANG] = { "Make", make_lang_states, no_char_hook, make_indentor,
                    "makefile\0Makefile\0GNUmakefile\0" },
 };
 

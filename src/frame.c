@@ -1366,7 +1366,7 @@ static int goto_matching_paren(struct frame *frame)
 
 int prepare_motion(struct frame *frame, int motion_key)
 {
-    static int (*const binds[KEY_MAX])(struct frame *frame) = {
+    static int (*const binds[])(struct frame *frame) = {
         [KEY_LEFT]      = move_left,
         ['h']           = move_left,
         [KEY_RIGHT]     = move_right,
@@ -1406,8 +1406,8 @@ int prepare_motion(struct frame *frame, int motion_key)
         ['n']           = find_next_match,
         ['%']           = goto_matching_paren,
     };
-    (void) find_current_match;
-    return binds[motion_key] == NULL ? 0 : binds[motion_key](frame);
+    return motion_key >= (int) ARRAY_SIZE(binds) ||
+            binds[motion_key] == NULL ? 0 : binds[motion_key](frame);
 }
 
 int apply_motion(struct frame *frame)

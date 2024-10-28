@@ -76,6 +76,24 @@ const char *c_preproc[] = {
     "warning",
 };
 
+void c_char_hook(struct buf *buf, struct pos *pos, struct text *text)
+{
+    col_t           indent;
+    col_t           n;
+
+    n = buf->text.lines[pos->line].n;
+    if ((text->lines[0].s[0] == '}' && pos->col == get_nolb(buf, pos->line)) ||
+            (text->lines[0].s[0] == ':' && pos->col == n)) {
+        indent = get_line_indent(buf, pos->line);
+        if (indent >= Core.tab_size) {
+            indent -= Core.tab_size;
+        }
+        set_line_indent(buf, pos->line, indent);
+        pos->col = text->lines[0].s[0] == '}' ? get_nolb(buf, pos->line) :
+                buf->text.lines[pos->line].n;
+    }
+}
+
 col_t c_indentor(struct buf *buf, line_t line_i)
 {
     struct pos      p;
@@ -132,7 +150,7 @@ col_t c_indentor(struct buf *buf, line_t line_i)
             }
         }
     }
-    c = get_line_indent(buf, line_i);
+    c = get_nolb(buf, line_i);
     if (c == line->n || line->s[c] != '}') {
         c = 1;
     } else {

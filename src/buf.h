@@ -295,6 +295,16 @@ size_t write_file(struct buf *buf, line_t from, line_t to, FILE *fp);
 struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp);
 
 /**
+ * Gets the number of leading blank characters of the line.
+ *
+ * @param buf   The buffer containing the line.
+ * @param line  The index of the line.
+ *
+ * @return The number of leading '\t' and ' '.
+ */
+col_t get_nolb(struct buf *buf, line_t line);
+
+/**
  * Gets the line indentation in bytes.
  *
  * This function does NO clipping on `line_i`.
@@ -304,7 +314,31 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp);
  *
  * @return Number of leading blank characters (' ' or '\t').
  */
-size_t get_line_indent(struct buf *buf, line_t line_i);
+col_t get_line_indent(struct buf *buf, line_t line);
+
+/**
+ * Sets the indentation of a line.
+ *
+ * @param buf       The buffer containing the line.
+ * @param line      The index of the line.
+ * @param indent    The new indent in units of spaces.
+ *
+ * @return The event generated from indenting the line, may be NULL.
+ */
+struct undo_event *set_line_indent(struct buf *buf, line_t line, col_t indent);
+
+/**
+ * Indents the line at `line_i`.
+ *
+ * This inserts spaces at the front of the line until it "seems" indented. It
+ * also adds an event.
+ *
+ * @param buf       Buffer to indent the line in.
+ * @param line_i    Index of the line to indent.
+ *
+ * @return Event generated from adding/removing spaces at the front of the line.
+ */
+struct undo_event *indent_line(struct buf *buf, line_t line_i);
 
 /**
  * Insert lines starting from a given position.
@@ -411,19 +445,6 @@ void notice_line_growth(struct buf *buf, line_t line_i, line_t num_lines);
  * @param num_lines The number of lines deleted.
  */
 void notice_line_removal(struct buf *buf, line_t line_i, line_t num_lines);
-
-/**
- * Indents the line at `line_i`.
- *
- * This inserts spaces at the front of the line until it "seems" indented. It
- * also adds an event.
- *
- * @param buf       Buffer to indent the line in.
- * @param line_i    Index of the line to indent.
- *
- * @return Event generated from adding/removing spaces at the front of the line.
- */
-struct undo_event *indent_line(struct buf *buf, line_t line_i);
 
 /**
  * Deletes a range from a buffer.
