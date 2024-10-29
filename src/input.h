@@ -70,6 +70,8 @@ struct input {
     size_t index;
     /// horizontal scrolling
     size_t scroll;
+    /// the index on the input line to which complete from the history
+    size_t history_end;
     /// history of all entered lines
     char **history;
     /// number of lines in the history

@@ -22,6 +22,7 @@ void set_input_text(struct input *inp, const char *text, size_t prefix_len)
     grow_input(inp, inp->n);
     memcpy(inp->s, text, inp->n);
 
+    inp->history_end = prefix_len;
     inp->prefix = prefix_len;
 
     inp->remember_len = inp->n;
@@ -99,6 +100,7 @@ int send_to_input(struct input *inp, int c)
             break;
         }
         inp->index = inp->prefix;
+        inp->history_end = inp->index;
         return INP_CURSOR;
 
     case KEY_END:
@@ -106,6 +108,7 @@ int send_to_input(struct input *inp, int c)
             break;
         }
         inp->index = inp->n;
+        inp->history_end = inp->index;
         return INP_CURSOR;
 
     case KEY_LEFT:
@@ -113,6 +116,7 @@ int send_to_input(struct input *inp, int c)
             break;
         }
         move_over_utf8(inp, -1);
+        inp->history_end = inp->index;
         return INP_CURSOR;
 
     case KEY_RIGHT:
@@ -120,12 +124,13 @@ int send_to_input(struct input *inp, int c)
             break;
         }
         move_over_utf8(inp, 1);
+        inp->history_end = inp->index;
         return INP_CURSOR;
 
     case KEY_UP:
         for (index = inp->history_index; index > 0; index--) {
             h = inp->history[index - 1];
-            if (strncmp(h, inp->s, inp->index) == 0) {
+            if (strncmp(h, inp->s, inp->history_end) == 0) {
                 break;
             }
         }
@@ -143,12 +148,13 @@ int send_to_input(struct input *inp, int c)
         inp->history_index = index - 1;
         inp->n = strlen(h);
         memcpy(inp->s, h, inp->n);
+        inp->index = inp->n;
         return INP_CHANGED;
 
     case KEY_DOWN:
         for (index = inp->history_index + 1; index < inp->num_history; index++) {
             h = inp->history[index];
-            if (strncmp(h, inp->s, inp->index) == 0) {
+            if (strncmp(h, inp->s, inp->history_end) == 0) {
                 break;
             }
         }
@@ -164,6 +170,7 @@ int send_to_input(struct input *inp, int c)
             inp->n = strlen(h);
             memcpy(inp->s, h, inp->n);
         }
+        inp->index = inp->n;
         return INP_CHANGED;
 
     case KEY_BACKSPACE:
@@ -177,6 +184,7 @@ int send_to_input(struct input *inp, int c)
                 &inp->s[index],
                 inp->n - index);
         inp->n -= index - inp->index;
+        inp->history_end = inp->index;
         return INP_CHANGED;
 
     case '\b': /* Shift/Control + Backspace or C-H */
@@ -194,6 +202,7 @@ int send_to_input(struct input *inp, int c)
                 &inp->s[index],
                 inp->n - index);
         inp->n -= index - inp->index;
+        inp->history_end = inp->index;
         return INP_CHANGED;
 
     case KEY_DC:
@@ -207,6 +216,7 @@ int send_to_input(struct input *inp, int c)
                 inp->n - inp->index);
         inp->n -= inp->index - index;
         inp->index = index;
+        inp->history_end = inp->index;
         return INP_CHANGED;
 
     case '\x1b':
@@ -226,6 +236,7 @@ int send_to_input(struct input *inp, int c)
                 &inp->s[inp->index], inp->n - inp->index);
         inp->s[inp->index++] = c;
         inp->n++;
+        inp->history_end = inp->index;
         return INP_CHANGED;
     }
     return INP_NOTHING;

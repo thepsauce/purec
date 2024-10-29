@@ -835,6 +835,7 @@ static int move_to_start(struct frame *frame)
 static int move_to_end(struct frame *frame)
 {
     struct line     *line;
+
     if (Core.counter >= (size_t) frame->buf->text.num_lines) {
         frame->next_cur.line = 0;
     } else {
@@ -860,6 +861,7 @@ static int move_to_extended(struct frame *frame)
     case 'G':
         return move_to_end(frame);
     case 'e':
+    case 'f':
         return 0 /* TODO: */;
     }
     return 0;
@@ -971,6 +973,7 @@ static int get_additional_char(char *buf)
     }
 
     e = get_expected_bytes(c);
+    n = 0;
     while (1) {
         buf[n++] = c;
         if (n == e) {
@@ -1290,7 +1293,7 @@ static int _find_prev_match(struct frame *frame)
     struct pos      p;
     size_t          index;
 
-    index = find_current_match(frame->buf, &p);
+    index = find_current_match(frame->buf, &frame->cur);
     p = frame->buf->matches[index].from;
     if (p.line != frame->cur.line || p.col != frame->cur.col) {
         Core.counter--;
@@ -1387,6 +1390,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         ['L']           = move_frame_end,
         ['I']           = move_to_line_indent,
         ['g']           = move_to_extended,
+        ['G']           = move_to_end,
         [KEY_PPAGE]     = move_page_up,
         [KEY_NPAGE]     = move_page_down,
         ['{']           = move_up_paragraph,

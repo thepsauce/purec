@@ -596,24 +596,16 @@ void read_command_line(const char *beg)
         }
     } while (r > INP_FINISHED);
 
-    SelFrame->cur = cur;
-    SelFrame->scroll = scroll;
-
     if (r == INP_CANCELLED || Cmd.n == Cmd.prefix) {
+        SelFrame->cur = cur;
+        SelFrame->scroll = scroll;
         return;
     }
 
     history = xreallocarray(history, num_history + 1, sizeof(*history));
     history[num_history++] = xstrdup(Cmd.s);
 
-    switch (beg[0]) {
-    case '/':
-    case '?':
-        (void) do_motion(SelFrame, 'n');
-        break;
-
-    case ':':
+    if (beg[0] == ':') {
         run_command(&Cmd.s[Cmd.prefix]);
-        break;
     }
 }
