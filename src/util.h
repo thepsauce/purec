@@ -79,6 +79,8 @@ int get_expected_bytes(char ch);
  */
 int get_glyph_count(const char *s, size_t n);
 
+#define move_forward_glyph(s, i, n) ((i)+get_glyph_count(&(s)[i], (n) - (i)))
+
 /**
  * Moves given index to the previous glyph.
  *

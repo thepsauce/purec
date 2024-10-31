@@ -104,12 +104,15 @@ static bool del_selection(bool chg)
                 sel.end.col = 0;
                 sel.end.line++;
             }
-         } else if (!chg) {
+         } else {
               if (sel.end.col == buf->text.lines[sel.end.line].n) {
                  sel.end.line++;
                  sel.end.col = 0;
              } else {
-                 sel.end.col++;
+                 sel.end.col =
+                    move_forward_glyph(buf->text.lines[sel.end.line].s,
+                                       sel.end.col,
+                                       buf->text.lines[sel.end.line].n);
              }
         }
         ev = delete_range(buf, &sel.beg, &sel.end);

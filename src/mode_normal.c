@@ -550,7 +550,7 @@ static int delete_chars(void)
         yank_data(ev->seg, 0);
     }
     clip_column(SelFrame);
-    SelFrame->vct = SelFrame->next_vct;
+    SelFrame->vct = compute_vct(SelFrame, &SelFrame->cur);
     (void) adjust_scroll(SelFrame);
     return UPDATE_UI | DO_RECORD;
 }
