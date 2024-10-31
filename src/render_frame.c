@@ -157,6 +157,7 @@ void render_frame(struct frame *frame)
     struct match        *match;
     struct selection    sel;
     col_t               start, end;
+    int                 v_start, v_end;
     size_t              paren_i, match_i;
     struct pos          p;
     int                 p_x, p_y;
@@ -208,23 +209,32 @@ void render_frame(struct frame *frame)
             match < &buf->matches[buf->num_matches] &&
                 match->from.line < last_line;
             match++) {
-        if (match->from.col >= ri.w) {
+        v_start = get_advance(buf->text.lines[match->from.line].s,
+                              buf->text.lines[match->from.line].n,
+                              match->from.col);
+        if (v_start >= ri.w) {
             break;
         }
-        /* TODO: translate to visual cursor */
+        v_end   = get_advance(buf->text.lines[match->to.line].s,
+                              buf->text.lines[match->to.line].n,
+                              match->to.col);
         mvchgat(frame->y + match->from.line - frame->scroll.line,
-                frame->x + x + match->from.col - frame->scroll.col,
-                MIN((int) (match->to.col - match->from.col), w),
+                frame->x + x + v_start - frame->scroll.col,
+                MIN((int) (v_end - v_start), w),
                 get_attrib_of(HI_SEARCH), HI_SEARCH, NULL);
     }
 
     if (frame == SelFrame) {
         /* render the selection if it exists */
         if (get_selection(&sel)) {
+            if (Core.mode == VISUAL_LINE_MODE) {
+                sel.beg.col = 0;
+                sel.end.col = buf->text.lines[sel.end.line].n;
+            }
             start = sel.beg.col;
             for (l = MAX(sel.beg.line, frame->scroll.line);
                  l <= sel.end.line && l < last_line;
-                 l++) {
+                 l++, start = 0) {
                 if (sel.is_block) {
                     start = sel.beg.col;
                     end = MIN(sel.end.col + 1, buf->text.lines[l].n);
@@ -232,17 +242,20 @@ void render_frame(struct frame *frame)
                     end = l == sel.end.line ? sel.end.col + 1 :
                         buf->text.lines[l].n + 1;
                 }
-                if (start < frame->scroll.col) {
-                    start = frame->scroll.col;
+                v_start = get_advance(buf->text.lines[l].s,
+                                      buf->text.lines[l].n, start);
+                v_end   = get_advance(buf->text.lines[l].s,
+                                      buf->text.lines[l].n, end);
+                if (v_start < frame->scroll.col) {
+                    v_start = frame->scroll.col;
                 }
-                if (end <= start) {
+                if (v_end <= v_start) {
                     continue;
                 }
                 mvchgat(frame->y + l - frame->scroll.line,
-                        frame->x + x + start - frame->scroll.col,
-                        MIN((int) (end - start), w),
+                        frame->x + x + v_start - frame->scroll.col,
+                        MIN((int) (v_end - v_start), w),
                         get_attrib_of(HI_VISUAL), HI_VISUAL, NULL);
-                start = 0;
             }
         }
         /* highlight matching parentheses */
