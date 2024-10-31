@@ -297,6 +297,8 @@ int cmd_nohighlight(struct cmd_data *cd)
 {
     (void) cd;
     SelFrame->buf->num_matches = 0;
+    free(SelFrame->buf->search_pat);
+    SelFrame->buf->search_pat = NULL;
     return 0;
 }
 
