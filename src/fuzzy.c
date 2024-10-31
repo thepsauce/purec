@@ -163,9 +163,9 @@ static void render_entries(struct fuzzy *fuzzy)
 
     /* erase the bottom */
     attr_off(A_REVERSE, NULL);
-    for (; i < fuzzy->scroll + fuzzy->h - 5; i++) {
-        move(fuzzy->y + 4 + i - fuzzy->scroll, fuzzy->x + 1);
-        while (getcurx(stdscr) < fuzzy->x + fuzzy->w - 2) {
+    for (; i < fuzzy->scroll + fuzzy->h - 4; i++) {
+        move(fuzzy->y + 3 + i - fuzzy->scroll, fuzzy->x + 1);
+        for (x = fuzzy->x + 1; x < fuzzy->x + fuzzy->w - 2; x++) {
             addch(' ');
         }
     }
@@ -314,4 +314,5 @@ void clear_shallow_fuzzy(struct fuzzy *fuzzy)
 {
     free(fuzzy->entries);
     free(fuzzy->inp.s);
+    free(fuzzy->inp.remember);
 }

@@ -5880,7 +5880,8 @@ void choose_theme(void)
             set_theme(fuzzy.entries[fuzzy.selected].name);
         }
     }
-    free(fuzzy.entries);
+    /* do not free entry names, they are static storage */
+    clear_shallow_fuzzy(&fuzzy);
 }
 
 void set_highlight(WINDOW *win, int hi)

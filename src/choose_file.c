@@ -31,8 +31,8 @@ static void update_files(struct fuzzy *fuzzy)
     for (i = 0; i < fuzzy->num_entries; i++) {
         free(fuzzy->entries[i].name);
     }
+    a = fuzzy->num_entries;
     fuzzy->num_entries = 0;
-    a = 0;
     while (ent = readdir(dir), ent != NULL) {
         if (fuzzy->num_entries == a) {
             a *= 2;
@@ -134,6 +134,7 @@ char *choose_file(const char *dir)
         switch (c) {
         case '\n':
             if (fuzzy.num_entries == 0) {
+                clear_fuzzy(&fuzzy);
                 return NULL;
             }
             entry = &fuzzy.entries[fuzzy.selected];
@@ -147,7 +148,9 @@ char *choose_file(const char *dir)
                 free(last_dir);
                 last_dir = xmemdup(fuzzy.inp.s, dir_len + 1);
                 last_dir[dir_len] = '\0';
-                return fuzzy.inp.s;
+                s = xstrdup(fuzzy.inp.s);
+                clear_fuzzy(&fuzzy);
+                return s;
             }
             break;
 

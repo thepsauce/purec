@@ -103,6 +103,7 @@ size_t read_text(FILE *fp, struct text *text, line_t max_lines)
     }
     text->lines = xreallocarray(text->lines, text->a_lines,
                                 sizeof(*text->lines));
+    free(line);
     return num_bytes;
 }
 

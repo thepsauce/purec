@@ -414,8 +414,8 @@ static void update_files(struct fuzzy *fuzzy)
     for (i = 0; i < fuzzy->num_entries; i++) {
         free(fuzzy->entries[i].name);
     }
+    a = fuzzy->num_entries;
     fuzzy->num_entries = 0;
-    a = 0;
     while (ent = readdir(dir), ent != NULL) {
         if (ent->d_name[0] == '.') {
             continue;
@@ -472,41 +472,38 @@ void choose_session(void)
     while (1) {
         render_fuzzy(&fuzzy);
         c = getch();
-        switch (c) {
-        default:
-            prev_name = fuzzy.entries[fuzzy.selected].name;
-            switch (send_to_fuzzy(&fuzzy, c)) {
-            case INP_CANCELLED:
-                /* revert to the last loaded session */
-                path = xasprintf("%s/%s", Core.session_dir, last_session);
-                free(last_session);
-                fp = fopen(path, "rb");
-                free(path);
-                if (fp != NULL) {
-                    free_session();
-                    load_session(fp);
-                    fclose(fp);
-                }
-                clear_fuzzy(&fuzzy);
-                return;
-
-            case INP_FINISHED:
-                /* keep the currently loaded session */
-                free(last_session);
-                clear_fuzzy(&fuzzy);
-                return;
+        prev_name = fuzzy.entries[fuzzy.selected].name;
+        switch (send_to_fuzzy(&fuzzy, c)) {
+        case INP_CANCELLED:
+            /* revert to the last loaded session */
+            path = xasprintf("%s/%s", Core.session_dir, last_session);
+            free(last_session);
+            fp = fopen(path, "rb");
+            free(path);
+            if (fp != NULL) {
+                free_session();
+                load_session(fp);
+                fclose(fp);
             }
-            if (prev_name != fuzzy.entries[fuzzy.selected].name) {
-                path = xasprintf("%s/%s", Core.session_dir,
-                                 fuzzy.entries[fuzzy.selected].name);
-                fp = fopen(path, "rb");
-                free(path);
-                if (fp != NULL) {
-                    free_session();
-                    load_session(fp);
-                    fclose(fp);
-                    render_all();
-                }
+            clear_fuzzy(&fuzzy);
+            return;
+
+        case INP_FINISHED:
+            /* keep the currently loaded session */
+            free(last_session);
+            clear_fuzzy(&fuzzy);
+            return;
+        }
+        if (prev_name != fuzzy.entries[fuzzy.selected].name) {
+            path = xasprintf("%s/%s", Core.session_dir,
+                             fuzzy.entries[fuzzy.selected].name);
+            fp = fopen(path, "rb");
+            free(path);
+            if (fp != NULL) {
+                free_session();
+                load_session(fp);
+                fclose(fp);
+                render_all();
             }
         }
     }
