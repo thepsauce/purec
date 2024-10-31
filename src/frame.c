@@ -1189,6 +1189,7 @@ static int move_to_next_word_excl(struct frame *frame)
             p.col--;
         }
 
+        Core.counter--;
     } while (Core.counter > 0 && (p.col + 1 < line->n ||
                                   p.line + 1 < frame->buf->text.num_lines));
 
@@ -1316,7 +1317,7 @@ static int _find_next_match(struct frame *frame)
 {
     size_t          index;
     
-    index = find_current_match(frame->buf, &frame->next_cur);
+    index = find_current_match(frame->buf, &frame->cur);
     index += Core.counter % frame->buf->num_matches;
     index %= frame->buf->num_matches;
     frame->next_cur = frame->buf->matches[index].from;
