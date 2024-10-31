@@ -178,8 +178,14 @@ beg:
 void destroy_buffer(struct buf *buf)
 {
     struct buf      *prev;
+    line_t          i;
 
     free(buf->path);
+    for (i = 0; i < buf->text.num_lines; i++) {
+        free(buf->attribs[i]);
+    }
+    free(buf->attribs);
+    free(buf->states);
     clear_text(&buf->text);
     free(buf->events);
     free(buf->parens);
@@ -287,12 +293,8 @@ size_t get_buffer_count(void)
 
 void set_language(struct buf *buf, size_t lang)
 {
-    line_t          i;
-
     buf->lang = lang;
-    for (i = 0; i < buf->text.num_lines; i++) {
-        rehighlight_line(buf, i);
-    }
+    rehighlight_lines(buf, 0, buf->text.num_lines);
 }
 
 size_t write_file(struct buf *buf, line_t from, line_t to, FILE *fp)
@@ -402,31 +404,11 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
 void _insert_lines(struct buf *buf, const struct pos *pos,
                    const struct text *text)
 {
-    line_t                  i;
-    bool                    r;
-
     insert_text(&buf->text, pos, text);
-
-    if (text->num_lines == 1) {
-        r = rehighlight_line(buf, pos->line);
-        i = pos->line;
-        while (r) {
-            i++;
-            r = rehighlight_line(buf, i);
-        }
-        return;
+    if (text->num_lines > 1) {
+        notice_line_growth(buf, pos->line + 1, text->num_lines - 1);
     }
-
-    notice_line_growth(buf, pos->line + 1, text->num_lines - 1);
-
-    r = false;
-    for (i = 0; i < text->num_lines; i++) {
-        r = rehighlight_line(buf, pos->line + i);
-    }
-    while (r) {
-        r = rehighlight_line(buf, pos->line + i);
-        i++;
-    }
+    rehighlight_lines(buf, pos->line, text->num_lines);
 }
 
 struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
@@ -445,26 +427,14 @@ void _insert_block(struct buf *buf,
                    const struct pos *pos,
                    const struct text *text)
 {
-    line_t                  i;
-    bool                    r;
-
     insert_text_block(&buf->text, pos, text);
-
-    r = false;
-    for (i = 0; i < text->num_lines; i++) {
-        r = rehighlight_line(buf, pos->line + i);
-    }
-    while (r) {
-        r = rehighlight_line(buf, pos->line + i);
-        i++;
-    }
+    rehighlight_lines(buf, pos->line, text->num_lines);
 }
 
 struct undo_event *break_line(struct buf *buf, const struct pos *pos)
 {
     struct line     *line, *at_line;
     col_t           indent;
-    line_t          i;
     size_t          ev_i;
     struct pos      p;
     struct text     text;
@@ -478,8 +448,7 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
     at_line->n = pos->col;
 
     /* the indentor needs these to be highlighted */
-    (void) rehighlight_line(buf, pos->line);
-    (void) rehighlight_line(buf, pos->line + 1);
+    (void) rehighlight_lines(buf, pos->line, 2);
 
     indent = Langs[buf->lang].indentor(buf, pos->line + 1);
     line->s = xrealloc(line->s, line->n + indent);
@@ -487,10 +456,7 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
     memset(line->s, ' ', indent);
     line->n += indent;
 
-    i = pos->line + 1;
-    while (rehighlight_line(buf, i)) {
-        i++;
-    }
+    (void) rehighlight_lines(buf, pos->line + 1, 1);
 
     init_text(&text, 2);
     /* use index to prevent base pointer change from breaking the event
@@ -675,16 +641,11 @@ void _delete_range(struct buf *buf,
                    const struct pos *from,
                    const struct pos *to)
 {
-    line_t          i;
-
     delete_text(&buf->text, from, to);
     if (from->line != to->line) {
         notice_line_removal(buf, from->line + 1, to->line - from->line);
     }
-    i = from->line;
-    while (rehighlight_line(buf, i)) {
-        i++;
-    }
+    rehighlight_lines(buf, from->line, 2);
 }
 
 struct undo_event *delete_block(struct buf *buf,
@@ -710,18 +671,8 @@ void _delete_block(struct buf *buf,
                    const struct pos *from,
                    const struct pos *to)
 {
-    bool            r;
-    line_t          i;
-
     delete_text_block(&buf->text, from, to);
-    r = false;
-    for (i = from->line; i <= to->line; i++) {
-        r = rehighlight_line(buf, i);
-    }
-    while (r) {
-        r = rehighlight_line(buf, i);
-        i++;
-    }
+    rehighlight_lines(buf, from->line, to->line - from->line + 1);
 }
 
 int ConvChar;
@@ -743,7 +694,6 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
     struct pos          pos;
     struct text         chg;
     char                ch;
-    bool                r;
     line_t              i;
     col_t               j;
 
@@ -760,20 +710,13 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
     to.line = MIN(to.line, text->num_lines - 1);
 
     ev = NULL;
-    r = false;
     for (i = from.line; i <= to.line; i++) {
         line = &text->lines[i];
         if (from.col >= line->n) {
-            if (r) {
-                r = rehighlight_line(buf, i);
-            }
             continue;
         }
         to_col = MIN(to.col + 1, line->n);
         if (to_col == 0) {
-            if (r) {
-                r = rehighlight_line(buf, i);
-            }
             continue;
         }
 
@@ -788,8 +731,8 @@ struct undo_event *change_block(struct buf *buf, const struct pos *pfrom,
         }
         chg.num_lines = 1;
         ev = add_event(buf, IS_REPLACE, &pos, &chg);
-        r = rehighlight_line(buf, i);
     }
+    rehighlight_lines(buf, from.line, to.line - from.line + 1);
     return ev;
 }
 
@@ -804,7 +747,6 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
     char            ch;
     line_t          i;
     col_t           j;
-    bool            r;
     struct text     chg;
 
     from = *pfrom;
@@ -892,14 +834,7 @@ struct undo_event *change_range(struct buf *buf, const struct pos *pfrom,
         }
     }
 
-    r = false;
-    for (i = from.line; i <= to.line; i++) {
-        r = rehighlight_line(buf, i);
-    }
-    while (r) {
-        r = rehighlight_line(buf, i);
-        i++;
-    }
+    rehighlight_lines(buf, from.line, to.line - from.line + 1);
 
     make_text(&chg, lines, num_lines);
     return add_event(buf, IS_REPLACE, &from, &chg);
@@ -1041,22 +976,32 @@ static void highlight_line(struct buf *buf, size_t line_i, unsigned state)
     buf->states[line_i] = ctx.state & ~FSTATE_MULTI;
 }
 
-bool rehighlight_line(struct buf *buf, line_t line_i)
+void rehighlight_lines(struct buf *buf, line_t line_i, line_t num_lines)
 {
-    unsigned        state;
+    unsigned        state, prev_state;
     struct match    *matches;
     size_t          n;
 
     state = line_i == 0 ? STATE_START : buf->states[line_i - 1];
-    highlight_line(buf, line_i, state); 
+    for (; num_lines > 0; num_lines--, line_i++) {
+        if (line_i >= buf->text.num_lines) {
+            break;
+        }
+        prev_state = buf->states[line_i];
+        highlight_line(buf, line_i, state); 
 
-    if (buf->search_pat != NULL) {
-        matches = search_line_pattern(buf, line_i, &n);
-        fuse_matches(buf, line_i, matches, n);
-        free(matches);
+        if (buf->search_pat != NULL) {
+            matches = search_line_pattern(buf, line_i, &n);
+            fuse_matches(buf, line_i, matches, n);
+            free(matches);
+        }
+        if (prev_state != buf->states[line_i]) {
+            if (num_lines == 1) {
+                num_lines++;
+            }
+        }
+        state = buf->states[line_i];
     }
-
-    return line_i + 1 < buf->text.num_lines && state != buf->states[line_i];
 }
 
 size_t get_next_paren_index(const struct buf *buf, const struct pos *pos)

@@ -231,7 +231,6 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
     struct line     *line;
     line_t          i;
     col_t           j;
-    bool            r;
     struct text     text;
 
     if ((flags & IS_DELETION)) {
@@ -256,15 +255,7 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
                 line->s[j] ^= seg->lines[i].s[j];
             }
         }
-
-        r = false;
-        for (i = 0; i < seg->num_lines; i++) {
-            r = rehighlight_line(buf, ev->pos.line + i);
-        }
-        while (r) {
-            r = rehighlight_line(buf, ev->pos.line + i);
-            i++;
-        }
+        rehighlight_lines(buf, ev->pos.line, seg->num_lines);
     } else {
         make_text(&text, seg->lines, seg->num_lines);
         if ((flags & IS_BLOCK)) {

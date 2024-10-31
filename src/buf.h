@@ -702,14 +702,13 @@ struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev)
 size_t search_pattern(struct buf *buf, const char *pat);
 
 /**
- * Rehighlights given line.
+ * Rehighlights given lines.
  *
  * @param buf       The buffer containing the line.
  * @param line_i    The line to highlight again.
- *
- * @return Whether this highlighting affects the next line.
+ * @param num_lines The number of lines starting from `line_i`.
  */
-bool rehighlight_line(struct buf *buf, line_t line_i);
+void rehighlight_lines(struct buf *buf, line_t line_i, line_t num_lines);
 
 /**
  * Gets the index where the given position should be inserted within the
