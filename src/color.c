@@ -1,5 +1,7 @@
 #include "color.h"
 #include "purec.h"
+#include "fuzzy.h"
+#include "xalloc.h"
 
 #include <string.h>
 
@@ -270,8 +272,7 @@ const struct theme Themes[] = {
             "#d6d6d6",
             "#6c99bb",
             "#e87d3e",
- 
-           "#e5b567",
+            "#e5b567",
             "#b4c973",
             "#b05279",
         },
@@ -803,8 +804,7 @@ const struct theme Themes[] = {
             [HI_COMMENT] = { 4, 3, 0 },
             [HI_CHAR] = { 5, 3, 0 },
             [HI_REMOVED] = { 2, 3, A_REVERSE },
-            [HI_VERT_SPLIT] = {
- 1, 1, 0 },
+            [HI_VERT_SPLIT] = { 1, 1, 0 },
             [HI_TODO] = { 6, 0, A_REVERSE },
             [HI_CMD] = { 7, 3, 0 },
             [HI_TYPE_MOD] = { 8, 3, 0 },
@@ -878,136 +878,6 @@ const struct theme Themes[] = {
     },
 
     {
-        .name = "distinguished",
-        .term_colors = {
-            "#585858",
-            "#dadada",
-            "#ff8700",
-            "#af0000",
-            "#767676",
-            "#121212",
-            "#af875f",
-            "#000000",
-            "#d70000",
-            "#1c1c1c",
-            "#ffff87",
-            "#875f00",
-            "#ffffff",
-            "#d7d7af",
-            "#d7af5f",
-            "#005faf",
-            "#ffd700",
-            "#8a8a8a",
-            "#9e9e9e",
-            "#303030",
-            "#262626",
-            "#d7d787",
-            "#ffff5f",
-            "#afaf5f",
-            "#d7af87",
-            "#d7875f",
-            "#5f8787",
-            "#87d700",
-            "#005f00",
-            "#5f87af",
-        },
-        .attribs = {
-            [HI_VISUAL] = { 0, 1, 0 },
-            [HI_ERROR] = { 2, 3, 0 },
-            [HI_COMMENT] = { 4, 5, 0 },
-            [HI_CHAR] = { 6, 7, 0 },
-            [HI_REMOVED] = { 8, 7, 0 },
-            [HI_VERT_SPLIT] = { 0, 9, 0 },
-            [HI_TODO] = { 10, 11, A_BOLD },
-            [HI_CMD] = { 12, 7, 0 },
-            [HI_TYPE_MOD] = { 13, 7, 0 },
-            [HI_FUNCTION] = { 14, 7, 0 },
-            [HI_NORMAL] = { 12, 7, 0 },
-            [HI_PAREN_MATCH] = { 12, 15, A_BOLD },
-            [HI_CHANGED] = { 16, 11, 0 },
-            [HI_FUZZY] = { 1, 17, 0 },
-            [HI_PREPROC] = { 18, 7, 0 },
-            [HI_STATUS] = { 12, 19, A_BOLD },
-            [HI_LINE_NO] = { 4, 20, 0 },
-            [HI_STATEMENT] = { 21, 7, A_BOLD },
-            [HI_SEARCH] = { 7, 22, A_UNDERLINE },
-            [HI_STRING] = { 23, 7, 0 },
-            [HI_OPERATOR] = { 24, 7, A_BOLD },
-            [HI_NUMBER] = { 25, 7, 0 },
-            [HI_JAVADOC] = { 26, 7, 0 },
-            [HI_IDENTIFIER] = { 26, 7, 0 },
-            [HI_ADDED] = { 27, 28, 0 },
-            [HI_TYPE] = { 29, 7, 0 },
-        },
-        .colors_needed = 30,
-    },
-
-    {
-        .name = "distinguished",
-        .term_colors = {
-            "#585858",
-            "#dadada",
-            "#ff8700",
-            "#af0000",
-            "#767676",
-            "#121212",
-            "#af875f",
-            "#000000",
-            "#d70000",
-            "#1c1c1c",
-            "#ffff87",
-            "#875f00",
-            "#ffffff",
-            "#d7d7af",
-            "#d7af5f",
-            "#005faf",
-            "#ffd700",
-            "#8a8a8a",
-            "#9e9e9e",
-            "#303030",
-            "#262626",
-            "#d7d787",
-            "#ffff5f",
-            "#afaf5f",
-            "#d7af87",
-            "#d7875f",
-            "#5f8787",
-            "#87d700",
-            "#005f00",
-            "#5f87af",
-        },
-        .attribs = {
-            [HI_VISUAL] = { 0, 1, 0 },
-            [HI_ERROR] = { 2, 3, 0 },
-            [HI_COMMENT] = { 4, 5, 0 },
-            [HI_CHAR] = { 6, 7, 0 },
-            [HI_REMOVED] = { 8, 7, 0 },
-            [HI_VERT_SPLIT] = { 0, 9, 0 },
-            [HI_TODO] = { 10, 11, A_BOLD },
-            [HI_CMD] = { 12, 7, 0 },
-            [HI_TYPE_MOD] = { 13, 7, 0 },
-            [HI_FUNCTION] = { 14, 7, A_BOLD },
-            [HI_NORMAL] = { 12, 7, 0 },
-            [HI_PAREN_MATCH] = { 12, 15, A_BOLD },
-            [HI_CHANGED] = { 16, 11, 0 },
-            [HI_FUZZY] = { 1, 17, 0 },
-            [HI_PREPROC] = { 18, 7, 0 },
-            [HI_STATUS] = { 12, 19, A_BOLD },
-            [HI_LINE_NO] = { 4, 20, 0 },
-            [HI_STATEMENT] = { 21, 7, A_BOLD },
-            [HI_SEARCH] = { 7, 22, A_UNDERLINE },
-            [HI_STRING] = { 23, 7, 0 },
-            [HI_OPERATOR] = { 24, 7, A_BOLD },
-            [HI_NUMBER] = { 25, 7, 0 },
-            [HI_JAVADOC] = { 26, 7, 0 },
-            [HI_IDENTIFIER] = { 26, 7, 0 },
-            [HI_ADDED] = { 27, 28, 0 },
-            [HI_TYPE] = { 29, 7, 0 },
-        },
-        .colors_needed = 30,
-    },
-
-    {
         .name = "darkblue",
         .term_colors = {
             "#8080ff",
@@ -1076,7 +946,7 @@ const struct theme Themes[] = {
             "#8f72bf",
         },
      
-   .attribs = {
+        .attribs = {
             [HI_VISUAL] = { 0, 1, 0 },
             [HI_ERROR] = { 2, 3, A_BOLD },
             [HI_COMMENT] = { 4, 3, 0 },
@@ -1343,12 +1213,11 @@ const struct theme Themes[] = {
             "#87d700",
             "#005f00",
             "#5f87af",
-        
-},
+        },
         .attribs = {
             [HI_VISUAL] = { 0, 1, 0 },
             [HI_ERROR] = { 2, 3, 0 },
-            [HI_COMMENT] = { 4, 5, 0 },
+            [HI_COMMENT] = { 4, 7, 0 },
             [HI_CHAR] = { 6, 7, 0 },
             [HI_REMOVED] = { 8, 7, 0 },
             [HI_VERT_SPLIT] = { 0, 9, 0 },
@@ -5971,6 +5840,47 @@ int set_theme(const char *name)
         }
     }
     return -1;
+}
+
+void choose_theme(void)
+{
+    struct fuzzy    fuzzy;
+    size_t          e;
+    int             last_theme;
+    int             c;
+    char            *prev_name;
+
+    memset(&fuzzy, 0, sizeof(fuzzy));
+    fuzzy.num_entries = ARRAY_SIZE(Themes);
+    fuzzy.entries = xcalloc(fuzzy.num_entries, sizeof(*fuzzy.entries));
+    for (e = 0; e < fuzzy.num_entries; e++) {
+        fuzzy.entries[e].type = 0;
+        fuzzy.entries[e].name = (char*) Themes[e].name;
+    }
+    fuzzy.selected = Core.theme;
+
+    sort_entries(&fuzzy);
+
+    last_theme = Core.theme;
+    while (1) {
+        set_highlight(stdscr, HI_NORMAL);
+        render_fuzzy(&fuzzy);
+        c = getch();
+        prev_name = fuzzy.entries[fuzzy.selected].name;
+        switch (send_to_fuzzy(&fuzzy, c)) {
+        case INP_CANCELLED:
+            Core.theme = last_theme;
+            init_theme();
+            return;
+
+        case INP_FINISHED:
+            return;
+        }
+        if (prev_name != fuzzy.entries[fuzzy.selected].name) {
+            set_theme(fuzzy.entries[fuzzy.selected].name);
+        }
+    }
+    free(fuzzy.entries);
 }
 
 void set_highlight(WINDOW *win, int hi)

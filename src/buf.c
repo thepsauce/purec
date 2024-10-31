@@ -143,7 +143,7 @@ size_t detect_language(struct buf *buf)
 int init_load_buffer(struct buf *buf)
 {
     FILE            *fp;
-    char            *path;
+    char            *file;
 
 beg:
     if (buf->path == NULL || (fp = fopen(buf->path, "r")) == NULL) {
@@ -155,12 +155,12 @@ beg:
     }
 
     if (stat(buf->path, &buf->st) == 0 && (buf->st.st_mode & S_IFDIR)) {
-        path = buf->path;
-        buf->path = choose_file(buf->path);
-        if (buf->path != NULL) {
-            buf->path = get_absolute_path(buf->path);
+        file = choose_file(buf->path);
+        if (file != NULL) {
+            free(buf->path);
+            buf->path = get_absolute_path(file);
+            free(file);
         }
-        free(path);
         goto beg;
     }
 

@@ -15,7 +15,7 @@ WINDOW *OffScreen;
 
 struct core Core = {
     .tab_size = 4,
-    .theme = 31
+    .theme = 44
 };
 
 static struct program_arguments {

@@ -81,6 +81,11 @@ void init_colors(void);
 int set_theme(const char *name);
 
 /**
+ * Opens a fuzzy chooser for color themes.
+ */
+void choose_theme(void);
+
+/**
  * Sets the attributes of given window to the highlight.
  *
  * @param win   The window whose attributes to set.

@@ -53,6 +53,10 @@ int cmd_bprev(struct cmd_data *cd)
 
 int cmd_colorscheme(struct cmd_data *cd)
 {
+    if (cd->arg[0] == '\0') {
+        choose_theme();
+        return 0;
+    }
     if (set_theme(cd->arg) == -1) {
         set_error("color scheme '%s' does not exist", cd->arg);
         return -1;
@@ -172,6 +176,7 @@ int cmd_edit(struct cmd_data *cd)
         entry = choose_file(NULL);
         if (entry != NULL) {
             buf = create_buffer(entry);
+            free(entry);
         }
     } else {
         buf = create_buffer(cd->arg);

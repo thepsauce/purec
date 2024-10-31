@@ -365,13 +365,14 @@ static int do_frame_command(void)
 
 static int choose_fuzzy_file(void)
 {
-    char            *entry;
+    char            *file;
     struct buf      *buf;
 
-    entry = choose_file(NULL);
-    if (entry != NULL) {
-        buf = create_buffer(entry);
+    file = choose_file(NULL);
+    if (file != NULL) {
+        buf = create_buffer(file);
         set_frame_buffer(SelFrame, buf);
+        free(file);
     }
     return UPDATE_UI;
 }

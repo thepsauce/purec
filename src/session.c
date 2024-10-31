@@ -399,39 +399,39 @@ int load_session(FILE *fp)
     return 0;
 }
 
-struct fuzzy SessionSelect;
-
-static void update_files(void)
+static void update_files(struct fuzzy *fuzzy)
 {
     DIR             *dir;
-    line_t          i;
+    size_t          i;
     struct dirent   *ent;
+    size_t          a;
 
     dir = opendir(Core.session_dir);
     if (dir == NULL) {
         return;
     }
 
-    for (i = 0; i < SessionSelect.num_entries; i++) {
-        free(SessionSelect.entries[i].name);
+    for (i = 0; i < fuzzy->num_entries; i++) {
+        free(fuzzy->entries[i].name);
     }
-    SessionSelect.num_entries = 0;
+    fuzzy->num_entries = 0;
+    a = 0;
     while (ent = readdir(dir), ent != NULL) {
         if (ent->d_name[0] == '.') {
             continue;
         }
-        if (SessionSelect.num_entries == SessionSelect.a_entries) {
-            SessionSelect.a_entries *= 2;
-            SessionSelect.a_entries++;
-            SessionSelect.entries = xreallocarray(SessionSelect.entries,
-                                                  SessionSelect.a_entries,
-                                        sizeof(*SessionSelect.entries));
+        if (fuzzy->num_entries == a) {
+            a *= 2;
+            a++;
+            fuzzy->entries = xreallocarray(fuzzy->entries, a,
+                                        sizeof(*fuzzy->entries));
         }
-        SessionSelect.entries[SessionSelect.num_entries].type = ent->d_type;
-        SessionSelect.entries[SessionSelect.num_entries].name = xstrdup(ent->d_name);
-        SessionSelect.num_entries++;
+        fuzzy->entries[fuzzy->num_entries].type = ent->d_type;
+        fuzzy->entries[fuzzy->num_entries].name = xstrdup(ent->d_name);
+        fuzzy->num_entries++;
     }
     closedir(dir);
+    sort_entries(fuzzy);
 }
 
 char *save_current_session(void)
@@ -459,44 +459,46 @@ char *save_current_session(void)
 
 void choose_session(void)
 {
+    struct fuzzy    fuzzy;
     int             c;
     FILE            *fp;
     char            *last_session;
     char            *path;
-    line_t          last_entry;
+    char            *prev_name;
 
-    set_input_text(&SessionSelect.inp, "", 0);
+    memset(&fuzzy, 0, sizeof(fuzzy));
     last_session = save_current_session();
-    update_files();
+    update_files(&fuzzy);
     while (1) {
-        render_fuzzy(&SessionSelect);
+        render_fuzzy(&fuzzy);
         c = getch();
         switch (c) {
         default:
-            last_entry = SessionSelect.selected;
-            switch (send_to_fuzzy(&SessionSelect, c)) {
+            prev_name = fuzzy.entries[fuzzy.selected].name;
+            switch (send_to_fuzzy(&fuzzy, c)) {
             case INP_CANCELLED:
                 /* revert to the last loaded session */
                 path = xasprintf("%s/%s", Core.session_dir, last_session);
                 free(last_session);
                 fp = fopen(path, "rb");
                 free(path);
-                if (fp == NULL) {
-                    return;
+                if (fp != NULL) {
+                    free_session();
+                    load_session(fp);
+                    fclose(fp);
                 }
-                free_session();
-                load_session(fp);
-                fclose(fp);
+                clear_fuzzy(&fuzzy);
                 return;
 
             case INP_FINISHED:
                 /* keep the currently loaded session */
                 free(last_session);
+                clear_fuzzy(&fuzzy);
                 return;
             }
-            if (last_entry != SessionSelect.selected) {
+            if (prev_name != fuzzy.entries[fuzzy.selected].name) {
                 path = xasprintf("%s/%s", Core.session_dir,
-                    SessionSelect.entries[SessionSelect.selected].name);
+                                 fuzzy.entries[fuzzy.selected].name);
                 fp = fopen(path, "rb");
                 free(path);
                 if (fp != NULL) {
