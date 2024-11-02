@@ -329,6 +329,7 @@ int cmd_nohighlight(struct cmd_data *cd)
 int cmd_make(struct cmd_data *cd)
 {
     int             fildes[2];
+    int             pid;
     char            *cmd;
     FILE            *pp;
     char            *line;
@@ -346,7 +347,8 @@ int cmd_make(struct cmd_data *cd)
         return -1;
     }
 
-    switch (fork()) {
+    pid = fork();
+    switch (pid) {
     case -1:
         set_error("fork: %s\n", strerror(errno));
         return -1;
@@ -361,6 +363,9 @@ int cmd_make(struct cmd_data *cd)
         close(fildes[1]);
         exit(EXIT_SUCCESS);
         break;
+
+    default:
+        Core.child_pid = pid;
     }
 
     close(fildes[1]);
@@ -459,6 +464,8 @@ int cmd_make(struct cmd_data *cd)
     Core.num_fixits = num_fis;
     Core.cur_fixit = 0;
     goto_fixit(1, 1);
+
+    Core.child_pid = 0;
     return 0;
 }
 

@@ -135,7 +135,9 @@ int main(int argc, char **argv)
     while (1) {
         render_all();
 
+        Core.is_busy = false;
         do {
+
             rec = get_playback();
             next_dot_i = rec == NULL ? Core.rec_len : rec->index;
             if (Core.mode == INSERT_MODE) {
@@ -147,6 +149,8 @@ int main(int argc, char **argv)
                     c = get_first_char();
                 } while (c == -1);
             }
+
+            Core.is_busy = true;
 
             old_mode = Core.mode;
             r = input_handlers[Core.mode](c);

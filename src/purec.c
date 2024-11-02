@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <locale.h>
+#include <signal.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -474,6 +475,20 @@ int load_last_session(void)
     return 0;
 }
 
+void sigint_handler(int sig)
+{
+    (void) sig;
+    Core.num_sigs++;
+    if (Core.child_pid != 0) {
+        kill(Core.child_pid, SIGKILL);
+        Core.child_pid = 0;
+    } else if (!Core.is_busy) {
+        set_message("Type  :qa!<ENTER>  to quit and abandon all changes");
+        render_all();
+        refresh();
+    }
+}
+
 int init_purec(int argc, char **argv)
 {
     const char      *home;
@@ -508,11 +523,13 @@ int init_purec(int argc, char **argv)
     }
 
     initscr();
-    raw();
+    cbreak();
     keypad(stdscr, true);
     noecho();
 
     set_escdelay(0);
+
+    signal(SIGINT, sigint_handler);
 
     init_colors();
     init_clipboard();

@@ -263,6 +263,7 @@ int run_command(char *s_cmd)
     FILE                *pp;
     struct buf          *buf;
     line_t              i;
+    size_t              prev_num_sigs;
 
     s_cmd += strspn(s_cmd, " \t");
     if (s_cmd[0] == '\0') {
@@ -303,6 +304,8 @@ int run_command(char *s_cmd)
     if (s_cmd[0] == '!') {
         s_cmd++;
 
+        prev_num_sigs = Core.num_sigs;
+
         endwin();
 
         pp = popen(s_cmd, "w");
@@ -319,9 +322,11 @@ int run_command(char *s_cmd)
         }
         pclose(pp);
 
-        printf("\nPress enter to return...\n");
-        while (getch() != '\n') {
-            (void) 0;
+        if (Core.num_sigs == prev_num_sigs) {
+            printf("\nPress enter to return...\n");
+            while (getch() != '\n') {
+                (void) 0;
+            }
         }
         return 0;
     }

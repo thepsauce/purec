@@ -18,12 +18,6 @@ static int escape_normal_mode(void)
     return 0;
 }
 
-static int notify_how_to_quit(void)
-{
-    set_message("Type  :qa!<ENTER>  to quit and abandon all changes");
-    return UPDATE_UI;
-}
-
 static int enter_insert_mode(void)
 {
     set_mode(INSERT_MODE);
@@ -960,7 +954,6 @@ int normal_handle_input(int c)
 {
     static int (*const binds[])(void) = {
         ['\x1b']        = escape_normal_mode,
-        [CONTROL('C')]  = notify_how_to_quit,
         ['i']           = enter_insert_mode,
         ['a']           = enter_append_mode,
         ['I']           = enter_insert_beg_mode,

@@ -167,6 +167,13 @@ extern struct core {
     size_t num_fixits;
     /// the current fixit item
     size_t cur_fixit;
+
+    /// if the core is not waiting for input
+    bool is_busy;
+    /// the number of sigints send
+    size_t num_sigs;
+    /// the current running child process
+    pid_t child_pid;
 } Core;
 
 struct selection {
