@@ -271,15 +271,11 @@ int insert_handle_input(int c)
         text.lines[0].n = 1;
         text.lines[0].s = xmalloc(1);
         text.lines[0].s[0] = c;
-        Langs[SelFrame->buf->lang].char_hook(SelFrame->buf, &SelFrame->cur,
-                                             &text);
         p = SelFrame->cur;
-        SelFrame->cur.col = text.num_lines == 1 ?
-                SelFrame->cur.col + text.lines[0].n :
-                text.lines[text.num_lines - 1].n;
-        SelFrame->cur.line += text.num_lines - 1;
         (void) _insert_lines(SelFrame->buf, &p, &text);
         (void) add_event(SelFrame->buf, IS_INSERTION, &p, &text);
+        SelFrame->cur.col++;
+        Langs[SelFrame->buf->lang].char_hook(SelFrame->buf, &SelFrame->cur, c);
         SelFrame->vct = compute_vct(SelFrame, &SelFrame->cur);
         (void) adjust_scroll(SelFrame);
         return UPDATE_UI;

@@ -43,8 +43,7 @@ typedef col_t (*state_proc_t)(struct state_ctx *ctx);
 /**
  * Called before text is typed into a buffer.
  */
-typedef void (*char_hook_t)(struct buf *buf, struct pos *pos,
-                            struct text *text);
+typedef void (*char_hook_t)(struct buf *buf, struct pos *pos, int c);
 
 /**
  * An indentor for a language computes the indentation given line would need.

@@ -62,11 +62,11 @@ static char *bin_search(const char **strs, size_t num_strs, char *s, size_t s_l)
 #include "syntax/commit.h"
 #include "syntax/make.h"
 
-void no_char_hook(struct buf *buf, struct pos *pos, struct text *text)
+void no_char_hook(struct buf *buf, struct pos *pos, int c)
 {
     (void) buf;
     (void) pos;
-    (void) text;
+    (void) c;
 }
 
 col_t no_indentor(struct buf *buf, line_t line_i)
