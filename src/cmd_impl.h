@@ -14,7 +14,7 @@ int cmd_bnext(struct cmd_data *cd)
 {
     struct buf *buf;
 
-    if (cd->from == 0) {
+    if (!cd->has_number) {
         cd->from = 1;
     }
     cd->from %= get_buffer_count();
@@ -35,7 +35,7 @@ int cmd_bprev(struct cmd_data *cd)
 {
     struct buf *buf;
 
-    if (cd->from == 0) {
+    if (!cd->has_number) {
         cd->from = 1;
     }
     cd->from %= get_buffer_count();
@@ -48,6 +48,15 @@ int cmd_bprev(struct cmd_data *cd)
         }
     }
     set_frame_buffer(SelFrame, buf);
+    return 0;
+}
+
+int cmd_cnext(struct cmd_data *cd)
+{
+    if (!cd->has_number) {
+        cd->from = 1;
+    }
+    goto_fixit(1, cd->from);
     return 0;
 }
 
@@ -85,6 +94,15 @@ int cmd_colorschemeindex(struct cmd_data *cd)
         index = Core.theme;
     }
     set_message("Theme index: %d", index);
+    return 0;
+}
+
+int cmd_cprev(struct cmd_data *cd)
+{
+    if (!cd->has_number) {
+        cd->from = 1;
+    }
+    goto_fixit(-1, cd->from);
     return 0;
 }
 
@@ -141,7 +159,8 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
         set_error("could not open '%s': %s", file, strerror(errno));
         return -1;
     }
-    num_bytes = write_file(buf, cd->from, cd->to, fp);
+    num_bytes = write_file(buf, MIN(cd->from, LINE_MAX),
+                           MIN(cd->to, LINE_MAX), fp);
     fclose(fp);
 
     if (file == buf->path) {
@@ -153,8 +172,8 @@ static int save_buffer(struct cmd_data *cd, struct buf *buf)
         set_message("nothing to write");
     } else {
         set_message("%s %zuL, %zuB written", get_pretty_path(file),
-                MIN(buf->text.num_lines - 1, cd->to) -
-                    MIN(buf->text.num_lines - 1, cd->from) + 1,
+                MIN(buf->text.num_lines - 1, (line_t) cd->to) -
+                    MIN(buf->text.num_lines - 1, (line_t) cd->from) + 1,
                 num_bytes);
     }
     return 0;
@@ -307,6 +326,142 @@ int cmd_nohighlight(struct cmd_data *cd)
     return 0;
 }
 
+int cmd_make(struct cmd_data *cd)
+{
+    int             fildes[2];
+    char            *cmd;
+    FILE            *pp;
+    char            *line;
+    size_t          a_line;
+    ssize_t         line_len;
+    char            *colon;
+    char            *s;
+    size_t          n;
+    struct fixit    fi;
+    struct fixit    *fis;
+    size_t          a_fis, num_fis;
+
+    if (pipe(fildes) == -1) {
+        set_error("pipe: %s\n", strerror(errno));
+        return -1;
+    }
+
+    switch (fork()) {
+    case -1:
+        set_error("fork: %s\n", strerror(errno));
+        return -1;
+    
+    case 0:
+        close(fildes[0]);
+        dup2(fildes[1], STDOUT_FILENO);
+        dup2(fildes[1], STDERR_FILENO);
+        cmd = xasprintf("make %s", cd->arg);
+        system(cmd);
+        free(cmd);
+        close(fildes[1]);
+        exit(EXIT_SUCCESS);
+        break;
+    }
+
+    close(fildes[1]);
+    pp = fdopen(fildes[0], "r");
+
+    line = NULL;
+    a_line = 0;
+    fis = NULL;
+    a_fis = 0;
+    num_fis = 0;
+    while ((line_len = get_line(&line, &a_line, pp)) != -1) {
+        if (line_len == 0 || isblank(line[0])) {
+            continue;
+        }
+
+        colon = &line[line_len];
+        do {
+            colon--;
+            while (colon > line && colon[0] != ':') {
+                colon--;
+            }
+        } while (colon > line && !isalpha(colon[-1]));
+
+        /* get to right after the message */
+        while (colon > line && colon[-1] != ':') {
+            colon--;
+        }
+        if (colon == line) {
+            continue;
+        }
+
+        n = MIN(sizeof(fi.msg) - 1, (size_t) (&line[line_len] - colon - 1));
+        memcpy(fi.msg, &colon[1], n);
+        fi.msg[n] = '\0';
+
+        /* get to right after the column number */
+        colon--;
+        while (colon > line && colon[-1] != ':') {
+            colon--;
+        }
+        if (colon == line) {
+            continue;
+        }
+
+        fi.pos.col = 0;
+        s = colon;
+        while (s[0] != ':') {
+            fi.pos.col *= 10;
+            fi.pos.col += s[0] - '0';
+            s++;
+        }
+        fi.pos.col--;
+
+        /* get to right after the line number */
+        colon--;
+        while (colon > line && colon[-1] != ':') {
+            colon--;
+        }
+        if (colon == line) {
+            continue;
+        }
+        fi.pos.line = 0;
+        s = colon;
+        while (s[0] != ':') {
+            fi.pos.line *= 10;
+            fi.pos.line += s[0] - '0';
+            s++;
+        }
+        fi.pos.line--;
+
+        /* get to right after the file name */
+        while (colon > line && colon[-1] != ':') {
+            colon--;
+        }
+        if (colon == line) {
+            continue;
+        }
+
+        colon--;
+        colon[0] = '\0';
+        fi.buf = create_buffer(line);
+        if (num_fis == a_fis) {
+            a_fis *= 2;
+            a_fis++;
+            fis = xrealloc(fis, sizeof(*fis) * a_fis);
+        }
+        fis[num_fis++] = fi;
+    }
+    free(line);
+
+    fclose(pp);
+    close(fildes[0]);
+
+    free(Core.fixits);
+    Core.fixits = fis;
+    Core.num_fixits = num_fis;
+    Core.cur_fixit = 0;
+    goto_fixit(1, 1);
+    return 0;
+}
+
 int cmd_quit(struct cmd_data *cd)
 {
     if (!cd->force && SelFrame->buf->save_event_i != SelFrame->buf->event_i) {
@@ -416,10 +571,10 @@ int cmd_substitute(struct cmd_data *cd)
     for (; m != buf->matches; ) {
         m--;
         /* skip matches that are out of range */
-        if (m->to.line < cd->from) {
+        if ((size_t) m->to.line < cd->from) {
             break;
         }
-        if (m->from.line > cd->to) {
+        if ((size_t) m->from.line > cd->to) {
             continue;
         }
         if (group != NULL) {

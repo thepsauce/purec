@@ -83,7 +83,9 @@ void c_char_hook(struct buf *buf, struct pos *pos, struct text *text)
 
     n = buf->text.lines[pos->line].n;
     if ((text->lines[0].s[0] == '}' && pos->col == get_nolb(buf, pos->line)) ||
-            (text->lines[0].s[0] == ':' && pos->col == n)) {
+            (text->lines[0].s[0] == ':' &&
+             buf->attribs[pos->line][n - 1] == HI_OPERATOR &&
+             pos->col == n)) {
         indent = get_line_indent(buf, pos->line);
         if (indent >= Core.tab_size) {
             indent -= Core.tab_size;

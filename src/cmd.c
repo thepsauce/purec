@@ -13,6 +13,7 @@
 #include <glob.h>
 #include <string.h>
 #include <limits.h>
+#include <unistd.h>
 
 #define ACCEPTS_RANGE   0x1
 #define ACCEPTS_NUMBER  0x2
@@ -21,7 +22,7 @@ struct cmd_data {
     /// the argument after the command name
     char *arg;
     /// the range supplied to the command
-    line_t from, to;
+    size_t from, to;
     /// if the command was supplied with a number or range
     bool has_number, has_range;
     /// if ! comes after the command name
@@ -61,10 +62,19 @@ static const struct cmd {
 
     { "buffer", ACCEPTS_NUMBER, cmd_buffer, 0 },
 
+    { "cn", ACCEPTS_NUMBER, cmd_cnext, 0 },
+    { "cnext", ACCEPTS_NUMBER, cmd_cnext, 0 },
+
+    { "cN", ACCEPTS_NUMBER, cmd_cprev, 0 },
+    { "cNext", ACCEPTS_NUMBER, cmd_cprev, 0 },
+
     { "colo", 0, cmd_colorscheme, TAB_COLOR },
     { "coloi", 0, cmd_colorschemeindex, TAB_COLOR },
     { "coloindex", 0, cmd_colorschemeindex, TAB_COLOR },
     { "colorscheme", 0, cmd_colorscheme, TAB_COLOR },
+
+    { "cp", ACCEPTS_NUMBER, cmd_cprev, 0 },
+    { "cprev", ACCEPTS_NUMBER, cmd_cprev, 0 },
 
     { "cq", ACCEPTS_NUMBER, cmd_cquit, 0 },
     { "cquit", ACCEPTS_NUMBER, cmd_cquit, 0 },
@@ -84,6 +94,8 @@ static const struct cmd {
 
     { "noh", 0, cmd_nohighlight, 0 },
     { "nohighlight", 0, cmd_nohighlight, 0 },
+
+    { "make", 0, cmd_make, 0 },
 
     { "q", 0, cmd_quit, 0 },
     { "qa", 0, cmd_quit_all, 0 },
@@ -132,17 +144,19 @@ static const struct cmd {
 static const struct cmd *get_command(const char *s, size_t s_m)
 {
     struct {
-        const struct cmd *cmd;
-        int val;
+        const struct cmd    *cmd;
+        int                 val;
     } mins[3];
-    int min_cnt = 0;
-    const char *s0;
-    int v0[MAX_COMMAND_NAME];
-    int v1[MAX_COMMAND_NAME];
-    int m, n;
-    int del_cost, ins_cost, sub_cost;
-    int d;
-    int max, max_i;
+    int             min_cnt = 0;
+    const char      *s0;
+    int             v0[MAX_COMMAND_NAME];
+    int             v1[MAX_COMMAND_NAME];
+    int             m, n;
+    size_t          c;
+    int             i, j;
+    int             del_cost, ins_cost, sub_cost;
+    int             d;
+    int             max, max_i;
 
     if (s_m >= MAX_COMMAND_NAME) {
         set_error("command '%.*s' does not exist", (int) s_m, s);
@@ -150,18 +164,18 @@ static const struct cmd *get_command(const char *s, size_t s_m)
     }
 
     m = s_m;
-    for (size_t c = 0; c < ARRAY_SIZE(Commands); c++) {
+    for (c = 0; c < ARRAY_SIZE(Commands); c++) {
         s0 = Commands[c].name;
         n = strlen(s0);
 
-        for (int i = 0; i <= n; i++) {
+        for (i = 0; i <= n; i++) {
             v0[i] = i;
         }
 
-        for (int i = 0; i < m; i++) {
+        for (i = 0; i < m; i++) {
             v1[0] = i + 1;
 
-            for (int j = 0; j < n; j++) {
+            for (j = 0; j < n; j++) {
                 del_cost = v0[j + 1] + 1;
                 ins_cost = v1[j] + 1;
                 sub_cost = v0[j];
@@ -186,7 +200,7 @@ static const struct cmd *get_command(const char *s, size_t s_m)
             } else {
                 max = mins[0].val;
                 max_i = 0;
-                for (int i = 1; i < min_cnt; i++) {
+                for (i = 1; i < min_cnt; i++) {
                     if (mins[i].val > max) {
                         max = mins[i].val;
                         max_i = i;
@@ -203,7 +217,7 @@ static const struct cmd *get_command(const char *s, size_t s_m)
     set_error("command '%.*s' does not exist", (int) m, s);
     if (min_cnt > 0) {
         waddstr(Core.msg_win, ", did you mean");
-        for (int i = 0; i < min_cnt; i++) {
+        for (i = 0; i < min_cnt; i++) {
             if (i > 0) {
                 if (i + 1 == min_cnt) {
                     waddstr(Core.msg_win, " or");
@@ -218,7 +232,7 @@ static const struct cmd *get_command(const char *s, size_t s_m)
     return NULL;
 }
 
-static bool read_number(char *s, char **p_s, line_t *p_n)
+static bool read_number(char *s, char **p_s, size_t *p_n)
 {
     struct mark *mark;
 
@@ -298,8 +312,8 @@ int run_command(char *s_cmd)
         }
 
         buf = SelFrame->buf;
-        data.to = MIN(data.to, buf->text.num_lines - 1);
-        for (i = data.from; i <= data.to; i++) {
+        data.to = MIN(data.to, (size_t) buf->text.num_lines - 1);
+        for (i = data.from; i <= (line_t) data.to; i++) {
             fwrite(buf->text.lines[i].s, buf->text.lines[i].n, 1, pp);
             fputc('\n', pp);
         }

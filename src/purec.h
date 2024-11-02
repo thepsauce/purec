@@ -49,6 +49,12 @@ extern WINDOW *OffScreen;
 #define USER_REC_MIN 'A'
 #define USER_REC_MAX 'Z'
 
+struct fixit {
+    struct buf *buf;
+    struct pos pos;
+    char msg[128];
+};
+
 /**
  * The core struct contains information about all modes and the state of the
  * editor.
@@ -154,6 +160,13 @@ extern struct core {
     char user_rec_ch;
     /// the dot recording
     struct rec dot;
+
+    /// all points where a buffer requires a fix
+    struct fixit *fixits;
+    /// the number of fixes required
+    size_t num_fixits;
+    /// the current fixit item
+    size_t cur_fixit;
 } Core;
 
 struct selection {
@@ -304,6 +317,15 @@ bool get_selection(struct selection *sel);
  * @return Whether the point is within the selection.
  */
 bool is_in_selection(const struct selection *sel, const struct pos *pos);
+
+/**
+ * Selects the buffer that has the next/prev fix it item and moves the cursor
+ * to it.
+ *
+ * @param dir   The direction to go in.
+ * @param count The number of items to jump over.
+ */
+void goto_fixit(int dir, size_t count);
 
 /// this constant can not be change to anything other than 1
 #define UPDATE_UI   0x1

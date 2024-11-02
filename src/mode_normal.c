@@ -558,9 +558,20 @@ static int delete_chars(void)
 
 static int replace_chars(void)
 {
-    (void) delete_chars();
+    struct undo_event   *ev;
+
+    if (prepare_motion(SelFrame, KEY_RIGHT) == 0) {
+        return 0;
+    }
+    ev = delete_range(SelFrame->buf, &SelFrame->cur, &SelFrame->next_cur);
+    if (ev != NULL) {
+        yank_data(ev->seg, 0);
+    }
     Core.counter = 1;
     set_mode(INSERT_MODE);
+    clip_column(SelFrame);
+    SelFrame->vct = compute_vct(SelFrame, &SelFrame->cur);
+    (void) adjust_scroll(SelFrame);
     return UPDATE_UI | DO_RECORD;
 }
 

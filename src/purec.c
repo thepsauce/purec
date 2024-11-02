@@ -203,6 +203,48 @@ bool is_in_selection(const struct selection *sel, const struct pos *pos)
     return is_in_range(pos, &sel->beg, &sel->end);
 }
 
+void goto_fixit(int dir, size_t count)
+{
+    struct fixit    *next;
+    struct frame    *frame;
+
+    if (Core.num_fixits == 0) {
+        set_message("no fix it items");
+        return;
+    }
+
+    if (Core.num_fixits == 1) {
+        Core.cur_fixit = 1;
+    } else {
+        count %= Core.num_fixits;
+        if (dir > 0) {
+            Core.cur_fixit += count;
+            if (Core.cur_fixit >= Core.num_fixits) {
+                Core.cur_fixit = 1;
+            }
+        } else {
+            if (count >= Core.cur_fixit) {
+                count -= Core.cur_fixit;
+                Core.cur_fixit = Core.num_fixits - count;
+            } else {
+                Core.cur_fixit -= count;
+            }
+        }
+    }
+    next = &Core.fixits[Core.cur_fixit - 1];
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (frame->buf == next->buf) {
+            SelFrame = frame;
+            break;
+        }
+    }
+    if (frame == NULL) {
+        set_frame_buffer(SelFrame, next->buf);
+    }
+    set_cursor(SelFrame, &next->pos);
+    set_message("(%zu/%zu) %s\n", Core.cur_fixit, Core.num_fixits, next->msg);
+}
+
 static void usage(FILE *fp, const char *program_name)
 {
     const struct program_opt *opt;

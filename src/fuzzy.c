@@ -12,9 +12,12 @@
 #include <unistd.h>
 #include <wctype.h>
 
+/**
+ * Compares two entries for `qsort()`.
+ */
 static int compare_entries(const void *v_a, const void *v_b)
 {
-    const struct entry *a, *b;
+    const struct entry  *a, *b;
 
     a = v_a;
     b = v_b;
@@ -171,6 +174,9 @@ static void render_entries(struct fuzzy *fuzzy)
     }
 }
 
+/**
+ * Draws a frame at given coordinates using double lines and a single line.
+ */
 static void draw_frame(int x, int y, int w, int h)
 {
     int             i;
@@ -230,6 +236,8 @@ void render_fuzzy(struct fuzzy *fuzzy)
     }
 
     render_entries(fuzzy);
+
+    set_highlight(stdscr, HI_NORMAL);
     render_input(&fuzzy->inp);
 }
 
