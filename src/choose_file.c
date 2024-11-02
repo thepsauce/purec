@@ -53,6 +53,9 @@ static void update_files(struct fuzzy *fuzzy)
 static void go_back_one_dir(struct fuzzy *fuzzy)
 {
     size_t          index;
+    char            *cwd, *s;
+    size_t          i;
+    size_t          num_slashes;
 
     index = fuzzy->inp.prefix;
     index--;
@@ -67,7 +70,25 @@ static void go_back_one_dir(struct fuzzy *fuzzy)
             insert_input_prefix(&fuzzy->inp, ".", index);
         } else if (fuzzy->inp.s[index + 1] == '.' &&
                    fuzzy->inp.s[index + 2] == '/') {
-            insert_input_prefix(&fuzzy->inp, "../", index);
+            /* compares the number of directories moved out of with the
+             * number of directories we can actually move out of
+             */
+            cwd = getcwd(NULL, 0);
+            num_slashes = 0;
+            for (s = cwd; s[0] != '\0'; s++) {
+                if (s[0] == '/') {
+                    num_slashes++;
+                }
+            }
+            for (i = 0; i < fuzzy->inp.prefix; i++) {
+                if (fuzzy->inp.s[i] == '/') {
+                    num_slashes--;
+                }
+            }
+            if (num_slashes > 0) {
+                insert_input_prefix(&fuzzy->inp, "../", index);
+            }
+            free(cwd);
         } else {
             fuzzy->inp.n      = index;
             fuzzy->inp.index  = index;
@@ -83,6 +104,10 @@ static void go_back_one_dir(struct fuzzy *fuzzy)
 
 static void move_into_dir(struct fuzzy *fuzzy, const char *name)
 {
+    size_t          i;
+    size_t          num_dirs;
+    char            *cwd, *s, *e;
+
     if (name[0] == '.') {
         if (name[1] == '\0') {
             fuzzy->inp.n     = fuzzy->inp.prefix;
@@ -94,6 +119,47 @@ static void move_into_dir(struct fuzzy *fuzzy, const char *name)
             return;
         }
     }
+
+    /* check if the prefix is a repeating sequence of `../` */
+    num_dirs = 0;
+    for (i = 0; i + 2 < fuzzy->inp.prefix; i += 3) {
+        if (fuzzy->inp.s[i] != '.' || fuzzy->inp.s[i + 1] != '.' ||
+                fuzzy->inp.s[i + 2] != '/') {
+            break;
+        }
+        num_dirs++;
+    }
+    if (i == fuzzy->inp.prefix) {
+        cwd = getcwd(NULL, 0);
+        for (s = &cwd[strlen(cwd)], e = s; s > cwd; s--) {
+            if (s[-1] == '/') {
+                num_dirs--;
+                if (num_dirs == 0) {
+                    break;
+                }
+                e = &s[-1];
+            }
+        }
+        if (strncmp(name, s, e - s) == 0 && name[e - s] == '\0') {
+            if (fuzzy->inp.prefix == 3) {
+                /* make `../` -> `./` */
+                fuzzy->inp.prefix--;
+                memmove(&fuzzy->inp.s[0], &fuzzy->inp.s[1], fuzzy->inp.prefix);
+            } else {
+                /* trim `../` off the beginning */
+                fuzzy->inp.prefix -= 3;
+                memmove(&fuzzy->inp.s[0], &fuzzy->inp.s[3], fuzzy->inp.prefix);
+            }
+            /* adjust these values like in `insert_input_prefix()` */
+            fuzzy->inp.n = fuzzy->inp.prefix;
+            fuzzy->inp.index = fuzzy->inp.prefix;
+            update_files(fuzzy);
+            free(cwd);
+            return;
+        }
+        free(cwd);
+    }
+
     insert_input_prefix(&fuzzy->inp, name, fuzzy->inp.prefix);
     insert_input_prefix(&fuzzy->inp, "/", fuzzy->inp.prefix);
     update_files(fuzzy);
