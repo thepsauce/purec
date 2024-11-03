@@ -18,6 +18,12 @@ static int escape_normal_mode(void)
     return 0;
 }
 
+static int notify_how_to_quit(void)
+{
+    set_message("Type  :qa!<ENTER>  to quit and abandon all changes");
+    return UPDATE_UI;
+}
+
 static int enter_insert_mode(void)
 {
     set_mode(INSERT_MODE);
@@ -534,7 +540,7 @@ static int delete_chars(void)
 {
     struct undo_event   *ev;
 
-    if (prepare_motion(SelFrame, KEY_RIGHT) == 0) {
+    if (prepare_motion(SelFrame, KEY_RIGHT) <= 0) {
         return 0;
     }
     ev = delete_range(SelFrame->buf, &SelFrame->cur, &SelFrame->next_cur);
@@ -551,7 +557,7 @@ static int replace_chars(void)
 {
     struct undo_event   *ev;
 
-    if (prepare_motion(SelFrame, KEY_RIGHT) == 0) {
+    if (prepare_motion(SelFrame, KEY_RIGHT) <= 0) {
         return 0;
     }
     ev = delete_range(SelFrame->buf, &SelFrame->cur, &SelFrame->next_cur);
@@ -569,7 +575,7 @@ static int replace_chars(void)
 static int delete_prev_chars(void)
 {
     struct undo_event   *ev;
-    if (prepare_motion(SelFrame, KEY_LEFT) == 0) {
+    if (prepare_motion(SelFrame, KEY_LEFT) <= 0) {
         return 0;
     }
     ev = delete_range(SelFrame->buf, &SelFrame->next_cur, &SelFrame->cur);
@@ -631,8 +637,8 @@ static int delete_till(int c)
 
     default:
         r = prepare_motion(SelFrame, c);
-        if (r == 0) {
-            return 0;
+        if (r <= 0) {
+            return r;
         }
         from = SelFrame->cur;
         to = SelFrame->next_cur;
@@ -653,7 +659,9 @@ static int delete_till(int c)
 
 static int change_lines(void)
 {
-    delete_till(get_extra_char());
+    if (delete_till(get_extra_char()) == -1) {
+        return 0;
+    }
     Core.counter = 1;
     set_mode(INSERT_MODE);
     clip_column(SelFrame);
@@ -663,7 +671,9 @@ static int change_lines(void)
 
 static int delete_lines(void)
 {
-    (void) delete_till(get_extra_char());
+    if (delete_till(get_extra_char()) <= 0) {
+        return 0;
+    }
     clip_column(SelFrame);
     (void) adjust_scroll(SelFrame);
     return UPDATE_UI;
@@ -671,7 +681,7 @@ static int delete_lines(void)
 
 static int change_to_end(void)
 {
-    delete_till('$');
+    (void) delete_till('$');
     Core.counter = 1;
     set_mode(INSERT_MODE);
     clip_column(SelFrame);
@@ -724,7 +734,7 @@ static int yank_lines_to(int c)
 
     /* yank till motion */
     default:
-        if (prepare_motion(SelFrame, c) == 0) {
+        if (prepare_motion(SelFrame, c) <= 0) {
             return 0;
         }
         from = SelFrame->cur;
@@ -800,7 +810,7 @@ static int replace_current_char(void)
     if (!isprint(c) && c != '\n' && c != '\t') {
         return 0;
     }
-    if (prepare_motion(SelFrame, KEY_RIGHT) == 0) {
+    if (prepare_motion(SelFrame, KEY_RIGHT) <= 0) {
         return 0;
     }
     if (c == '\n' || c == '\t') {
@@ -844,6 +854,7 @@ static int join_lines(void)
 static inline int bind_to_motion(int action)
 {
     int             c;
+    int             r;
     line_t          min_line, max_line;
 
     c = get_extra_char();
@@ -852,7 +863,11 @@ static inline int bind_to_motion(int action)
         max_line = safe_add(min_line, Core.counter - 1);
         max_line = MIN(max_line, SelFrame->buf->text.num_lines - 1);
     } else {
-        if (prepare_motion(SelFrame, c) == 0) {
+        r = prepare_motion(SelFrame, c);
+        if (r == -1) {
+            return 0;
+        }
+        if (r == 0) {
             min_line = SelFrame->cur.line;
             max_line = min_line;
         } else if (SelFrame->cur.line < SelFrame->next_cur.line) {
@@ -951,6 +966,7 @@ int normal_handle_input(int c)
 {
     static int (*const binds[])(void) = {
         ['\x1b']        = escape_normal_mode,
+        [CONTROL('C')]  = notify_how_to_quit,
         ['i']           = enter_insert_mode,
         ['a']           = enter_append_mode,
         ['I']           = enter_insert_beg_mode,

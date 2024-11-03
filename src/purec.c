@@ -473,7 +473,7 @@ void jump_to_file(const struct buf *buf, const struct pos *pos)
     }
 
     path = xmalloc(strlen(buf->path) + e - s + 1);
-    for (i = 0; buf->path[i] != '\0'; i++) {
+    for (i = 0, l = 0; buf->path[i] != '\0'; i++) {
         if (buf->path[i] == '/') {
             l = i + 1;
         }
@@ -555,6 +555,18 @@ int load_last_session(void)
     return 0;
 }
 
+int handle_input(int c)
+{
+   static int (*const input_handlers[])(int c) = {
+        [NORMAL_MODE] = normal_handle_input,
+        [INSERT_MODE] = insert_handle_input,
+        [VISUAL_MODE] = visual_handle_input,
+        [VISUAL_BLOCK_MODE] = visual_handle_input,
+        [VISUAL_LINE_MODE] = visual_handle_input,
+    };
+    return input_handlers[Core.mode](c);
+}
+
 static void sigint_handler(int sig)
 {
     (void) sig;
@@ -563,7 +575,7 @@ static void sigint_handler(int sig)
         kill(Core.child_pid, SIGKILL);
         Core.child_pid = 0;
     } else if (!Core.is_busy) {
-        set_message("Type  :qa!<ENTER>  to quit and abandon all changes");
+        handle_input(CONTROL('C'));
         render_all();
         refresh();
     }
@@ -615,9 +627,10 @@ int init_purec(int argc, char **argv)
     init_clipboard();
 
     Core.msg_win = newpad(1, 128);
+    Core.preview_win = newpad(1, 128);
     OffScreen = newpad(1, 512);
     
-    if (Core.msg_win == NULL || OffScreen == NULL) {
+    if (Core.msg_win == NULL || Core.preview_win == NULL || OffScreen == NULL) {
         endwin();
         fprintf(stderr, "failed creating ncurses windows\n");
         return -1;
@@ -625,6 +638,7 @@ int init_purec(int argc, char **argv)
 
     wbkgdset(stdscr, ' ' | COLOR_PAIR(HI_NORMAL));
     wbkgdset(Core.msg_win, ' ' | COLOR_PAIR(HI_NORMAL));
+    wbkgdset(Core.preview_win, ' ' | COLOR_PAIR(HI_NORMAL));
     wbkgdset(OffScreen, ' ' | COLOR_PAIR(HI_NORMAL));
 
     for (int i = 0; i < Args.num_files; i++) {
@@ -693,6 +707,8 @@ void render_all(void)
 
     int             cur_x, cur_y;
     struct frame    *frame;
+    int             x;
+    size_t          d, d2;
     
     curs_set(0);
 
@@ -708,6 +724,43 @@ void render_all(void)
     }
     copywin(Core.msg_win, stdscr, 0, 0, LINES - 1, 0, LINES - 1,
             MIN(COLS - 1, getmaxx(Core.msg_win) - 1), 0);
+
+    set_highlight(stdscr, HI_CMD);
+    if (Core.mode == VISUAL_MODE) {
+        if (Core.pos.line == SelFrame->cur.line) {
+            d = Core.pos.col > SelFrame->cur.col ?
+                    Core.pos.col - SelFrame->cur.col :
+                    SelFrame->cur.col - Core.pos.col;
+            mvprintw(LINES - 1, COLS * 3 / 4, "%zu", d + 1);
+        } else {
+            d = Core.pos.line > SelFrame->cur.line ?
+                    Core.pos.line - SelFrame->cur.line :
+                    SelFrame->cur.line - Core.pos.line;
+            mvprintw(LINES - 1, COLS * 3 / 4, "%zu", d + 1);
+        }
+    } else if (Core.mode == VISUAL_LINE_MODE) {
+        d = Core.pos.line > SelFrame->cur.line ?
+                Core.pos.line - SelFrame->cur.line :
+                SelFrame->cur.line - Core.pos.line;
+        mvprintw(LINES - 1, COLS * 3 / 4, "%zu", d + 1);
+    } else if (Core.mode == VISUAL_BLOCK_MODE) {
+        d = Core.pos.line > SelFrame->cur.line ?
+                Core.pos.line - SelFrame->cur.line :
+                SelFrame->cur.line - Core.pos.line;
+        d2 = Core.pos.col > SelFrame->cur.col ?
+                Core.pos.col - SelFrame->cur.col :
+                SelFrame->cur.col - Core.pos.col;
+        mvprintw(LINES - 1, COLS * 3 / 4, "%zux%zu", d + 1, d2 + 1);
+    }
+
+    x = getcurx(Core.preview_win);
+    if (x > 0) {
+        x -= COLS / 4;
+        x = MAX(x, 0);
+        copywin(Core.preview_win, stdscr,
+                0, x, LINES - 1, COLS * 3 / 4,
+                LINES - 1, MIN(COLS - 1, getmaxx(Core.preview_win) - 1), 0);
+    }
 
     if (get_visual_pos(SelFrame, &SelFrame->cur, &cur_x, &cur_y)) {
         move(cur_y, cur_x);

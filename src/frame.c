@@ -1471,7 +1471,7 @@ int prepare_motion(struct frame *frame, int motion_key)
         ['%']           = goto_matching_paren,
     };
     return motion_key >= (int) ARRAY_SIZE(binds) ||
-            binds[motion_key] == NULL ? 0 : binds[motion_key](frame);
+            binds[motion_key] == NULL ? -1 : binds[motion_key](frame);
 }
 
 int apply_motion(struct frame *frame)

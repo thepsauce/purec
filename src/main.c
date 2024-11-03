@@ -9,6 +9,7 @@ int get_ch(void)
 {
     struct play_rec *rec;
     int             c;
+    int             x;
 
     rec = get_playback();
     if (rec != NULL) {
@@ -25,6 +26,15 @@ int get_ch(void)
         render_all();
         return -1;
     }
+
+    set_highlight(Core.preview_win, HI_CMD);
+    waddstr(Core.preview_win, keyname(c));
+    x = getcurx(Core.preview_win);
+    x -= COLS / 4;
+    x = MAX(x, 0);
+    copywin(Core.preview_win, stdscr,
+            0, x, LINES - 1, COLS * 3 / 4,
+            LINES - 1, MIN(COLS - 1, getmaxx(Core.preview_win) - 1), 0);
 
     if (c > 0xff) {
         /* does not fit into a single byte */
@@ -112,14 +122,6 @@ int get_extra_char(void)
 
 int main(int argc, char **argv)
 {
-   static int (*const input_handlers[])(int c) = {
-        [NORMAL_MODE] = normal_handle_input,
-        [INSERT_MODE] = insert_handle_input,
-        [VISUAL_MODE] = visual_handle_input,
-        [VISUAL_BLOCK_MODE] = visual_handle_input,
-        [VISUAL_LINE_MODE] = visual_handle_input,
-    };
-
     int                 c;
     int                 r;
     int                 old_mode;
@@ -133,11 +135,11 @@ int main(int argc, char **argv)
     }
 
     while (1) {
+        wclear(Core.preview_win);
         render_all();
 
         Core.is_busy = false;
         do {
-
             rec = get_playback();
             next_dot_i = rec == NULL ? Core.rec_len : rec->index;
             if (Core.mode == INSERT_MODE) {
@@ -153,7 +155,7 @@ int main(int argc, char **argv)
             Core.is_busy = true;
 
             old_mode = Core.mode;
-            r = input_handlers[Core.mode](c);
+            r = handle_input(c);
 
             /* the dot recording is either the last key used in normal mode or
              * the key that led to a different mode all until the end of that
@@ -170,7 +172,7 @@ int main(int argc, char **argv)
         /* does not render the UI if nothing changed or when a recording is
          * playing which means: no active user input
          */
-        } while ((r & UPDATE_UI) == 0 || get_playback() != NULL);
+        } while (get_playback() != NULL);
 
         if (Core.is_stopped) {
             break;

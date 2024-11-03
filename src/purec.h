@@ -75,6 +75,9 @@ extern struct core {
     /// the state of the message
     int msg_state;
 
+    /// contains the current characters pressed
+    WINDOW *preview_win;
+
     /// whether the editor should quit
     bool is_stopped;
     /// the exit code to return in `main()`
@@ -433,6 +436,15 @@ void read_command_line(const char *beg);
  * @param pos   The position of the cursor.
  */
 void jump_to_file(const struct buf *buf, const struct pos *pos);
+
+/**
+ * Sends the character to the current mode handler.
+ *
+ * @param c     The character to send.
+ *
+ * @return Whether the ui needs re-rendering.
+ */
+int handle_input(int c);
 
 /**
  * Initialize the core.
