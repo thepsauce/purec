@@ -176,13 +176,15 @@ int main(int argc, char **argv)
             break;
         }
 
-        /* make all events at the end of the event list of a buffer non transient */
+        /* make all events at the end of the event list of a buffer a stop
+         * signal
+         */
         for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
             if (buf->num_events == 0) {
                 continue;
             }
             ev = &buf->events[buf->num_events - 1];
-            ev->flags &= ~IS_TRANSIENT;
+            ev->flags |= IS_STOP;
         }
     }
 

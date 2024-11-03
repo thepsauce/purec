@@ -11,7 +11,7 @@
 
 /**
  * Checks if any events between the event at `Core.ev_from_ins` and the last
- * event can be combined and combines them by setting the `IS_TRANSIENT` flag.
+ * event can be combined and combines them by removing the stop flag.
  */
 static void attempt_join(void)
 {
@@ -22,7 +22,7 @@ static void attempt_join(void)
         prev_ev = &SelFrame->buf->events[i - 1];
         ev = &SelFrame->buf->events[i];
         if (should_join(prev_ev, ev)) {
-            prev_ev->flags |= IS_TRANSIENT;
+            prev_ev->flags &= ~IS_STOP;
         }
     }
 }
@@ -51,7 +51,7 @@ static void repeat_last_insertion(void)
     /* check if there is only a SINGLE transient chain */
     for (e = Core.ev_from_insert + 1; e < buf->event_i; e++) {
         ev = &buf->events[e - 1];
-        if (!(ev->flags & IS_TRANSIENT)) {
+        if ((ev->flags & IS_STOP)) {
             return;
         }
     }
@@ -97,7 +97,7 @@ static void repeat_last_insertion(void)
         return;
     }
 
-    buf->events[buf->event_i - 1].flags |= IS_TRANSIENT;
+    /* TODO: did I remove something needed? */
     repeat = Core.repeat_insert - 1;
     for (i = 0; i <= Core.move_down_count; i++, cur.line++) {
         if (cur.line >= SelFrame->buf->text.num_lines) {
@@ -152,7 +152,7 @@ static int enter_new_line(void)
     if (buf->ev_last_indent + 1 == buf->event_i) {
         undo_event_no_trans(buf);
         if (buf->event_i > 0) {
-            buf->events[buf->event_i].flags &= ~IS_TRANSIENT;
+            buf->events[buf->event_i].flags |= IS_STOP;
         }
         /* since the indentation is now trimmed, move to the first column */
         SelFrame->cur.col = 0;

@@ -47,8 +47,8 @@ extern struct undo {
     size_t a_segments;
 } Undo;
 
-/// whether the next event should be processed together with this one
-#define IS_TRANSIENT    0x01
+/// whether an undo/redo should stop at this event
+#define IS_STOP         0x01
 /// whether the event changes a block rather than a range
 #define IS_BLOCK        0x02
 /// if this is an insertion event
@@ -153,13 +153,6 @@ struct buf {
     /// attributes
     int **attribs;
 
-    /// all parentheses within the buffer
-    struct paren *parens;
-    /// number of parentheses
-    size_t num_parens;
-    /// number of allocated paranthesis
-    size_t a_parens;
-
     /// events that occured
     struct undo_event *events;
     /// number of ecents that occured
@@ -170,6 +163,13 @@ struct buf {
     size_t event_i;
     /// from which event the last indentation occured
     size_t ev_last_indent;
+
+    /// all parentheses within the buffer
+    struct paren *parens;
+    /// number of parentheses
+    size_t num_parens;
+    /// number of allocated parantheses
+    size_t a_parens;
 
     /// matches found in the buffer
     struct match *matches;

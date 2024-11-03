@@ -199,11 +199,7 @@ struct undo_event *add_event(struct buf *buf, int flags, const struct pos *pos,
     ev = &buf->events[buf->event_i++];
     buf->num_events = buf->event_i;
 
-    /* all events are flagged as `IS_TRANSIENT`,
-     * when receiving input has finished, this flag is removed
-     * for the last event in the event list of a buffer
-     */
-    ev->flags = flags | IS_TRANSIENT;
+    ev->flags = flags;
     ev->pos = *pos;
     if ((flags & IS_BLOCK)) {
         ev->end.line = ev->pos.line + text->num_lines - 1;
@@ -304,7 +300,7 @@ struct undo_event *undo_event(struct buf *buf)
         }
         do_event(buf, ev, flags);
     } while (buf->event_i > 0 &&
-            (buf->events[buf->event_i - 1].flags & IS_TRANSIENT));
+            !(buf->events[buf->event_i - 1].flags & IS_STOP));
     return ev;
 }
 
@@ -319,6 +315,6 @@ struct undo_event *redo_event(struct buf *buf)
     do {
         ev = &buf->events[buf->event_i++];
         do_event(buf, ev, ev->flags);
-    } while ((ev->flags & IS_TRANSIENT) && buf->event_i != buf->num_events);
+    } while (!(ev->flags & IS_STOP) && buf->event_i != buf->num_events);
     return ev;
 }
