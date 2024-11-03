@@ -249,8 +249,12 @@ void render_frame(struct frame *frame)
                 if (v_start < frame->scroll.col) {
                     v_start = frame->scroll.col;
                 }
-                if (v_end <= v_start) {
+                if (v_end < v_start) {
                     continue;
+                }
+                if ((Core.mode == VISUAL_MODE && l < sel.end.line) ||
+                        Core.mode == VISUAL_LINE_MODE) {
+                    v_end++;
                 }
                 mvchgat(frame->y + l - frame->scroll.line,
                         frame->x + x + v_start - frame->scroll.col,
