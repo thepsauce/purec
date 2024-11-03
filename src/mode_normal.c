@@ -641,7 +641,7 @@ static int delete_till(int c)
         }
         ev = delete_range(SelFrame->buf, &from, &to);
         if (to.line < SelFrame->cur.line ||
-            (to.line == SelFrame->cur.line && to.col < SelFrame->cur.col)) {
+                (to.line == SelFrame->cur.line && to.col < SelFrame->cur.col)) {
             SelFrame->cur = to;
         }
     }

@@ -170,7 +170,7 @@ extern struct core {
 
     /// if the core is not waiting for input
     bool is_busy;
-    /// the number of sigints send
+    /// the number of sigints sent
     size_t num_sigs;
     /// the current running child process
     pid_t child_pid;
@@ -288,7 +288,7 @@ int get_extra_char(void);
  *
  * @return Index of the line ending.
  */
-col_t get_mode_line_end(struct line *line);
+col_t get_mode_line_end(const struct line *line);
 
 /**
  * Gets the frame that has the given buffer selected.

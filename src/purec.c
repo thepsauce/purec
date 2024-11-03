@@ -141,7 +141,7 @@ void yank_data(struct undo_seg *seg, int flags)
     }
 }
 
-col_t get_mode_line_end(struct line *line)
+col_t get_mode_line_end(const struct line *line)
 {
     if (Core.mode != NORMAL_MODE) {
         return line->n;
@@ -555,7 +555,7 @@ int load_last_session(void)
     return 0;
 }
 
-void sigint_handler(int sig)
+static void sigint_handler(int sig)
 {
     (void) sig;
     Core.num_sigs++;

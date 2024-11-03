@@ -164,20 +164,25 @@ static int enter_new_line(void)
 
 static int enter_tab(void)
 {
-    static struct line line;
-    static struct text text = {
-        .lines = &line,
-        .num_lines = 1
-    };
-
-    char            ch;
+    col_t           ind;
+    struct text     text;
     size_t          n;
 
-    ch = ' ';
-    n = Core.tab_size - SelFrame->cur.col % Core.tab_size;
-    line.s = &ch;
-    line.n = 1;
-    (void) insert_lines(SelFrame->buf, &SelFrame->cur, &text, n);
+    ind = get_line_indent(SelFrame->buf, SelFrame->cur.line);
+
+    if (SelFrame->cur.col > ind && SelFrame->cur.col < ind + 16) {
+        n = 16 + ind - SelFrame->cur.col;
+    } else {
+        n = Core.tab_size - SelFrame->cur.col % Core.tab_size;
+    }
+    text.num_lines = 1;
+    text.lines = xmalloc(sizeof(*text.lines));
+    text.lines[0].n = n;
+    text.lines[0].s = xmalloc(n);
+    memset(text.lines[0].s, ' ', n);
+
+    (void) _insert_lines(SelFrame->buf, &SelFrame->cur, &text);
+    (void) add_event(SelFrame->buf, IS_INSERTION, &SelFrame->cur, &text);
     SelFrame->cur.col += n;
     SelFrame->vct = SelFrame->cur.col;
     (void) adjust_scroll(SelFrame);
