@@ -291,6 +291,15 @@ int get_extra_char(void);
 col_t get_mode_line_end(struct line *line);
 
 /**
+ * Gets the frame that has the given buffer selected.
+ *
+ * @param buf   The buffer to look for.
+ *
+ * @return The frame containing the buffer.
+ */
+struct frame *get_frame_with_buffer(const struct buf *buf);
+
+/**
  * Sets the new mode and does any transition needed like changing cursor shape.
  *
  * If the current mode is not a visual mode but the new mode is, `Core.pos` is
@@ -416,6 +425,14 @@ int run_command(char *cmd);
  * @param beg   What the command line should start with, must be larger than 1.
  */
 void read_command_line(const char *beg);
+
+/**
+ * Jumps to the file within the buffer at given position.
+ *
+ * @param buf   The buffer to check for a file name.
+ * @param pos   The position of the cursor.
+ */
+void jump_to_file(const struct buf *buf, const struct pos *pos);
 
 /**
  * Initialize the core.

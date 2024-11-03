@@ -850,23 +850,6 @@ static int move_to_end(struct frame *frame)
     return UPDATE_UI;
 }
 
-static int move_to_extended(struct frame *frame)
-{
-    int             c;
-
-    c = get_extra_char();
-    switch (c) {
-    case 'g':
-        return move_to_start(frame);
-    case 'G':
-        return move_to_end(frame);
-    case 'e':
-    case 'f':
-        return 0 /* TODO: */;
-    }
-    return 0;
-}
-
 static int move_page_up(struct frame *frame)
 {
     line_t          n;
@@ -1094,54 +1077,59 @@ static int find_next_character_excl(struct frame *frame)
     return find_next_char(frame, true);
 }
 
-static int move_to_prev_word(struct frame *frame)
+static int move_to_prev_word_excl(struct frame *frame)
 {
     struct pos      p;
     struct line     *line;
     int             s, o_s;
 
+    if (SelFrame->cur.col == 0 && SelFrame->cur.line == 0) {
+        return 0;
+    }
+
     p = frame->cur;
     line = &frame->buf->text.lines[p.line];
 
     do {
-        for (; p.col > 0; p.col--) {
-            if (!isblank(line->s[p.col - 1])) {
-                break;
-            }
-        }
-
-        if (p.col == 0) {
-            if (p.line > 0) {
-                line--;
-                p.line--;
-                p.col = line->n;
-            }
-        }
-
-        for (; p.col > 0; p.col--) {
-            if (!isblank(line->s[p.col - 1])) {
-                break;
-            }
-        }
-
         s = -1;
+        if (p.col > 0 && p.col == line->n) {
+            p.col--;
+        }
         while (p.col > 0) {
-            o_s = get_char_state(line->s[p.col - 1]);
+            o_s = get_char_state(line->s[p.col]);
             if (s >= 0 && s != o_s) {
                 break;
             }
-            p.col--;
             s = o_s;
+            p.col--;
         }
+
+        while (1) {
+            for (; p.col > 0; p.col--) {
+                if (!isblank(line->s[p.col])) {
+                    break;
+                }
+            }
+
+            if (p.col > 0) {
+                break;
+            }
+
+            if (p.line == 0) {
+                break;
+            }
+
+            p.line--;
+            line--;
+            p.col = line->n == 0 ? 0 : line->n - 1;
+        }
+
         Core.counter--;
-    } while (Core.counter > 0 && (p.line > 0 || p.col > 0));
+    } while (Core.counter > 0 && (p.col > 0 || p.line > 0));
 
     frame->next_cur = p;
-    if (is_point_equal(&frame->cur, &p)) {
-        return 0;
-    }
-    frame->next_vct = compute_vct(frame, &frame->next_cur);
-    return UPDATE_UI;
+    frame->next_vct = compute_vct(frame, &p);
+    return 2;
 }
 
 static int move_to_next_word_excl(struct frame *frame)
@@ -1201,6 +1189,56 @@ static int move_to_next_word_excl(struct frame *frame)
     return 2;
 }
 
+static int move_to_prev_word(struct frame *frame)
+{
+    struct pos      p;
+    struct line     *line;
+    int             s, o_s;
+
+    p = frame->cur;
+    line = &frame->buf->text.lines[p.line];
+
+    do {
+        for (; p.col > 0; p.col--) {
+            if (!isblank(line->s[p.col - 1])) {
+                break;
+            }
+        }
+
+        if (p.col == 0) {
+            if (p.line > 0) {
+                line--;
+                p.line--;
+                p.col = line->n;
+            }
+        }
+
+        for (; p.col > 0; p.col--) {
+            if (!isblank(line->s[p.col - 1])) {
+                break;
+            }
+        }
+
+        s = -1;
+        while (p.col > 0) {
+            o_s = get_char_state(line->s[p.col - 1]);
+            if (s >= 0 && s != o_s) {
+                break;
+            }
+            p.col--;
+            s = o_s;
+        }
+        Core.counter--;
+    } while (Core.counter > 0 && (p.line > 0 || p.col > 0));
+
+    frame->next_cur = p;
+    if (is_point_equal(&frame->cur, &p)) {
+        return 0;
+    }
+    frame->next_vct = compute_vct(frame, &frame->next_cur);
+    return UPDATE_UI;
+}
+
 static int move_to_next_word(struct frame *frame)
 {
     struct pos      p;
@@ -1245,6 +1283,27 @@ static int move_to_next_word(struct frame *frame)
     frame->next_cur = p;
     frame->next_vct = compute_vct(frame, &p);
     return UPDATE_UI;
+}
+
+static int move_to_extended(struct frame *frame)
+{
+    int             c;
+
+    c = get_extra_char();
+    switch (c) {
+    case 'g':
+        return move_to_start(frame);
+    case 'G':
+        return move_to_end(frame);
+    case 'e':
+        return move_to_prev_word_excl(frame);
+    case 'f':
+        jump_to_file(frame->buf, &frame->cur);
+        SelFrame->next_cur = SelFrame->cur;
+        SelFrame->next_vct = SelFrame->vct;
+        return UPDATE_UI;
+    }
+    return 0;
 }
 
 /**

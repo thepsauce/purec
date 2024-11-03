@@ -320,11 +320,11 @@ static int do_frame_command(void)
 
     /* expand the width of current frame */
     case '>':
-        return move_right_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
+        return move_right_edge(SelFrame, MIN(Core.counter, INT_MAX)) > 0;
 
     /* move current frame to the left and expand its width */
     case '<':
-        return move_left_edge(SelFrame, MIN(INT_MAX, Core.counter)) > 0;
+        return move_left_edge(SelFrame, MIN(Core.counter, INT_MAX)) > 0;
 
     /* set the width */
     case '|':
@@ -341,8 +341,8 @@ static int do_frame_command(void)
     /* jump to the file under the cursor */
     case CONTROL('F'):
     case 'f':
-        /* TODO */
-        return 0;
+        jump_to_file(SelFrame->buf, &SelFrame->cur);
+        return UPDATE_UI;
     }
 
     frame = do_binded_frame_movement(c);
@@ -379,24 +379,24 @@ static int choose_fuzzy_session(void)
 
 static int scroll_up(void)
 {
-    return scroll_frame(SelFrame, -Core.counter);
+    return scroll_frame(SelFrame, -MIN(Core.counter, LINE_MAX));
 }
 
 static int scroll_down(void)
 {
-    return scroll_frame(SelFrame, -Core.counter);
+    return scroll_frame(SelFrame, MIN(Core.counter, LINE_MAX));
 }
 
 static int scroll_up_half(void)
 {
     Core.counter = safe_mul(Core.counter, MAX(SelFrame->h / 2, 1));
-    return scroll_frame(SelFrame, -Core.counter);
+    return scroll_frame(SelFrame, -MIN(Core.counter, LINE_MAX));
 }
 
 static int scroll_down_half(void)
 {
     Core.counter = safe_mul(Core.counter, MAX(SelFrame->h / 2, 1));
-    return scroll_frame(SelFrame, Core.counter);
+    return scroll_frame(SelFrame, MIN(Core.counter, LINE_MAX));
 }
 
 static int goto_mark(void)
@@ -422,18 +422,15 @@ static int goto_mark(void)
         set_cursor(SelFrame, &mark->pos);
         return UPDATE_UI;
     }
-    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
-        if (frame->buf == mark->buf) {
-            SelFrame = frame;
-            set_cursor(frame, &mark->pos);
-            return UPDATE_UI;
-        }
-    }
-    if (SelFrame->buf != mark->buf) {
+    frame = get_frame_with_buffer(mark->buf);
+    if (frame != NULL) {
+        SelFrame = frame;
+        set_cursor(frame, &mark->pos);
+    } else {
         set_frame_buffer(SelFrame, mark->buf);
+        set_cursor(SelFrame, &mark->pos);
     }
-    set_cursor(SelFrame, &mark->pos);
-    return 0;
+    return UPDATE_UI;
 }
 
 static int place_mark(void)

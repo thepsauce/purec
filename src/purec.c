@@ -150,6 +150,18 @@ col_t get_mode_line_end(struct line *line)
     return line->n == 0 ? 0 : move_back_glyph(line->s, line->n);
 }
 
+struct frame *get_frame_with_buffer(const struct buf *buf)
+{
+    struct frame    *frame;
+
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
+        if (frame->buf == buf) {
+            return frame;
+        }
+    }
+    return NULL;
+}
+
 void set_mode(int mode)
 {
     struct buf *buf;
@@ -233,14 +245,11 @@ void goto_fixit(int dir, size_t count)
         }
     }
     next = &Core.fixits[Core.cur_fixit - 1];
-    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
-        if (frame->buf == next->buf) {
-            SelFrame = frame;
-            break;
-        }
-    }
+    frame = get_frame_with_buffer(next->buf);
     if (frame == NULL) {
         set_frame_buffer(SelFrame, next->buf);
+    } else {
+        SelFrame = frame;
     }
     set_cursor(SelFrame, &next->pos);
     set_message("(%zu/%zu) %s\n", Core.cur_fixit, Core.num_fixits, next->msg);
@@ -427,6 +436,77 @@ struct play_rec *get_playback(void)
         return rec;
     }
     return NULL;
+}
+
+void jump_to_file(const struct buf *buf, const struct pos *pos)
+{
+    struct line     *line;
+    char            *s, *e;
+    char            *path;
+    size_t          i, l;
+    struct stat     st;
+    struct buf      *new_buf;
+    struct frame    *frame;
+
+    line = &buf->text.lines[pos->line];
+    for (s = &line->s[pos->col]; s > line->s; s--) {
+        if (!isalnum(s[-1]) &&
+                s[-1] != '.' &&
+                s[-1] != '/' &&
+                s[-1] != '_' &&
+                s[-1] != '-') {
+            break;
+        }
+    }
+    for (e = &line->s[pos->col]; e < &line->s[line->n]; e++) {
+        if (!isalnum(e[0]) &&
+                e[0] != '.' &&
+                e[0] != '/' &&
+                e[0] != '_' &&
+                e[0] != '-') {
+            break;
+        }
+    }
+    if (e == s) {
+        set_error("there is no file at the cursor");
+        return;
+    }
+
+    path = xmalloc(strlen(buf->path) + e - s + 1);
+    for (i = 0; buf->path[i] != '\0'; i++) {
+        if (buf->path[i] == '/') {
+            l = i + 1;
+        }
+        path[i] = buf->path[i];
+    }
+    memcpy(&path[l], s, e - s);
+    path[l + e - s] = '\0';
+    if (stat(path, &st) == 0) {
+        goto found;
+    }
+
+    path = xrealloc(path, STRING_SIZE("/usr/include/") + e - s + 1);
+    memcpy(path, "/usr/include/", STRING_SIZE("/usr/include/"));
+    memcpy(&path[STRING_SIZE("/usr/include/")], s, e - s);
+    path[STRING_SIZE("/usr/include/") + e - s] = '\0';
+    if (stat(path, &st) == 0) {
+        goto found;
+    }
+
+    free(path);
+
+    set_error("could not find file '%.*s'\n", (int) (e - s), s);
+    return;
+
+found:
+    new_buf = create_buffer(path);
+    frame = get_frame_with_buffer(new_buf);
+    if (frame == NULL) {
+        set_frame_buffer(SelFrame, new_buf);
+    } else {
+        SelFrame = frame;
+    }
+    free(path);
 }
 
 int load_last_session(void)

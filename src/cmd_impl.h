@@ -267,7 +267,9 @@ int cmd_exit(struct cmd_data *cd)
 
 int cmd_exit_all(struct cmd_data *cd)
 {
-    for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
+    struct frame    *frame;
+
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
         if (save_buffer(cd, frame->buf) && !cd->force) {
             return -1;
         }
@@ -481,11 +483,13 @@ int cmd_quit(struct cmd_data *cd)
 
 int cmd_quit_all(struct cmd_data *cd)
 {
+    struct frame    *frame;
+
     if (cd->force) {
         Core.is_stopped = true;
         return 0;
     }
-    for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
         if (!cd->force && frame->buf->save_event_i != frame->buf->event_i) {
             set_error("buffer has changed, use  :qa!  to quit");
             return -1;
@@ -646,7 +650,9 @@ int cmd_write(struct cmd_data *cd)
 
 int cmd_write_all(struct cmd_data *cd)
 {
-    for (struct frame *frame = FirstFrame; frame != NULL; frame = frame->next) {
+    struct frame    *frame;
+
+    for (frame = FirstFrame; frame != NULL; frame = frame->next) {
         if (save_buffer(cd, frame->buf) != 0) {
             return -1;
         }
