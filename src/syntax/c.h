@@ -152,7 +152,7 @@ col_t c_indentor(struct buf *buf, line_t line_i)
     } else {
         c = 0;
     }
-    return Core.tab_size * c + get_line_indent(buf, par->pos.line);
+    return buf->rule.tab_size * c + get_line_indent(buf, par->pos.line);
 }
 
 static col_t c_get_identf(struct state_ctx *ctx)

@@ -170,16 +170,25 @@ static int enter_tab(void)
 
     ind = get_line_indent(SelFrame->buf, SelFrame->cur.line);
 
-    if (SelFrame->cur.col > ind && SelFrame->cur.col < ind + 16) {
-        n = 16 + ind - SelFrame->cur.col;
-    } else {
-        n = Core.tab_size - SelFrame->cur.col % Core.tab_size;
-    }
     text.num_lines = 1;
     text.lines = xmalloc(sizeof(*text.lines));
-    text.lines[0].n = n;
-    text.lines[0].s = xmalloc(n);
-    memset(text.lines[0].s, ' ', n);
+    if (SelFrame->cur.col > ind && SelFrame->cur.col < ind + 16 &&
+            ind % 2 == 0) {
+        n = 16 + ind - SelFrame->cur.col;
+        text.lines[0].n = n;
+        text.lines[0].s = xmalloc(n);
+        memset(text.lines[0].s, ' ', n);
+    } else if (SelFrame->buf->rule.use_spaces) {
+        n = tab_adjust(SelFrame->cur.col, SelFrame->buf->rule.tab_size);
+        text.lines[0].n = n;
+        text.lines[0].s = xmalloc(n);
+        memset(text.lines[0].s, ' ', n);
+    } else {
+        n = 1;
+        text.lines[0].n = 1;
+        text.lines[0].s = xmalloc(1);
+        text.lines[0].s[0] = '\t';
+    }
 
     (void) _insert_lines(SelFrame->buf, &SelFrame->cur, &text);
     (void) add_event(SelFrame->buf, IS_INSERTION, &SelFrame->cur, &text);
@@ -226,12 +235,12 @@ static int delete_prev_char(void)
         SelFrame->next_cur.col = buf->text.lines[SelFrame->next_cur.line].n;
         SelFrame->next_vct = compute_vct(SelFrame, &SelFrame->next_cur);
     } else {
-        if (SelFrame->cur.col % Core.tab_size == 0) {
-            Core.counter = Core.tab_size;
+        if (SelFrame->cur.col % SelFrame->buf->rule.tab_size == 0) {
+            Core.counter = SelFrame->buf->rule.tab_size;
        
             line = &buf->text.lines[SelFrame->cur.line];
             for (i = SelFrame->cur.col;
-                 i > SelFrame->cur.col - Core.tab_size; ) {
+                 i > SelFrame->cur.col - SelFrame->buf->rule.tab_size; ) {
                 i--;
                 if (line->s[i] != ' ') {
                     Core.counter = 1;

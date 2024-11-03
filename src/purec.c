@@ -15,7 +15,7 @@
 WINDOW *OffScreen;
 
 struct core Core = {
-    .tab_size = 4,
+    .rule = { 4, true },
     .theme = 44
 };
 

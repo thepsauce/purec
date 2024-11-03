@@ -5786,16 +5786,15 @@ static void convert_hex_to_rgb(const char *hex, int *p_r, int *p_g, int *p_b)
  */
 static void init_theme(void)
 {
-    const struct theme *t;
-    int r, g, b;
-    int i, j;
+    const struct theme  *t;
+    int                 r, g, b;
+    short               s_r, s_g, s_b;
+    short               m;
+    int                 i, j;
 
     t = &Themes[Core.theme];
     if (can_change_color()) {
         for (i = 0; i < t->colors_needed; i++) {
-            if (t->term_colors[i] == NULL) {
-                continue;
-            }
             if (t->term_colors[i][0] == '#') {
                 convert_hex_to_rgb(t->term_colors[i], &r, &g, &b);
             } else {
@@ -5815,9 +5814,28 @@ static void init_theme(void)
         }
     }
 
-    for (int i = 1; i < HI_MAX; i++) {
+    for (i = 1; i < HI_MAX; i++) {
         init_pair(i, t->attribs[i][0], t->attribs[i][1]);
     }
+
+    color_content(t->attribs[HI_NORMAL][1], &s_r, &s_g, &s_b);
+    m = MAX(s_r, s_g);
+    m = MAX(m, s_b);
+    if (m == 0) {
+        s_r = 80;
+        s_g = 80;
+        s_b = 80;
+    } else if (m < 500) {
+        s_r = s_r * 9 / 4;
+        s_g = s_g * 9 / 4;
+        s_b = s_b * 9 / 4;
+    } else {
+        s_r = s_r * 4 / 7;
+        s_g = s_g * 4 / 7;
+        s_b = s_b * 4 / 7;
+    }
+    init_color(t->colors_needed, s_r, s_g, s_b);
+    init_pair(HI_MAX, t->colors_needed, t->attribs[HI_NORMAL][1]);
 }
 
 void init_colors(void)

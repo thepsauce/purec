@@ -23,6 +23,8 @@ struct render_info {
     /// the line the cursor is on
     struct line *cur_line;
 
+    /// the buffer the below line is part of
+    struct buf *buf;
     /// the line to render
     struct line *line;
     /// the attributes of the line
@@ -93,29 +95,45 @@ struct lang Langs[] = {
  */
 static void render_line(struct render_info *ri)
 {
+    col_t           col;
+    col_t           sp_thres;
     col_t           x;
+    int             a;
     int             hi;
-    struct pos      p;
     struct glyph    g;
     bool            err;
-    int             c;
+    char            ch;
+    int             t;
 
-    p.line = ri->line_i;
-    for (p.col = 0, x = 0; p.col < ri->line->n && x < ri->w;) {
-        err = get_glyph(&ri->line->s[p.col], ri->line->n - p.col, &g) == -1;
-        if (x + g.w > ri->x) {
-            hi = ri->attribs[p.col];
-            c = ri->line->s[p.col];
-            if (c == '\t') {
-                p.col++;
-                x += Core.tab_size - x % Core.tab_size;
-                continue;
+    for (sp_thres = ri->line->n; sp_thres > 0; sp_thres --) {
+        if (!isblank(ri->line->s[sp_thres - 1])) {
+            break;
+        }
+    }
+
+    for (col = 0, x = 0; col < ri->line->n && x < ri->w;) {
+        ch = ri->line->s[col];
+        if (ch == '\t') {
+            col++;
+            a = tab_adjust(x, ri->buf->rule.tab_size);
+            x += a;
+            set_highlight(stdscr, HI_MAX);
+            for (; a > 0 && x < ri->w; a--, x++) {
+                if (x >= ri->x) {
+                    mvaddstr(ri->off_y, ri->off_x + x, "·");
+                }
             }
+            continue;
+        }
+
+        err = get_glyph(&ri->line->s[col], ri->line->n - col, &g) == -1;
+        if (x + g.w > ri->x) {
+            hi = ri->attribs[col];
 
             if (x < ri->x) {
                 set_highlight(stdscr, HI_COMMENT);
                 mvaddch(ri->off_y, ri->off_x + ri->x, '<');
-                p.col += g.n;
+                col += g.n;
                 x = ri->x + 1;
                 continue;
             }
@@ -126,20 +144,39 @@ static void render_line(struct render_info *ri)
                 break;
             }
 
-            if (err) {
+            if (col >= sp_thres && sp_thres > 0) {
+                set_highlight(stdscr, HI_MAX);
+                mvaddstr(ri->off_y, ri->off_x + x, "·");
+            } else if (err) {
                 set_highlight(stdscr, HI_COMMENT);
                 mvaddch(ri->off_y, ri->off_x + x, '?');
-            } else if ((c >= '\0' && c < ' ') || c == 0x7f) {
+            } else if ((ch >= '\0' && ch < ' ') || ch == 0x7f) {
                 set_highlight(stdscr, HI_COMMENT);
                 mvaddch(ri->off_y, ri->off_x + x, '^');
-                addch(c == 0x7f ? '?' : c + '@');
+                addch(ch == 0x7f ? '?' : ch + '@');
             } else {
                 set_highlight(stdscr, hi);
-                mvaddnstr(ri->off_y, ri->off_x + x, &ri->line->s[p.col], g.n);
+                mvaddnstr(ri->off_y, ri->off_x + x, &ri->line->s[col], g.n);
             }
         }
-        p.col += g.n;
+        col += g.n;
         x += g.w;
+    }
+
+    for (col = 0, x = 0; col < ri->line->n && x < ri->w; col++) {
+        ch = ri->line->s[col];
+        if (ch == '\t') {
+            x += tab_adjust(x, ri->buf->rule.tab_size);
+        } else if (ch == ' ') {
+            x++;
+        } else {
+            break;
+        }
+    }
+
+    set_highlight(stdscr, HI_MAX);
+    for (t = ri->buf->rule.tab_size; t < x; t += ri->buf->rule.tab_size) {
+        mvaddstr(ri->off_y, ri->off_x + t, "┆");
     }
 }
 
@@ -192,6 +229,7 @@ void render_frame(struct frame *frame)
     ri.off_x = frame->x + x - frame->scroll.col;
     ri.x = frame->scroll.col;
     ri.w = frame->scroll.col + w;
+    ri.buf = frame->buf;
 
     last_line = frame->scroll.line + frame->h - 1;
     last_line = MIN(last_line, buf->text.num_lines);
@@ -211,12 +249,14 @@ void render_frame(struct frame *frame)
             match++) {
         v_start = get_advance(buf->text.lines[match->from.line].s,
                               buf->text.lines[match->from.line].n,
+                              buf->rule.tab_size,
                               match->from.col);
         if (v_start >= ri.w) {
             break;
         }
         v_end   = get_advance(buf->text.lines[match->to.line].s,
                               buf->text.lines[match->to.line].n,
+                              buf->rule.tab_size,
                               match->to.col);
         mvchgat(frame->y + match->from.line - frame->scroll.line,
                 frame->x + x + v_start - frame->scroll.col,
@@ -243,9 +283,13 @@ void render_frame(struct frame *frame)
                         buf->text.lines[l].n + 1;
                 }
                 v_start = get_advance(buf->text.lines[l].s,
-                                      buf->text.lines[l].n, start);
+                                      buf->text.lines[l].n,
+                                      buf->rule.tab_size,
+                                      start);
                 v_end   = get_advance(buf->text.lines[l].s,
-                                      buf->text.lines[l].n, end);
+                                      buf->text.lines[l].n,
+                                      buf->rule.tab_size,
+                                      end);
                 if (v_start < frame->scroll.col) {
                     v_start = frame->scroll.col;
                 }
@@ -362,7 +406,7 @@ bool get_visual_pos(const struct frame *frame, const struct pos *pos,
     get_text_rect(frame, &x, &y, &w, &h);
 
     line = &frame->buf->text.lines[pos->line];
-    v_x = get_advance(line->s, line->n, pos->col);
+    v_x = get_advance(line->s, line->n, frame->buf->rule.tab_size, pos->col);
     *p_x = frame->x + x + v_x - frame->scroll.col;
     *p_y = frame->y + y + pos->line - frame->scroll.line;
 

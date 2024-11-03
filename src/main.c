@@ -27,6 +27,7 @@ int get_ch(void)
         return -1;
     }
 
+    /* draw key preview */
     set_highlight(Core.preview_win, HI_CMD);
     waddstr(Core.preview_win, keyname(c));
     x = getcurx(Core.preview_win);

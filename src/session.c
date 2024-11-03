@@ -62,7 +62,7 @@ void save_session(FILE *fp)
                 frame->scroll.col, frame->scroll.line);
     }
 
-    fprintf(fp, "%d\n", Core.tab_size);
+    fprintf(fp, "%d %d\n", Core.rule.tab_size, Core.rule.use_spaces);
     for (i = 0; i <= MARK_MAX - MARK_MIN; i++) {
         fprintf(fp, "%zu "PRLINE","PRCOL"\n",
                 Core.marks[i].buf == NULL ? 0 : Core.marks[i].buf->id,
@@ -322,6 +322,7 @@ int load_session(FILE *fp)
     struct frame    *frame, *next_frame;
     int             i;
     size_t          buf_id;
+    int             use_spaces;
 
     if (fp == NULL || check_header(fp) != 0) {
         FirstBuffer = create_buffer(NULL);
@@ -387,7 +388,9 @@ int load_session(FILE *fp)
     /* the screen size back then might be different than the current one */
     update_screen_size();
 
-    load_number_d(fp, &Core.tab_size);
+    load_number_d(fp, &Core.rule.tab_size);
+    load_number_d(fp, &use_spaces);
+    Core.rule.use_spaces = use_spaces;
     for (i = 0; i <= MARK_MAX - MARK_MIN; i++) {
         if (load_number_zu(fp, &buf_id) == -1) {
             break;

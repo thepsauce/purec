@@ -60,7 +60,7 @@ size_t move_back_glyph(const char *s, size_t i)
     return i - n;
 }
 
-size_t get_index(const char *s, size_t n, size_t target_x)
+size_t get_index(const char *s, size_t n, int ts, size_t target_x)
 {
     struct glyph    g;
     size_t          i, x;
@@ -68,7 +68,7 @@ size_t get_index(const char *s, size_t n, size_t target_x)
     for (i = 0, x = 0; i < n && x < target_x; i += g.n, x += g.w) {
         if (s[i] == '\t') {
             g.n = 1;
-            g.w = Core.tab_size - x % Core.tab_size;
+            g.w = tab_adjust(x, ts);
         } else {
             (void) get_glyph(&s[i], n - i, &g);
         }
@@ -76,7 +76,7 @@ size_t get_index(const char *s, size_t n, size_t target_x)
     return i;
 }
 
-size_t get_advance(const char *s, size_t n, size_t i)
+size_t get_advance(const char *s, size_t n, int ts, size_t i)
 {
     size_t          j, x;
     struct glyph    g;
@@ -85,7 +85,7 @@ size_t get_advance(const char *s, size_t n, size_t i)
     for (j = 0, x = 0; j < i; ) {
         if (s[j] == '\t') {
             g.n = 1;
-            g.w = Core.tab_size - x % Core.tab_size;
+            g.w = tab_adjust(x, ts);
         } else {
             (void) get_glyph(&s[j], n - j, &g);
         }

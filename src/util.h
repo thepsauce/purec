@@ -91,27 +91,31 @@ int get_glyph_count(const char *s, size_t n);
  */
 size_t move_back_glyph(const char *s, size_t i);
 
+#define tab_adjust(i, ts) ((ts)-(i)%(ts))
+
 /**
  * Gets the index at given x position.
  *
- * @param s The multi byte sequence.
- * @param n The length of the multi byte sequence.
- * @param w The x position.
+ * @param s     The multi byte sequence.
+ * @param n     The length of the multi byte sequence.
+ * @param ts    The tab size to use.
+ * @param w     The x position.
  *
  * @return The index at given x position.
  */
-size_t get_index(const char *s, size_t n, size_t x);
+size_t get_index(const char *s, size_t n, int ts, size_t x);
 
 /**
  * Gets the x position of given index.
  *
- * @param s The multi byte sequence.
- * @param n The length of the byte sequence.
- * @param i The index.
+ * @param s     The multi byte sequence.
+ * @param n     The length of the byte sequence.
+ * @param ts    The tab size to use.
+ * @param i     The index.
  *
  * @return The x position.
  */
-size_t get_advance(const char *s, size_t n, size_t i);
+size_t get_advance(const char *s, size_t n, int ts, size_t i);
 
 /**
  * Gets the first glyph of the multi byte string `s`.

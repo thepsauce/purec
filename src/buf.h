@@ -146,6 +146,9 @@ struct buf {
     /// the index of the highlighting machine
     size_t lang;
 
+    /// the indentation rule used by this buffer
+    struct indent_rule rule;
+
     /// the text within the buffer
     struct text text;
     /// states at the start of each line
@@ -155,7 +158,7 @@ struct buf {
 
     /// events that occured
     struct undo_event *events;
-    /// number of ecents that occured
+    /// number of events that occured
     size_t num_events;
     /// number of allocated events
     size_t a_events;

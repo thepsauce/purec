@@ -140,11 +140,39 @@ size_t detect_language(struct buf *buf)
     return NO_LANG;
 }
 
+static void analyze_indent_rules(struct buf *buf)
+{
+    line_t          num;
+    struct line     *line;
+
+    num = MIN(buf->text.num_lines, 300);
+    for (line = buf->text.lines;
+         line < &buf->text.lines[num];
+         line++) {
+        if (line->n == 0) {
+            continue;
+        }
+        if (line->s[0] == '\t') {
+            buf->rule.use_spaces = false;
+            break;
+        }
+        if (line->n == 1) {
+            continue;
+        }
+        if (line->s[0] == ' ' && line->s[1] == ' ') {
+            buf->rule.use_spaces = true;
+            buf->rule.tab_size = get_line_indent(buf, line - buf->text.lines);
+            break;
+        }
+    }
+}
+
 int init_load_buffer(struct buf *buf)
 {
     FILE            *fp;
     char            *file;
 
+    buf->rule = Core.rule;
 beg:
     if (buf->path == NULL || (fp = fopen(buf->path, "r")) == NULL) {
         init_text(&buf->text, 1);
@@ -169,6 +197,7 @@ beg:
         notice_line_growth(buf, 0, 1);
     } else {
         notice_line_growth(buf, 0, buf->text.num_lines);
+        analyze_indent_rules(buf);
     }
 
     set_language(buf, detect_language(buf));
@@ -349,7 +378,7 @@ col_t get_line_indent(struct buf *buf, line_t line_i)
         if (line->s[col] == ' ') {
             indent++;
         } else if (line->s[col] == '\t') {
-            indent += Core.tab_size;
+            indent += buf->rule.tab_size;
         } else {
             break;
         }
@@ -359,18 +388,28 @@ col_t get_line_indent(struct buf *buf, line_t line_i)
 
 struct undo_event *set_line_indent(struct buf *buf, line_t line_i, col_t indent)
 {
-    col_t               pre;
-    struct pos          pos, to;
-    struct text         text;
+    col_t           pre;
+    col_t           sp, d;
+    struct pos      pos, to;
+    struct text     text;
 
     pre = get_nolb(buf, line_i);
     pos.line = line_i;
     pos.col = 0;
     if (indent > pre) {
         init_text(&text, 1);
-        text.lines[0].n = indent - pre;
-        text.lines[0].s = xmalloc(indent - pre);
-        memset(text.lines[0].s, ' ', text.lines[0].n);
+        sp = indent - pre;
+        if (buf->rule.use_spaces) {
+            text.lines[0].n = sp;
+            text.lines[0].s = xmalloc(sp);
+            memset(text.lines[0].s, ' ', sp);
+        } else {
+            d = sp / buf->rule.tab_size;
+            text.lines[0].n = d + sp % buf->rule.tab_size;
+            text.lines[0].s = xmalloc(text.lines[0].n);
+            memset(text.lines[0].s, '\t', d);
+            memset(&text.lines[0].s[d], ' ', d - text.lines[0].n);
+        }
         _insert_lines(buf, &pos, &text);
         return add_event(buf, IS_INSERTION, &pos, &text);
     }

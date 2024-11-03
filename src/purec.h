@@ -37,6 +37,13 @@ extern WINDOW *OffScreen;
 #define VISUAL_LINE_MODE (2|1) /* 3 */
 #define VISUAL_BLOCK_MODE (2|4) /* 6 */
 
+struct indent_rule {
+    /// the number of spaces of a tab
+    int tab_size;
+    /// whether to expand \t to spaces
+    bool use_spaces;
+};
+
 #define REG_MIN '.'
 #define REG_MAX 'Z'
 
@@ -60,8 +67,8 @@ struct fixit {
  * editor.
  */
 extern struct core {
-    /// size of a tab in spaces
-    col_t tab_size;
+    /// default indentation to use for buffers
+    struct indent_rule rule;
 
     /// the currently selected theme
     int theme;

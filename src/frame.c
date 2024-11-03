@@ -468,7 +468,8 @@ void adjust_cursor(struct frame *frame)
         frame->cur.line = buf->text.num_lines - 1;
     }
     line = &buf->text.lines[frame->cur.line];
-    frame->cur.col = get_index(line->s, get_mode_line_end(line), frame->vct);
+    frame->cur.col = get_index(line->s, get_mode_line_end(line),
+                               buf->rule.tab_size, frame->vct);
 }
 
 int adjust_scroll(struct frame *frame)
@@ -481,7 +482,8 @@ int adjust_scroll(struct frame *frame)
     get_text_rect(frame, &x, &y, &w, &h);
 
     line = &frame->buf->text.lines[frame->cur.line];
-    v_x = get_advance(line->s, line->n, frame->cur.col);
+    v_x = get_advance(line->s, line->n,
+                      frame->buf->rule.tab_size, frame->cur.col);
 
     if (v_x < frame->scroll.col) {
         frame->scroll.col = v_x;
@@ -518,7 +520,8 @@ col_t compute_vct(struct frame *frame, const struct pos *pos)
     struct line *line;
 
     line = &frame->buf->text.lines[pos->line];
-    return get_advance(line->s, get_mode_line_end(line), pos->col);
+    return get_advance(line->s, get_mode_line_end(line),
+                       frame->buf->rule.tab_size, pos->col);
 }
 
 int scroll_frame(struct frame *frame, line_t dist)
@@ -572,7 +575,8 @@ void set_cursor(struct frame *frame, const struct pos *pos)
     new_cur.col = MIN(new_cur.col, n);
 
     /* set vct */
-    frame->vct = get_advance(line->s, n, new_cur.col);
+    frame->vct = get_advance(line->s, n,
+                             frame->buf->rule.tab_size, new_cur.col);
 
     frame->prev_cur = frame->cur;
     frame->cur = new_cur;
@@ -649,7 +653,8 @@ static int move_up(struct frame *frame)
         frame->next_cur.line = frame->cur.line - Core.counter;
     }
     line = &frame->buf->text.lines[frame->next_cur.line];
-    frame->next_cur.col = get_index(line->s, line->n, frame->vct);
+    frame->next_cur.col = get_index(line->s, line->n,
+                                    frame->buf->rule.tab_size, frame->vct);
     frame->next_vct = frame->vct;
     return UPDATE_UI;
 }
@@ -669,7 +674,8 @@ static int move_down(struct frame *frame)
         return 0;
     }
     line = &frame->buf->text.lines[frame->next_cur.line];
-    frame->next_cur.col = get_index(line->s, line->n, frame->vct);
+    frame->next_cur.col = get_index(line->s, line->n,
+                                    frame->buf->rule.tab_size, frame->vct);
     frame->next_vct = frame->vct;
     return UPDATE_UI;
 }
@@ -769,7 +775,8 @@ static int move_frame_start(struct frame *frame)
     frame->next_cur.line = frame->scroll.line;
 
     line = &frame->buf->text.lines[frame->next_cur.line];
-    frame->next_cur.col  = get_index(line->s, line->n, frame->vct);
+    frame->next_cur.col  = get_index(line->s, line->n,
+                                     frame->buf->rule.tab_size, frame->vct);
     frame->next_vct = frame->vct;
     return UPDATE_UI;
 }
@@ -786,7 +793,8 @@ static int move_frame_middle(struct frame *frame)
     }
 
     line = &frame->buf->text.lines[frame->next_cur.line];
-    frame->next_cur.col  = get_index(line->s, line->n, frame->vct);
+    frame->next_cur.col  = get_index(line->s, line->n,
+                                     frame->buf->rule.tab_size, frame->vct);
     frame->next_vct = frame->vct;
     return UPDATE_UI;
 }
@@ -803,7 +811,8 @@ static int move_frame_end(struct frame *frame)
     }
 
     line = &frame->buf->text.lines[frame->next_cur.line];
-    frame->next_cur.col  = get_index(line->s, line->n, frame->vct);
+    frame->next_cur.col  = get_index(line->s, line->n,
+                                     frame->buf->rule.tab_size, frame->vct);
     frame->next_vct = frame->vct;
     return UPDATE_UI;
 }
@@ -827,7 +836,8 @@ static int move_to_start(struct frame *frame)
     }
     frame->next_cur.line = Core.counter;
     line = &frame->buf->text.lines[frame->next_cur.line];
-    frame->next_cur.col = get_index(line->s, line->n, frame->vct);
+    frame->next_cur.col = get_index(line->s, line->n,
+                                    frame->buf->rule.tab_size, frame->vct);
     frame->next_vct = frame->vct;
     return UPDATE_UI;
 }
@@ -845,7 +855,8 @@ static int move_to_end(struct frame *frame)
         return 0;
     }
     line = &frame->buf->text.lines[frame->next_cur.line];
-    frame->next_cur.col = get_index(line->s, line->n, frame->vct);
+    frame->next_cur.col = get_index(line->s, line->n,
+                                    frame->buf->rule.tab_size, frame->vct);
     frame->next_vct = frame->vct;
     return UPDATE_UI;
 }
@@ -1521,10 +1532,16 @@ int do_action_till(struct frame *frame, int action, line_t min_line,
                 continue;
             }
             update = true;
-            line->s = xmalloc(Core.tab_size);
-            line->n = Core.tab_size;
-            for (c = 0; c < Core.tab_size; c++) {
-                line->s[c] = ' ';
+            if (buf->rule.use_spaces) {
+                line->n = buf->rule.tab_size;
+                line->s = xmalloc(buf->rule.tab_size);
+                for (c = 0; c < buf->rule.tab_size; c++) {
+                    line->s[c] = ' ';
+                }
+            } else {
+                line->n = 1;
+                line->s = xmalloc(1);
+                line->s[0] = '\t';
             }
         }
         if (!update) {
@@ -1538,12 +1555,12 @@ int do_action_till(struct frame *frame, int action, line_t min_line,
         ev = add_event(buf, IS_BLOCK | IS_INSERTION, &p1, &text);
         ev->cur = frame->cur;
         if (buf->text.lines[frame->cur.line].n > 0) {
-            frame->cur.col += Core.tab_size;
+            frame->cur.col += buf->rule.tab_size;
         }
         return UPDATE_UI;
     } else if (action == '<') {
-        if (frame->cur.col > Core.tab_size) {
-            frame->cur.col -= Core.tab_size;
+        if (frame->cur.col > buf->rule.tab_size) {
+            frame->cur.col -= buf->rule.tab_size;
         } else {
             frame->cur.col = 0;
         }
@@ -1577,12 +1594,16 @@ int do_action_till(struct frame *frame, int action, line_t min_line,
             break;
 
         case '<':
-            for (n = 0; n < buf->text. lines[min_line].n; n++) {
-                if (n == Core.tab_size) {
-                    break;
-                }
-                if (buf->text. lines[min_line].s[n] != ' ') {
-                    break;
+            if (buf->text.lines[min_line].s[0] == '\t') {
+                n = 1;
+            } else {
+                for (n = 0; n < buf->text.lines[min_line].n; n++) {
+                    if (n == buf->rule.tab_size) {
+                        break;
+                    }
+                    if (buf->text.lines[min_line].s[n] != ' ') {
+                        break;
+                    }
                 }
             }
             if (n > 0) {
