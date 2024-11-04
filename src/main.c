@@ -163,7 +163,7 @@ int main(int argc, char **argv)
              * mode
              */
             if (old_mode == NORMAL_MODE) {
-                if ((r & DO_RECORD)) {
+                if (!(r & DO_NOT_RECORD)) {
                     Core.dot.from = next_dot_i;
                     Core.dot.to = rec == NULL ? Core.rec_len : rec->index;
                 }

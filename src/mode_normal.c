@@ -27,46 +27,46 @@ static int notify_how_to_quit(void)
 static int enter_insert_mode(void)
 {
     set_mode(INSERT_MODE);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int enter_append_mode(void)
 {
     set_mode(INSERT_MODE);
     (void) do_motion(SelFrame, KEY_RIGHT);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int enter_insert_beg_mode(void)
 {
     set_mode(INSERT_MODE);
     (void) do_motion(SelFrame, 'I');
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int enter_append_end_mode(void)
 {
     set_mode(INSERT_MODE);
     (void) do_motion(SelFrame, KEY_END);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int enter_visual_mode(void)
 {
     set_mode(VISUAL_MODE);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int enter_visual_line_mode(void)
 {
     set_mode(VISUAL_LINE_MODE);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int enter_visual_block_mode(void)
 {
     set_mode(VISUAL_BLOCK_MODE);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int enter_command_mode(void)
@@ -353,14 +353,14 @@ static int do_frame_command(void)
 
     frame = do_binded_frame_movement(c);
     if (frame == SelFrame) {
-        return 0;
+        return DO_NOT_RECORD;
     }
     if (SelFrame->buf == frame->buf) {
         /* clip the cursor */
         set_cursor(frame, &frame->cur);
     }
     SelFrame = frame;
-    return UPDATE_UI;
+    return UPDATE_UI | DO_NOT_RECORD;
 }
 
 static int choose_fuzzy_file(void)
@@ -374,35 +374,39 @@ static int choose_fuzzy_file(void)
         set_frame_buffer(SelFrame, buf);
         free(file);
     }
-    return UPDATE_UI;
+    return UPDATE_UI | DO_NOT_RECORD;
 }
 
 static int choose_fuzzy_session(void)
 {
     choose_session();
-    return UPDATE_UI;
+    return UPDATE_UI | DO_NOT_RECORD;
 }
 
 static int scroll_up(void)
 {
-    return scroll_frame(SelFrame, -MIN(Core.counter, LINE_MAX));
+    return scroll_frame(SelFrame, -MIN(Core.counter, LINE_MAX)) |
+            DO_NOT_RECORD;
 }
 
 static int scroll_down(void)
 {
-    return scroll_frame(SelFrame, MIN(Core.counter, LINE_MAX));
+    return scroll_frame(SelFrame, MIN(Core.counter, LINE_MAX)) |
+            DO_NOT_RECORD;
 }
 
 static int scroll_up_half(void)
 {
     Core.counter = safe_mul(Core.counter, MAX(SelFrame->h / 2, 1));
-    return scroll_frame(SelFrame, -MIN(Core.counter, LINE_MAX));
+    return scroll_frame(SelFrame, -MIN(Core.counter, LINE_MAX)) |
+            DO_NOT_RECORD;
 }
 
 static int scroll_down_half(void)
 {
     Core.counter = safe_mul(Core.counter, MAX(SelFrame->h / 2, 1));
-    return scroll_frame(SelFrame, MIN(Core.counter, LINE_MAX));
+    return scroll_frame(SelFrame, MIN(Core.counter, LINE_MAX)) |
+            DO_NOT_RECORD;
 }
 
 static int goto_mark(void)
@@ -413,20 +417,20 @@ static int goto_mark(void)
 
     c = toupper(get_ch());
     if (c == '\x1b') {
-        return 0;
+        return DO_NOT_RECORD;
     }
     if (c == '?') {
         /* TODO: show window with all marks */
-        return 0;
+        return DO_NOT_RECORD;
     }
     mark = get_mark(SelFrame, c);
     if (mark == NULL) {
         set_error("invalid mark");
-        return UPDATE_UI;
+        return UPDATE_UI | DO_NOT_RECORD;
     }
     if (SelFrame->buf == mark->buf) {
         set_cursor(SelFrame, &mark->pos);
-        return UPDATE_UI;
+        return UPDATE_UI | DO_NOT_RECORD;
     }
     frame = get_frame_with_buffer(mark->buf);
     if (frame != NULL) {
@@ -436,7 +440,7 @@ static int goto_mark(void)
         set_frame_buffer(SelFrame, mark->buf);
         set_cursor(SelFrame, &mark->pos);
     }
-    return UPDATE_UI;
+    return UPDATE_UI | DO_NOT_RECORD;
 }
 
 static int place_mark(void)
@@ -450,17 +454,17 @@ static int place_mark(void)
     }
     if (c < MARK_MIN || c > MARK_MAX) {
         set_error("invalid mark");
-        return UPDATE_UI;
+        return UPDATE_UI | DO_NOT_RECORD;
     }
     mark = &Core.marks[c - MARK_MIN];
     mark->buf = SelFrame->buf;
     mark->pos = SelFrame->cur;
-    return UPDATE_UI;
+    return UPDATE_UI | DO_NOT_RECORD;
 }
 
 static int do_undo(void)
 {
-    struct undo_event *ev, *ev_nn;
+    struct undo_event   *ev, *ev_nn;
 
     ev_nn = NULL;
     for (; Core.counter > 0; Core.counter--) {
@@ -472,14 +476,14 @@ static int do_undo(void)
     }
     if (ev_nn != NULL) {
         set_cursor(SelFrame, &ev_nn->cur);
-        return UPDATE_UI;
+        return UPDATE_UI | DO_NOT_RECORD;
     }
-    return 0;
+    return DO_NOT_RECORD;
 }
 
 static int do_redo(void)
 {
-    struct undo_event *ev, *ev_nn;
+    struct undo_event   *ev, *ev_nn;
 
     ev_nn = NULL;
     for (; Core.counter > 0; Core.counter--) {
@@ -495,9 +499,9 @@ static int do_redo(void)
         } else {
             set_cursor(SelFrame, &ev_nn->end);
         }
-        return UPDATE_UI;
+        return UPDATE_UI | DO_NOT_RECORD;
     }
-    return 0;
+    return DO_NOT_RECORD;
 }
 
 static int insert_line_above(void)
@@ -520,7 +524,7 @@ static int insert_line_above(void)
         p = SelFrame->buf->events[SelFrame->buf->event_i - 1].end;
         set_cursor(SelFrame, &p);
     }
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int insert_line_below(void)
@@ -533,7 +537,7 @@ static int insert_line_below(void)
     (void) break_line(SelFrame->buf, &p);
     p = SelFrame->buf->events[SelFrame->buf->event_i - 1].end;
     set_cursor(SelFrame, &p);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int delete_chars(void)
@@ -541,7 +545,7 @@ static int delete_chars(void)
     struct undo_event   *ev;
 
     if (prepare_motion(SelFrame, KEY_RIGHT) <= 0) {
-        return 0;
+        return DO_NOT_RECORD;
     }
     ev = delete_range(SelFrame->buf, &SelFrame->cur, &SelFrame->next_cur);
     if (ev != NULL) {
@@ -550,7 +554,7 @@ static int delete_chars(void)
     clip_column(SelFrame);
     SelFrame->vct = compute_vct(SelFrame, &SelFrame->cur);
     (void) adjust_scroll(SelFrame);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int replace_chars(void)
@@ -558,7 +562,7 @@ static int replace_chars(void)
     struct undo_event   *ev;
 
     if (prepare_motion(SelFrame, KEY_RIGHT) <= 0) {
-        return 0;
+        return DO_NOT_RECORD;
     }
     ev = delete_range(SelFrame->buf, &SelFrame->cur, &SelFrame->next_cur);
     if (ev != NULL) {
@@ -569,21 +573,21 @@ static int replace_chars(void)
     clip_column(SelFrame);
     SelFrame->vct = compute_vct(SelFrame, &SelFrame->cur);
     (void) adjust_scroll(SelFrame);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int delete_prev_chars(void)
 {
     struct undo_event   *ev;
     if (prepare_motion(SelFrame, KEY_LEFT) <= 0) {
-        return 0;
+        return DO_NOT_RECORD;
     }
     ev = delete_range(SelFrame->buf, &SelFrame->next_cur, &SelFrame->cur);
     yank_data(ev->seg, 0);
     SelFrame->cur = SelFrame->next_cur;
     SelFrame->vct = SelFrame->next_vct;
     (void) adjust_scroll(SelFrame);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int delete_till(int c)
@@ -643,7 +647,9 @@ static int delete_till(int c)
         from = SelFrame->cur;
         to = SelFrame->next_cur;
         if (r == 2) {
-            to.col++;
+            to.col = move_forward_glyph(SelFrame->buf->text.lines[to.line].s,
+                                        to.col,
+                                        SelFrame->buf->text.lines[to.line].n);
         }
         ev = delete_range(SelFrame->buf, &from, &to);
         if (to.line < SelFrame->cur.line ||
@@ -660,19 +666,19 @@ static int delete_till(int c)
 static int change_lines(void)
 {
     if (delete_till(get_extra_char()) == -1) {
-        return 0;
+        return DO_NOT_RECORD;
     }
     Core.counter = 1;
     set_mode(INSERT_MODE);
     clip_column(SelFrame);
     (void) adjust_scroll(SelFrame);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int delete_lines(void)
 {
     if (delete_till(get_extra_char()) <= 0) {
-        return 0;
+        return DO_NOT_RECORD;
     }
     clip_column(SelFrame);
     (void) adjust_scroll(SelFrame);
@@ -686,7 +692,7 @@ static int change_to_end(void)
     set_mode(INSERT_MODE);
     clip_column(SelFrame);
     (void) adjust_scroll(SelFrame);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int delete_to_end(void)
@@ -735,7 +741,7 @@ static int yank_lines_to(int c)
     /* yank till motion */
     default:
         if (prepare_motion(SelFrame, c) <= 0) {
-            return 0;
+            return DO_NOT_RECORD;
         }
         from = SelFrame->cur;
         to = SelFrame->next_cur;
@@ -743,7 +749,7 @@ static int yank_lines_to(int c)
     }
     get_text(&SelFrame->buf->text, &from, &to, &text);
     yank_data(save_lines(&text), 0);
-    return UPDATE_UI;
+    return UPDATE_UI | DO_NOT_RECORD;
 }
 
 static int yank_to_end(void)
@@ -764,9 +770,9 @@ static int paste_text(bool before)
     struct reg          *reg;
 
     p = SelFrame->cur;
-    if (!before) {
-        p.col++;
-        p.col = MIN(p.col, SelFrame->buf->text.lines[p.line].n);
+    if (!before && p.col < SelFrame->buf->text.lines[p.line].n) {
+        p.col = move_forward_glyph(SelFrame->buf->text.lines[p.line].s,
+                                   p.col, SelFrame->buf->text.lines[p.line].n);
     }
 
     if (Core.user_reg == '+' || Core.user_reg == '*') {
@@ -820,7 +826,7 @@ static int replace_current_char(void)
     ConvChar = c;
     (void) change_range(SelFrame->buf, &SelFrame->cur, &SelFrame->next_cur,
                       conv_to_char);
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static int join_lines(void)
@@ -848,7 +854,7 @@ static int join_lines(void)
             clear_text(&text);
         }
     }
-    return UPDATE_UI | DO_RECORD;
+    return UPDATE_UI;
 }
 
 static inline int bind_to_motion(int action)
@@ -906,16 +912,16 @@ static int do_recording(void)
             Core.rec_len - 1;
         Core.user_rec_ch = '\0';
         Core.msg_state = MSG_TO_DEFAULT;
-        return UPDATE_UI;
+        return UPDATE_UI | DO_NOT_RECORD;
     }
     c = toupper(get_ch());
     if (c < USER_REC_MIN || c > USER_REC_MAX) {
-        return 0;
+        return DO_NOT_RECORD;
     }
     Core.user_rec_ch = c;
     Core.user_recs[Core.user_rec_ch - USER_REC_MIN].from = Core.rec_len;
     Core.msg_state = MSG_TO_DEFAULT;
-    return UPDATE_UI;
+    return UPDATE_UI | DO_NOT_RECORD;
 }
 
 static int play_recording(void)
@@ -925,24 +931,24 @@ static int play_recording(void)
 
     c = toupper(get_ch());
     if (c < USER_REC_MIN || c > USER_REC_MAX) {
-        return 0;
+        return DO_NOT_RECORD;
     }
     if (Core.user_recs[c - USER_REC_MIN].from >=
             Core.user_recs[c - USER_REC_MIN].to) {
         set_error("recording %c is empty", c);
-        return UPDATE_UI;
+        return UPDATE_UI | DO_NOT_RECORD;
     }
     if (Core.rec_stack_n == ARRAY_SIZE(Core.rec_stack)) {
         set_error("overflow error on recording stack, playback is stopped");
         Core.rec_stack_n = 0;
-        return UPDATE_UI;
+        return UPDATE_UI | DO_NOT_RECORD;
     }
     rec = &Core.rec_stack[Core.rec_stack_n++];
     rec->from = Core.user_recs[c - USER_REC_MIN].from;
     rec->to = Core.user_recs[c - USER_REC_MIN].to;
     rec->index = rec->from;
     rec->repeat_count = Core.counter - 1;
-    return UPDATE_UI;
+    return UPDATE_UI | DO_NOT_RECORD;
 }
 
 static int play_dot_recording(void)
@@ -952,14 +958,14 @@ static int play_dot_recording(void)
     if (Core.rec_stack_n == ARRAY_SIZE(Core.rec_stack)) {
         set_error("overflow error on recording stack, playback is stopped");
         Core.rec_stack_n = 0;
-        return UPDATE_UI;
+        return UPDATE_UI | DO_NOT_RECORD;
     }
     rec = &Core.rec_stack[Core.rec_stack_n++];
     rec->from = Core.dot.from;
     rec->to = Core.dot.to;
     rec->index = rec->from;
     rec->repeat_count = Core.counter - 1;
-    return 0;
+    return DO_NOT_RECORD;
 }
 
 int normal_handle_input(int c)
@@ -1018,5 +1024,5 @@ int normal_handle_input(int c)
     if (c < (int) ARRAY_SIZE(binds) && binds[c] != NULL) {
         return binds[c]();
     }
-    return do_motion(SelFrame, c);
+    return do_motion(SelFrame, c) | DO_NOT_RECORD;
 }

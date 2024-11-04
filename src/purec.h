@@ -353,9 +353,8 @@ bool is_in_selection(const struct selection *sel, const struct pos *pos);
  */
 void goto_fixit(int dir, size_t count);
 
-/// this constant can not be change to anything other than 1
-#define UPDATE_UI   0x1
-#define DO_RECORD   0x2
+#define UPDATE_UI       0x1
+#define DO_NOT_RECORD   0x2
 
 /**
  * Handles a key input for the normal mode.
