@@ -242,4 +242,8 @@ static void handle_sel_notify(XEvent *e)
         /* number of 32-bit chunks returned */
         ofs += nitems * format / 32;
     } while (rem > 0);
+
+    X.text.a_lines = 0;
+    X.text.lines = xreallocarray(X.text.lines, X.text.num_lines,
+                                 sizeof(*X.text.lines));
 }
