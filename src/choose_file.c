@@ -234,17 +234,16 @@ char *choose_file(const char *dir)
         case CONTROL('D'):
             fuzzy.inp.s[fuzzy.inp.prefix - 1] = '\0';
             chdir(fuzzy.inp.s);
-            fuzzy.inp.s[fuzzy.inp.prefix - 1] = '/';
+            /* rerender the status line of all frames */
+            render_all();
             fuzzy.inp.s[0] = '.';
             fuzzy.inp.s[1] = '/';
-            fuzzy.inp.index -= fuzzy.inp.prefix;
-            fuzzy.inp.n     -= fuzzy.inp.prefix;
-            memmove(&fuzzy.inp.s[0],
-                    &fuzzy.inp.s[fuzzy.inp.prefix],
-                    fuzzy.inp.n);
             fuzzy.inp.prefix = 2;
-            fuzzy.inp.index += fuzzy.inp.prefix;
-            fuzzy.inp.n     += fuzzy.inp.prefix;
+            fuzzy.inp.index  = 2;
+            fuzzy.inp.n      = 2;
+            update_files(&fuzzy);
+            free(last_dir);
+            last_dir = NULL;
             break;
 
         case KEY_BACKSPACE:
