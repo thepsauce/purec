@@ -79,14 +79,21 @@ const char *c_preproc[] = {
 void c_char_hook(struct buf *buf, struct pos *pos, int c)
 {
     struct line     *line;
+    col_t           col;
 
+    if (c != '}' && c != ':') {
+        return;
+    }
     line = &buf->text.lines[pos->line];
-    if ((c == '}' && pos->col == get_nolb(buf, pos->line) + 1) ||
+    (void) get_line_indent(buf, pos->line, &col);
+    if ((c == '}' && pos->col == col + 1) ||
             (c == ':' &&
-             !isblank(line->s[pos->col - 1]) &&
-             pos->col == line->n)) {
+             pos->col == line->n &&
+             line->n > 1 &&
+             !isblank(line->s[pos->col - 2]))) {
         indent_line(buf, pos->line);
-        pos->col = c == '}' ? get_nolb(buf, pos->line) + 1 : line->n;
+        (void) get_line_indent(buf, pos->line, &col);
+        pos->col = c == '}' ? col + 1 : line->n;
     }
 }
 
@@ -142,17 +149,17 @@ col_t c_indentor(struct buf *buf, line_t line_i)
     for (i = 1; i < line->n; i++) {
         if (buf->attribs[line_i][i] == HI_OPERATOR) {
             if (line->s[i - 1] != ' ' && line->s[i] == ':') {
-                return get_line_indent(buf, par->pos.line);
+                return get_line_indent(buf, par->pos.line, NULL);
             }
         }
     }
-    c = get_nolb(buf, line_i);
+    (void) get_line_indent(buf, line_i, &c);
     if (c == line->n || line->s[c] != '}') {
         c = 1;
     } else {
         c = 0;
     }
-    return buf->rule.tab_size * c + get_line_indent(buf, par->pos.line);
+    return buf->rule.tab_size * c + get_line_indent(buf, par->pos.line, NULL);
 }
 
 static col_t c_get_identf(struct state_ctx *ctx)

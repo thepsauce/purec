@@ -168,7 +168,7 @@ static int enter_tab(void)
     struct text     text;
     size_t          n;
 
-    ind = get_line_indent(SelFrame->buf, SelFrame->cur.line);
+    ind = get_line_indent(SelFrame->buf, SelFrame->cur.line, NULL);
 
     text.num_lines = 1;
     text.lines = xmalloc(sizeof(*text.lines));

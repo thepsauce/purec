@@ -161,7 +161,8 @@ static void analyze_indent_rules(struct buf *buf)
         }
         if (line->s[0] == ' ' && line->s[1] == ' ') {
             buf->rule.use_spaces = true;
-            buf->rule.tab_size = get_line_indent(buf, line - buf->text.lines);
+            buf->rule.tab_size = get_line_indent(buf, line - buf->text.lines,
+                                                 NULL);
             break;
         }
     }
@@ -311,8 +312,8 @@ struct buf *get_buffer(size_t id)
 
 size_t get_buffer_count(void)
 {
-    struct buf *buf;
-    size_t      c = 0;
+    struct buf      *buf;
+    size_t          c = 0;
 
     for (buf = FirstBuffer; buf != NULL; buf = buf->next) {
         c++;
@@ -351,21 +352,7 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
     return ev;
 }
 
-col_t get_nolb(struct buf *buf, line_t line_i)
-{
-    col_t           col;
-    struct line     *line;
-
-    line = &buf->text.lines[line_i];
-    for (col = 0; col < line->n; col++) {
-        if (!isblank(line->s[col])) {
-            break;
-        }
-    }
-    return col;
-}
-
-col_t get_line_indent(struct buf *buf, line_t line_i)
+col_t get_line_indent(struct buf *buf, line_t line_i, col_t *p_col)
 {
     col_t           indent;
     col_t           col;
@@ -383,39 +370,35 @@ col_t get_line_indent(struct buf *buf, line_t line_i)
             break;
         }
     }
+    if (p_col != NULL) {
+        *p_col = col;
+    }
     return indent;
 }
 
 struct undo_event *set_line_indent(struct buf *buf, line_t line_i, col_t indent)
 {
-    col_t           pre;
-    col_t           sp, d;
+    col_t           d;
     struct pos      pos, to;
     struct text     text;
 
-    pre = get_nolb(buf, line_i);
-    pos.line = line_i;
-    pos.col = 0;
-    if (indent > pre) {
-        init_text(&text, 1);
-        sp = indent - pre;
-        if (buf->rule.use_spaces) {
-            text.lines[0].n = sp;
-            text.lines[0].s = xmalloc(sp);
-            memset(text.lines[0].s, ' ', sp);
-        } else {
-            d = sp / buf->rule.tab_size;
-            text.lines[0].n = d + sp % buf->rule.tab_size;
-            text.lines[0].s = xmalloc(text.lines[0].n);
-            memset(text.lines[0].s, '\t', d);
-            memset(&text.lines[0].s[d], ' ', d - text.lines[0].n);
-        }
-        _insert_lines(buf, &pos, &text);
-        return add_event(buf, IS_INSERTION, &pos, &text);
+    init_text(&text, 1);
+    if (buf->rule.use_spaces) {
+        text.lines[0].n = indent;
+        text.lines[0].s = xmalloc(indent);
+        memset(text.lines[0].s, ' ', indent);
+    } else {
+        d = indent / buf->rule.tab_size;
+        text.lines[0].n = d + indent % buf->rule.tab_size;
+        text.lines[0].s = xmalloc(text.lines[0].n);
+        memset(text.lines[0].s, '\t', d);
+        memset(&text.lines[0].s[d], ' ', text.lines[0].n - d);
     }
+    pos.col = 0;
+    pos.line = line_i;
+    (void) get_line_indent(buf, line_i, &to.col);
     to.line = line_i;
-    to.col = pre - indent;
-    return delete_range(buf, &pos, &to);
+    return _replace_lines(buf, &pos, &to, &text);
 }
 
 struct undo_event *indent_line(struct buf *buf, line_t line_i)
@@ -474,9 +457,8 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
 {
     struct line     *line, *at_line;
     col_t           indent;
-    size_t          ev_i;
-    struct pos      p;
     struct text     text;
+    col_t           d;
 
     line = insert_blank(&buf->text, pos->line + 1, 1);
     notice_line_growth(buf, pos->line + 1, 1);
@@ -490,33 +472,26 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
     (void) rehighlight_lines(buf, pos->line, 2);
 
     indent = Langs[buf->lang].indentor(buf, pos->line + 1);
-    line->s = xrealloc(line->s, line->n + indent);
-    memmove(&line->s[indent], &line->s[0], line->n);
-    memset(line->s, ' ', indent);
-    line->n += indent;
+    init_text(&text, 2);
+    if (buf->rule.use_spaces) {
+        text.lines[1].n = indent;
+        text.lines[1].s = xmalloc(indent);
+        memset(text.lines[1].s, ' ', indent);
+    } else {
+        d = indent / buf->rule.tab_size;
+        text.lines[1].n = d + indent % buf->rule.tab_size;
+        text.lines[1].s = xmalloc(text.lines[1].n);
+        memset(text.lines[1].s, '\t', d);
+        memset(&text.lines[1].s[d], ' ', d - text.lines[1].n);
+    }
+    line->s = xrealloc(line->s, line->n + text.lines[1].n);
+    memmove(&line->s[indent], line->s, line->n);
+    memcpy(line->s, text.lines[1].s, text.lines[1].n);
+    line->n += text.lines[1].n;
 
     (void) rehighlight_lines(buf, pos->line + 1, 1);
 
-    init_text(&text, 2);
-    /* use index to prevent base pointer change from breaking the event
-     * pointer
-     */
-    ev_i = add_event(buf, IS_INSERTION, pos, &text) - buf->events;
-
-    if (indent > 0) {
-        if (line->n == indent) {
-            buf->ev_last_indent = buf->event_i;
-        }
-        init_text(&text, 1);
-        text.lines[0].n = indent;
-        text.lines[0].s = xmalloc(indent);
-        memset(text.lines[0].s, ' ', indent);
-        p.col = 0;
-        p.line = pos->line + 1;
-        (void) add_event(buf, IS_INSERTION, &p, &text);
-    }
-    /* return by index because of the base pointer change potential */
-    return &buf->events[ev_i];
+    return add_event(buf, IS_INSERTION, pos, &text);
 }
 
 /**
@@ -892,6 +867,24 @@ struct undo_event *replace_lines(struct buf *buf,
     ev2 = insert_lines(buf, from, text, 1);
 
     return ev == NULL ? ev2 : ev2 == NULL ? ev : ev2 - 1;
+}
+
+struct undo_event *_replace_lines(struct buf *buf,
+                                 const struct pos *from,
+                                 const struct pos *to,
+                                 struct text *text)
+{
+    struct undo_event   *ev;
+
+    /* TODO: optimize this */
+    ev = delete_range(buf, from, to);
+    if (text->num_lines == 1 && text->lines[0].n == 0) {
+        free(text->lines);
+        return ev;
+    }
+    _insert_lines(buf, from, text);
+    (void) add_event(buf, IS_INSERTION, from, text);
+    return ev;
 }
 
 static struct match *search_line_pattern(struct buf *buf, line_t line_i,

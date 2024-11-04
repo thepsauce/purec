@@ -73,7 +73,7 @@ void no_char_hook(struct buf *buf, struct pos *pos, int c)
 
 col_t no_indentor(struct buf *buf, line_t line_i)
 {
-    return get_line_indent(buf, line_i);
+    return get_line_indent(buf, line_i, NULL);
 }
 
 struct lang Langs[] = {
@@ -98,7 +98,6 @@ static void render_line(struct render_info *ri)
     col_t           col;
     col_t           sp_thres;
     col_t           x;
-    int             a;
     int             hi;
     struct glyph    g;
     bool            err;
@@ -114,15 +113,14 @@ static void render_line(struct render_info *ri)
     for (col = 0, x = 0; col < ri->line->n && x < ri->w;) {
         ch = ri->line->s[col];
         if (ch == '\t') {
-            col++;
-            a = tab_adjust(x, ri->buf->rule.tab_size);
-            x += a;
-            set_highlight(stdscr, HI_MAX);
-            for (; a > 0 && x < ri->w; a--, x++) {
+            if (col >= sp_thres && sp_thres > 0) {
+                set_highlight(stdscr, HI_MAX);
                 if (x >= ri->x) {
-                    mvaddstr(ri->off_y, ri->off_x + x, "·");
+                    mvaddstr(ri->off_y, ri->off_x + x, "»");
                 }
             }
+            col++;
+            x += tab_adjust(x, ri->buf->rule.tab_size);
             continue;
         }
 
@@ -410,8 +408,8 @@ bool get_visual_pos(const struct frame *frame, const struct pos *pos,
     *p_x = frame->x + x + v_x - frame->scroll.col;
     *p_y = frame->y + y + pos->line - frame->scroll.line;
 
-    return pos->col >= frame->scroll.col &&
+    return v_x >= (size_t) frame->scroll.col &&
             pos->line >= frame->scroll.line &&
-            pos->col - frame->scroll.col < (col_t) w &&
+            v_x - frame->scroll.col < (size_t) w &&
             pos->line - frame->scroll.line < (line_t) h;
 }

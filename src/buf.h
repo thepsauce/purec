@@ -308,16 +308,17 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp);
 col_t get_nolb(struct buf *buf, line_t line);
 
 /**
- * Gets the line indentation in bytes.
+ * Gets the line indentation in space units.
  *
  * This function does NO clipping on `line_i`.
  *
  * @param buf       Buffer to look into.
  * @param line_i    Index of the line.
+ * @param p_col     Destination of byte count, may be NULL.
  *
  * @return Number of leading blank characters (' ' or '\t').
  */
-col_t get_line_indent(struct buf *buf, line_t line);
+col_t get_line_indent(struct buf *buf, line_t line, col_t *p_col);
 
 /**
  * Sets the indentation of a line.
@@ -549,8 +550,7 @@ void _delete_block(struct buf *buf,
  * @param buf       Buffer to replace lines.
  * @param from      Start of deletion.
  * @param to        End of deletion.
- * @param lines     Lines to insert.
- * @param num_lines Number of lines to insert.
+ * @param text      The text to insert.
  *
  * @return The first added event.
  */
@@ -558,6 +558,24 @@ struct undo_event *replace_lines(struct buf *buf,
                                  const struct pos *from,
                                  const struct pos *to,
                                  const struct text *text);
+
+/**
+ * Deletes given range and inserts given lines.
+ *
+ * This function adds one or two events, an insertion or deletion event and
+ * a replace event if applicable.
+ *
+ * @param buf       Buffer to replace lines.
+ * @param from      Start of deletion.
+ * @param to        End of deletion.
+ * @param text      The text to insert, ownership of this pointer is taken away.
+ *
+ * @return The first added event.
+ */
+struct undo_event *_replace_lines(struct buf *buf,
+                                 const struct pos *from,
+                                 const struct pos *to,
+                                 struct text *text);
 
 /// outside parameter for `conv_to_char`
 extern int ConvChar;

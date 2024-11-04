@@ -837,7 +837,7 @@ static int join_lines(void)
         from.col = SelFrame->buf->text.lines[from.line].n;
         to = from;
         to.line++;
-        to.col = get_line_indent(SelFrame->buf, to.line);
+        (void) get_line_indent(SelFrame->buf, to.line, &to.col);
         (void) delete_range(SelFrame->buf, &from, &to);
         line = &SelFrame->buf->text.lines[from.line];
         if (from.col > 0 && from.col != line->n &&

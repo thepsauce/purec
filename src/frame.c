@@ -819,7 +819,7 @@ static int move_frame_end(struct frame *frame)
 
 static int move_to_line_indent(struct frame *frame)
 {
-    frame->next_cur.col = get_line_indent(frame->buf, frame->cur.line);
+    (void) get_line_indent(frame->buf, frame->cur.line, &frame->next_cur.col);
     frame->next_cur.line = frame->cur.line;
     frame->next_vct = compute_vct(frame, &frame->next_cur);
     return UPDATE_UI;
