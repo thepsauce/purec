@@ -1,3 +1,27 @@
+[?] Fix bugs
+    [X] Wrong vct for deleting with x
+    [X] Wrong rehighlighting
+    [X] Search buggy
+    [X] Wrong visual mode selection highlighting
+    [X] Fix visual mode not deleting correctly
+    [X] Wrong s normal bind
+    [X] Make undo using stop flags
+    [?] Fix substitution
+    [X] Fix ../../../..
+    [X] Fix crash when pasting from clipboard twice
+    [ ] Fix window split movements
+    [ ] Clean up dot recording code
+
+[-] Add features
+    [X] Key press preview
+    [X] Visual counters
+    [X] "make" command that jumps to error automatically
+        [X] Add signal handler to kill the child -> See below
+    [ ] Unicode insertion
+    [X] Add C-C signal handler
+    [X] Dynamic setting of indentation rules per buffer
+    [ ] Add buffer view
+
 [-] Add cache directory
     [X] Save recent sessions
     [ ] Add session selection
@@ -11,12 +35,12 @@
         [ ] Save undo data
         [ ] Save core information (registers, recordings and marks)
 
-[-] Add motions
-    [-] Add word movement motions
+[X] Add motions
+    [X] Add word movement motions
         [X] Add w
         [X] Add e
         [X] Add b
-        [ ] Add ge
+        [X] Add ge
 
 [?] Add modes
     [?] Add replace mode
@@ -30,6 +54,7 @@
         [X] q for recording
         [X] @ for playback
         [X] Support recursive use of @
+    [X] gf to jump into file
     [.] (Comes from other todos)
 
 [-] Finish insert mode
@@ -72,24 +97,29 @@
     [X] Add C syntax
         [X] Add core syntax
         [X] Add auto indentation
-    [ ] Add git syntax
+    [?] Add Git syntax
+    [ ] Add Java syntax
+    [ ] Add Haskell syntax
+    [ ] Add assembly syntax
 
 [X] Add color themes
     [X] Add simple color theme
     [X] Make array of color themes for easy switching
+    [X] Add color theme chooser
 
-[-] Add file opener
+[X] Add file opener
     [X] Make option to choose file
-    [ ] Add directory switching
+    [X] Add directory switching
 
 [-] Add commands
     [X] Add :e for opening a file
-    [ ] Add :s for substitute
+    [X] Add :s for substitute
     [-] Add / and ? for searching...
         [X] ...simple words
+        [X] ...with patterns
         [ ] ...with regex
 
 [-] Add search and replace
     [X] Add simple search
     [ ] Add regex engine
-    [ ] Add replace
+    [X] Add replace
