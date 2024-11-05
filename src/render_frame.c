@@ -102,7 +102,8 @@ static void render_line(struct render_info *ri)
     struct glyph    g;
     bool            err;
     char            ch;
-    int             t;
+    col_t           x2;
+    int             t, a;
 
     for (sp_thres = ri->line->n; sp_thres > 0; sp_thres --) {
         if (!isblank(ri->line->s[sp_thres - 1])) {
@@ -113,7 +114,7 @@ static void render_line(struct render_info *ri)
     for (col = 0, x = 0; col < ri->line->n && x < ri->w;) {
         ch = ri->line->s[col];
         if (ch == '\t') {
-            if (col >= sp_thres && sp_thres > 0) {
+            if (col >= sp_thres) {
                 set_highlight(stdscr, HI_MAX);
                 if (x >= ri->x) {
                     mvaddstr(ri->off_y, ri->off_x + x, "»");
@@ -142,7 +143,7 @@ static void render_line(struct render_info *ri)
                 break;
             }
 
-            if (col >= sp_thres && sp_thres > 0) {
+            if (col >= sp_thres) {
                 set_highlight(stdscr, HI_MAX);
                 mvaddstr(ri->off_y, ri->off_x + x, "·");
             } else if (err) {
@@ -161,19 +162,34 @@ static void render_line(struct render_info *ri)
         x += g.w;
     }
 
-    for (col = 0, x = 0; col < ri->line->n && x < ri->w; col++) {
-        ch = ri->line->s[col];
-        if (ch == '\t') {
-            x += tab_adjust(x, ri->buf->rule.tab_size);
-        } else if (ch == ' ') {
-            x++;
-        } else {
-            break;
+    if (ri->line->n == 0) {
+        if (ri->line_i == 0) {
+            return;
+        }
+        x = get_line_indent(ri->buf, ri->line_i - 1, NULL);
+        if (ri->line_i + 1 < ri->buf->text.num_lines) {
+            x2 = get_line_indent(ri->buf, ri->line_i + 1, NULL);
+            x = MIN(x, x2);
+        }
+        x = MIN(x, ri->w);
+    } else {
+        for (col = 0, x = 0; col < sp_thres && x < ri->w; col++) {
+            ch = ri->line->s[col];
+            if (ch == ' ') {
+                x++;
+            } else if (ch == '\t') {
+                x += tab_adjust(x, ri->buf->rule.tab_size);
+            } else {
+                break;
+            }
         }
     }
 
+
     set_highlight(stdscr, HI_MAX);
-    for (t = ri->buf->rule.tab_size; t < x; t += ri->buf->rule.tab_size) {
+    for (a = ri->x % ri->buf->rule.tab_size,
+            t = a == 0 ? ri->x : ri->x + ri->buf->rule.tab_size - a;
+         t < x; t += ri->buf->rule.tab_size) {
         mvaddstr(ri->off_y, ri->off_x + t, "┆");
     }
 }
@@ -249,13 +265,17 @@ void render_frame(struct frame *frame)
                               buf->text.lines[match->from.line].n,
                               buf->rule.tab_size,
                               match->from.col);
+        v_start = MAX(v_start, frame->scroll.col);
         if (v_start >= ri.w) {
-            break;
+            continue;
         }
         v_end   = get_advance(buf->text.lines[match->to.line].s,
                               buf->text.lines[match->to.line].n,
                               buf->rule.tab_size,
                               match->to.col);
+        if (v_start >= v_end) {
+            continue;
+        }
         mvchgat(frame->y + match->from.line - frame->scroll.line,
                 frame->x + x + v_start - frame->scroll.col,
                 MIN((int) (v_end - v_start), w),
@@ -288,9 +308,7 @@ void render_frame(struct frame *frame)
                                       buf->text.lines[l].n,
                                       buf->rule.tab_size,
                                       end);
-                if (v_start < frame->scroll.col) {
-                    v_start = frame->scroll.col;
-                }
+                v_start = MAX(v_start, frame->scroll.col);
                 if (v_end < v_start) {
                     continue;
                 }

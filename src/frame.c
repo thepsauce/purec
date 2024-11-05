@@ -1562,12 +1562,13 @@ int do_action_till(struct frame *frame, int action, line_t min_line,
     }
 
     for (; min_line <= max_line; min_line++) {
+        if (buf->text.lines[min_line].n == 0) {
+            /* skip empty lines */
+            continue;
+        }
+
         switch (action) {
         case '=':
-            if (buf->text. lines[min_line].n == 0) {
-                /* skip empty lines */
-                break;
-            }
             ev = indent_line(buf, min_line);
             if (ev != NULL) {
                 update = true;
