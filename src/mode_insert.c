@@ -149,16 +149,19 @@ static int enter_new_line(void)
     struct buf      *buf;
 
     buf = SelFrame->buf;
-    if (buf->ev_last_indent + 1 == buf->event_i) {
+    if (buf->event_i > 0 &&
+            (buf->events[buf->event_i - 1].flags & IS_AUTO_INDENT)) {
         undo_event_no_trans(buf);
         if (buf->event_i > 0) {
-            buf->events[buf->event_i].flags |= IS_STOP;
+            buf->events[buf->event_i - 1].flags |= IS_STOP;
         }
         /* since the indentation is now trimmed, move to the first column */
         SelFrame->cur.col = 0;
     }
     (void) break_line(buf, &SelFrame->cur);
-    set_cursor(SelFrame, &buf->events[buf->event_i - 1].end);
+    SelFrame->cur.line++;
+    SelFrame->cur.col = buf->events[buf->event_i - 1].end.col;
+    (void) adjust_scroll(SelFrame);
     return UPDATE_UI;
 }
 

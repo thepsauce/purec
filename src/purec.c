@@ -176,14 +176,15 @@ void set_mode(int mode)
 {
     struct buf *buf;
 
-    if (Core.mode == INSERT_MODE) {
-        buf = SelFrame->buf;
-        /* cut auto indentation */
-        if (buf->ev_last_indent + 1 == buf->event_i) {
-            undo_event_no_trans(buf);
-            /* make sure this does not pollute other things */
-            buf->ev_last_indent = SIZE_MAX - 1;
+    buf = SelFrame->buf;
+    if (Core.mode == INSERT_MODE && buf->event_i > 0 &&
+            (buf->events[buf->event_i - 1].flags & IS_AUTO_INDENT)) {
+        undo_event_no_trans(buf);
+        if (buf->event_i > 0) {
+            buf->events[buf->event_i - 1].flags |= IS_STOP;
         }
+        SelFrame->cur.col = 0;
+        (void) adjust_scroll(SelFrame);
     }
     if (IS_VISUAL(mode) && !IS_VISUAL(Core.mode)) {
         Core.pos = SelFrame->cur;

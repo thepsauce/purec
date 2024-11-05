@@ -36,8 +36,6 @@ struct buf *create_buffer(const char *path)
     buf = xcalloc(1, sizeof(*buf));
     buf->path = abs_path;
     (void) init_load_buffer(buf);
-    /* -1 so +1 does not wrap around */
-    buf->ev_last_indent = SIZE_MAX - 1;
 
     /* add buffer to linked list */
     if (FirstBuffer == NULL) {
@@ -461,43 +459,38 @@ struct undo_event *_insert_block(struct buf *buf,
 
 struct undo_event *break_line(struct buf *buf, const struct pos *pos)
 {
-    struct line     *line, *at_line;
-    col_t           indent;
-    struct text     text;
-    col_t           d;
+    col_t               indent;
+    struct text         text;
+    col_t               d;
+    struct pos          p;
+    struct undo_event   *ev;
 
-    line = insert_blank(&buf->text, pos->line + 1, 1);
-    notice_line_growth(buf, pos->line + 1, 1);
+    p = *pos;
 
-    at_line = &buf->text.lines[pos->line];
-    line->n = at_line->n - pos->col;
-    line->s = xmemdup(&at_line->s[pos->col], line->n);
-    at_line->n = pos->col;
-
-    /* the indentor needs these to be highlighted */
-    (void) rehighlight_lines(buf, pos->line, 2);
+    init_text(&text, 2);
+    ev = _insert_lines(buf, &p, &text);
 
     indent = Langs[buf->lang].indentor(buf, pos->line + 1);
-    init_text(&text, 2);
+    if (indent == 0) {
+        return ev;
+    }
+    p.col = 0;
+    p.line++;
+    init_text(&text, 1);
     if (buf->rule.use_spaces) {
-        text.lines[1].n = indent;
-        text.lines[1].s = xmalloc(indent);
-        memset(text.lines[1].s, ' ', indent);
+        text.lines[0].n = indent;
+        text.lines[0].s = xmalloc(indent);
+        memset(text.lines[0].s, ' ', indent);
     } else {
         d = indent / buf->rule.tab_size;
-        text.lines[1].n = d + indent % buf->rule.tab_size;
-        text.lines[1].s = xmalloc(text.lines[1].n);
-        memset(text.lines[1].s, '\t', d);
-        memset(&text.lines[1].s[d], ' ', text.lines[1].n - d);
+        text.lines[0].n = d + indent % buf->rule.tab_size;
+        text.lines[0].s = xmalloc(text.lines[0].n);
+        memset(text.lines[0].s, '\t', d);
+        memset(&text.lines[0].s[d], ' ', text.lines[0].n - d);
     }
-    line->s = xrealloc(line->s, line->n + text.lines[1].n);
-    memmove(&line->s[indent], line->s, line->n);
-    memcpy(line->s, text.lines[1].s, text.lines[1].n);
-    line->n += text.lines[1].n;
-
-    (void) rehighlight_lines(buf, pos->line + 1, 1);
-
-    return add_event(buf, IS_INSERTION, pos, &text);
+    ev = _insert_lines(buf, &p, &text);
+    ev->flags |= IS_AUTO_INDENT;
+    return ev;
 }
 
 /**
