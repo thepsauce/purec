@@ -72,6 +72,16 @@ void set_error(const char *err, ...)
     Core.msg_state = MSG_OTHER;
 }
 
+int get_char(void)
+{
+    int             c;
+
+    do {
+        c = get_ch();
+    } while (c == -1);
+    return c;
+}
+
 struct mark *get_mark(struct frame *frame, char ch)
 {
     static struct mark m;

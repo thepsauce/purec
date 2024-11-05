@@ -957,11 +957,7 @@ static int get_additional_char(char *buf)
     int             e;
     int             n;
 
-    do {
-        c = get_ch();
-        /* skip over resize events */
-    } while (c == -1);
-
+    c = get_char();
     if (c >= 0x100) {
         return -1;
     }

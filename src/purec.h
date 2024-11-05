@@ -270,9 +270,18 @@ struct play_rec *get_playback(void);
 /**
  * Get input from the user or the playback record.
  *
- * @return Next input character.
+ * @return Next input character or -1 on a resize event.
  */
 int get_ch(void);
+
+/**
+ * Get input from the user or the playback record.
+ *
+ * The difference to `get_ch()` is that -1 is never returned.
+ *
+ * @return The next input character.
+ */
+int get_char(void);
 
 /**
  * Gets user input like normal but handle digits in a special way.

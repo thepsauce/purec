@@ -474,7 +474,7 @@ void choose_session(void)
     update_files(&fuzzy);
     while (1) {
         render_fuzzy(&fuzzy);
-        c = getch();
+        c = get_ch();
         prev_name = fuzzy.entries[fuzzy.selected].name;
         switch (send_to_fuzzy(&fuzzy, c)) {
         case INP_CANCELLED:

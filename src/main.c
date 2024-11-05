@@ -64,14 +64,14 @@ static int get_first_char(void)
 
     Core.counter = 1;
     Core.user_reg = '.';
-    while (c = get_ch(), (c == '0' && counter != 0) || (c >= '1' && c <= '9') ||
-                         c == '\"') {
+    while (c = get_char(), (c == '0' && counter != 0) ||
+            (c >= '1' && c <= '9') || c == '\"') {
         if (c == '\"') {
             if (counter != 0) {
                 Core.counter = counter;
                 counter = 0;
             }
-            c = toupper(get_ch());
+            c = toupper(get_char());
             if (!IS_REG_CHAR(c)) {
                 return -1;
             }
@@ -145,12 +145,10 @@ int main(int argc, char **argv)
             next_dot_i = rec == NULL ? Core.rec_len : rec->index;
             if (Core.mode == INSERT_MODE) {
                 Core.counter = 1;
-                c = get_ch();
+                c = get_char();
             } else {
                 Core.move_down_count = 0;
-                do {
-                    c = get_first_char();
-                } while (c == -1);
+                c = get_first_char();
             }
 
             Core.is_busy = true;

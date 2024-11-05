@@ -415,7 +415,7 @@ static int goto_mark(void)
     struct mark     *mark;
     struct frame    *frame;
 
-    c = toupper(get_ch());
+    c = toupper(get_char());
     if (c == '\x1b') {
         return DO_NOT_RECORD;
     }
@@ -448,7 +448,7 @@ static int place_mark(void)
     int             c;
     struct mark     *mark;
 
-    c = toupper(get_ch());
+    c = toupper(get_char());
     if (c == '\x1b') {
         return 0;
     }
@@ -812,7 +812,7 @@ static int replace_current_char(void)
 {
     int                 c;
 
-    c = get_ch();
+    c = get_char();
     if (!isprint(c) && c != '\n' && c != '\t') {
         return 0;
     }
@@ -914,7 +914,7 @@ static int do_recording(void)
         Core.msg_state = MSG_TO_DEFAULT;
         return UPDATE_UI | DO_NOT_RECORD;
     }
-    c = toupper(get_ch());
+    c = toupper(get_char());
     if (c < USER_REC_MIN || c > USER_REC_MAX) {
         return DO_NOT_RECORD;
     }
@@ -929,7 +929,7 @@ static int play_recording(void)
     int             c;
     struct play_rec *rec;
 
-    c = toupper(get_ch());
+    c = toupper(get_char());
     if (c < USER_REC_MIN || c > USER_REC_MAX) {
         return DO_NOT_RECORD;
     }
