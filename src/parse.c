@@ -8,7 +8,7 @@
 
 struct parser Parser;
 
-const int Precedences[] = {
+static const int Precedences[] = {
     [GROUP_NULL] = 0,
 
     [GROUP_ROUND] = 0,

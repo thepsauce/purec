@@ -77,15 +77,22 @@ col_t no_indentor(struct buf *buf, line_t line_i)
 }
 
 struct lang Langs[] = {
-    [NO_LANG] = { "None", none_lang_states, no_char_hook, no_indentor, "\0" },
+    [NO_LANG] = { "None", none_lang_states, no_char_hook, no_indentor, "" },
     [C_LANG] = { "C", c_lang_states, c_char_hook, c_indentor,
-                "*.c\0*.h\0*.cpp\0*.cxx\0*.c++\0*.hpp\0*.hxx\0*.h++\0" },
+                "[^.]*\\.c|"
+                "[^.]*\\.h|"
+                "[^.]*\\.cpp|"
+                "[^.]*\\.cxx|"
+                "[^.]*\\.c++|"
+                "[^.]*\\.hpp|"
+                "[^.]*\\.hxx|"
+                "[^.]*\\.h++" },
     [DIFF_LANG] = { "Diff", diff_lang_states, no_char_hook, no_indentor,
-                   "*.diff\0*.patch\0" },
+                   "[^.]*\\.diff|[^.]*\\.patch" },
     [COMMIT_LANG] = { "Commit", commit_lang_states, no_char_hook, no_indentor,
-                     "\\i*.commit*\0" },
+                     "[^.]*\\.commit.*" },
     [MAKE_LANG] = { "Make", make_lang_states, no_char_hook, make_indentor,
-                   "makefile\0Makefile\0GNUmakefile\0" },
+                   "makefile|Makefile|GNUmakefile" },
 };
 
 /**
@@ -184,7 +191,6 @@ static void render_line(struct render_info *ri)
             }
         }
     }
-
 
     set_highlight(stdscr, HI_MAX);
     for (a = ri->x % ri->buf->rule.tab_size,

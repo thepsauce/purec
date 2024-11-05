@@ -570,6 +570,7 @@ int cmd_substitute(struct cmd_data *cd)
         group = NULL;
         repl = parse_string(&e1[1], &e1, &repl_len, '\0');
         str_to_text(repl, repl_len, &text);
+        free(repl);
     }
     buf = SelFrame->buf;
     search_pattern(buf, &cd->arg[1]);

@@ -57,41 +57,14 @@ struct buf *create_buffer(const char *path)
     return buf;
 }
 
-/**
- * Finds given string within a null terminated string list.
- *
- * `s_list` is a null terminated string list, the end is marked by a double null
- * terminator. Only if the given string is equal to any of the strings in `s_list`,
- * or the first mismatching character is an asterisk, then true is returned.
- *
- * @param s_list    The list of pattern strings.
- * @param s         The string to check.
- * @param s_len     The length of the string to theck.
- *
- * @return Whether the string was found.
- */
-static bool find_string_in_list(const char *s_list, const char *s, size_t s_len)
-{
-    size_t              len;
-
-    while (s_list[0] != '\0') {
-        len = strlen(s_list);
-        if (match_pattern_exact(s, s_len, s_list)) {
-            return true;
-        }
-        s_list = &s_list[len + 1];
-    }
-    return false;
-}
-
 size_t detect_language(struct buf *buf)
 {
     static const char   *commit_detect = "# Please enter the commit message";
     line_t              i;
     col_t               j;
-    size_t              len;
     int                 l;
     char                *name;
+    struct regex_group  *group;
 
     if (buf->text.num_lines > 4) {
         if (buf->text.lines[0].n == 0) {
@@ -129,11 +102,12 @@ size_t detect_language(struct buf *buf)
     } else {
         name++;
     }
-    len = strlen(name);
     for (l = 1; l < NUM_LANGS; l++) {
-        if (find_string_in_list(Langs[l].file_exts, name, len)) {
+        group = parse_regex(Langs[l].file_exts);
+        if (regex_matches(group, name)) {
             return l;
         }
+        free_regex_group(group);
     }
     return NO_LANG;
 }
@@ -881,18 +855,20 @@ struct undo_event *_replace_lines(struct buf *buf,
 static struct match *search_line_pattern(struct buf *buf, line_t line_i,
                                          size_t *p_num_matches)
 {
-    struct line     *line;
-    col_t           i;
-    size_t          l;
-    struct match    *matches;
-    size_t          num_matches;
+    struct regex_group  *group;
+    struct line         *line;
+    col_t               i;
+    size_t              l;
+    struct match        *matches;
+    size_t              num_matches;
 
+    group = parse_regex(buf->search_pat);
     line = &buf->text.lines[line_i];
     matches = NULL;
     num_matches = 0;
     for (i = 0; i < line->n; ) {
-        l = match_pattern(line->s, i, line->n, buf->search_pat);
-        if (l == 0) {
+        l = match_regex(group, line->s, i, line->n);
+        if (l == 0 || l == SIZE_MAX) {
             i++;
             continue;
         }
@@ -904,6 +880,7 @@ static struct match *search_line_pattern(struct buf *buf, line_t line_i,
         matches[num_matches].to.col = i;
         num_matches++;
     }
+    free_regex_group(group);
     *p_num_matches = num_matches;
     return matches;
 }
