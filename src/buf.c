@@ -409,27 +409,36 @@ struct undo_event *indent_line(struct buf *buf, line_t line_i)
     return set_line_indent(buf, line_i, new_indent);
 }
 
-struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
-                                const struct text *text, size_t repeat)
-{
-    struct text     ins;
-
-    if (text->num_lines == 0 || repeat == 0) {
-        return NULL;
-    }
-
-    repeat_text(&ins, text, repeat);
-    _insert_lines(buf, pos, &ins);
-    return add_event(buf, IS_INSERTION, pos, &ins);
-}
-
-void _insert_lines(struct buf *buf, const struct pos *pos,
-                   const struct text *text)
+void insert_lines_no_event(struct buf *buf, const struct pos *pos,
+                           const struct text *text)
 {
     insert_text(&buf->text, pos, text);
     if (text->num_lines > 1) {
         notice_line_growth(buf, pos->line + 1, text->num_lines - 1);
     }
+    rehighlight_lines(buf, pos->line, text->num_lines);
+}
+
+struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
+                                const struct text *text, size_t repeat)
+{
+    struct text     ins;
+
+    repeat_text(&ins, text, repeat);
+    return _insert_lines(buf, pos, &ins);
+}
+
+struct undo_event *_insert_lines(struct buf *buf, const struct pos *pos,
+                                 struct text *text)
+{
+    insert_lines_no_event(buf, pos, text);
+    return add_event(buf, IS_INSERTION, pos, text);
+}
+
+void insert_block_no_event(struct buf *buf, const struct pos *pos,
+                           const struct text *text)
+{
+    insert_text_block(&buf->text, pos, text);
     rehighlight_lines(buf, pos->line, text->num_lines);
 }
 
@@ -439,18 +448,15 @@ struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
     struct text     ins;
 
     repeat_text_block(&ins, text, repeat);
-
-    _insert_block(buf, pos, &ins);
-
-    return add_event(buf, IS_BLOCK | IS_INSERTION, pos, &ins);
+    return _insert_block(buf, pos, &ins);
 }
 
-void _insert_block(struct buf *buf,
+struct undo_event *_insert_block(struct buf *buf,
                    const struct pos *pos,
-                   const struct text *text)
+                   struct text *text)
 {
-    insert_text_block(&buf->text, pos, text);
-    rehighlight_lines(buf, pos->line, text->num_lines);
+    insert_block_no_event(buf, pos, text);
+    return add_event(buf, IS_BLOCK | IS_INSERTION, pos, text);
 }
 
 struct undo_event *break_line(struct buf *buf, const struct pos *pos)
@@ -482,7 +488,7 @@ struct undo_event *break_line(struct buf *buf, const struct pos *pos)
         text.lines[1].n = d + indent % buf->rule.tab_size;
         text.lines[1].s = xmalloc(text.lines[1].n);
         memset(text.lines[1].s, '\t', d);
-        memset(&text.lines[1].s[d], ' ', d - text.lines[1].n);
+        memset(&text.lines[1].s[d], ' ', text.lines[1].n - d);
     }
     line->s = xrealloc(line->s, line->n + text.lines[1].n);
     memmove(&line->s[indent], line->s, line->n);
@@ -631,29 +637,9 @@ void notice_line_removal(struct buf *buf, line_t line_i, line_t num_lines)
     }
 }
 
-struct undo_event *delete_range(struct buf *buf,
-                                const struct pos *from,
-                                const struct pos *to)
-{
-    struct pos          r_from, r_to;
-    struct undo_event   *ev;
-    struct text         text;
-
-    if (!clip_range(&buf->text, from, to, &r_from, &r_to)) {
-        return NULL;
-    }
-
-    /* get the deleted text for undo */
-    get_text(&buf->text, &r_from, &r_to, &text);
-    ev = add_event(buf, IS_DELETION, &r_from, &text);
-
-    _delete_range(buf, &r_from, &r_to);
-    return ev;
-}
-
-void _delete_range(struct buf *buf,
-                   const struct pos *from,
-                   const struct pos *to)
+void delete_range_no_event(struct buf *buf,
+                           const struct pos *from,
+                           const struct pos *to)
 {
     delete_text(&buf->text, from, to);
     if (from->line != to->line) {
@@ -662,31 +648,44 @@ void _delete_range(struct buf *buf,
     rehighlight_lines(buf, from->line, 2);
 }
 
+struct undo_event *delete_range(struct buf *buf,
+                                const struct pos *from,
+                                const struct pos *to)
+{
+    struct pos          r_from, r_to;
+    struct text         text;
+
+    if (!clip_range(&buf->text, from, to, &r_from, &r_to)) {
+        return NULL;
+    }
+    /* get the deleted text for undo */
+    get_text(&buf->text, &r_from, &r_to, &text);
+    delete_range_no_event(buf, &r_from, &r_to);
+    return add_event(buf, IS_DELETION, &r_from, &text);;
+}
+
+void delete_block_no_event(struct buf *buf,
+                           const struct pos *from,
+                           const struct pos *to)
+{
+    delete_text_block(&buf->text, from, to);
+    rehighlight_lines(buf, from->line, to->line - from->line + 1);
+}
+
 struct undo_event *delete_block(struct buf *buf,
                                 const struct pos *from,
                                 const struct pos *to)
 {
     struct pos          r_from, r_to;
     struct text         text;
-    struct undo_event   *ev;
 
     if (!clip_block(&buf->text, from, to, &r_from, &r_to)) {
         return NULL;
     }
-
+    /* get the deleted text for undo */
     get_text_block(&buf->text, &r_from, &r_to, &text);
-    ev = add_event(buf, IS_BLOCK | IS_DELETION, &r_from, &text);
-
-    _delete_block(buf, &r_from, &r_to);
-    return ev;
-}
-
-void _delete_block(struct buf *buf,
-                   const struct pos *from,
-                   const struct pos *to)
-{
-    delete_text_block(&buf->text, from, to);
-    rehighlight_lines(buf, from->line, to->line - from->line + 1);
+    delete_block_no_event(buf, &r_from, &r_to);
+    return add_event(buf, IS_BLOCK | IS_DELETION, &r_from, &text);
 }
 
 int ConvChar;
@@ -882,8 +881,7 @@ struct undo_event *_replace_lines(struct buf *buf,
         free(text->lines);
         return ev;
     }
-    _insert_lines(buf, from, text);
-    (void) add_event(buf, IS_INSERTION, from, text);
+    (void) _insert_lines(buf, from, text);
     return ev;
 }
 

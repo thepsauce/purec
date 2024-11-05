@@ -191,7 +191,6 @@ static int enter_tab(void)
     }
 
     (void) _insert_lines(SelFrame->buf, &SelFrame->cur, &text);
-    (void) add_event(SelFrame->buf, IS_INSERTION, &SelFrame->cur, &text);
     SelFrame->cur.col += n;
     SelFrame->vct = SelFrame->cur.col;
     (void) adjust_scroll(SelFrame);
@@ -287,7 +286,6 @@ int insert_handle_input(int c)
         text.lines[0].s[0] = c;
         p = SelFrame->cur;
         (void) _insert_lines(SelFrame->buf, &p, &text);
-        (void) add_event(SelFrame->buf, IS_INSERTION, &p, &text);
         SelFrame->cur.col++;
         Langs[SelFrame->buf->lang].char_hook(SelFrame->buf, &SelFrame->cur, c);
         SelFrame->vct = compute_vct(SelFrame, &SelFrame->cur);

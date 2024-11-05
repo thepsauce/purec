@@ -1551,8 +1551,7 @@ int do_action_till(struct frame *frame, int action, line_t min_line,
         }
         p1.col = 0;
         p1.line = min_line;
-        _insert_block(buf, &p1, &text);
-        ev = add_event(buf, IS_BLOCK | IS_INSERTION, &p1, &text);
+        ev = _insert_block(buf, &p1, &text);
         ev->cur = frame->cur;
         if (buf->text.lines[frame->cur.line].n > 0) {
             frame->cur.col += buf->rule.tab_size;

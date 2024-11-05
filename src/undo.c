@@ -231,9 +231,9 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
 
     if ((flags & IS_DELETION)) {
         if ((flags & IS_BLOCK)) {
-            _delete_block(buf, &ev->pos, &ev->end);
+            delete_block_no_event(buf, &ev->pos, &ev->end);
         } else {
-            _delete_range(buf, &ev->pos, &ev->end);
+            delete_range_no_event(buf, &ev->pos, &ev->end);
         }
         return;
     }
@@ -255,9 +255,9 @@ static void do_event(struct buf *buf, const struct undo_event *ev, int flags)
     } else {
         make_text(&text, seg->lines, seg->num_lines);
         if ((flags & IS_BLOCK)) {
-            _insert_block(buf, &ev->pos, &text);
+            insert_block_no_event(buf, &ev->pos, &text);
         } else {
-            _insert_lines(buf, &ev->pos, &text);
+            insert_lines_no_event(buf, &ev->pos, &text);
         }
     }
     unload_undo_data(seg);

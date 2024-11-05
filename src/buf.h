@@ -345,17 +345,24 @@ struct undo_event *set_line_indent(struct buf *buf, line_t line, col_t indent);
 struct undo_event *indent_line(struct buf *buf, line_t line_i);
 
 /**
+ * Inserts lines into the buffer without adding an event.
+ *
+ * @param buf    The buffer to insert lines into.
+ * @param pos    The position to insert text into, must be in bound.
+ * @param text   The text to insert.
+ */
+void insert_lines_no_event(struct buf *buf, const struct pos *pos,
+                           const struct text *text);
+
+/**
  * Insert lines starting from a given position.
  *
  * All added lines are initialized to given lines and an event is added.
  *
- * WARNING: This function does NO clipping on `pos`.
- *
  * @param buf       Buffer to insert in.
- * @param pos       Position to append to.
- * @param lines     Lines to insert.
- * @param num_lines Number of lines to insert.
- * @param repeat    How many times to repeat the insertion.
+ * @param pos       Position to append to, must be in bound.
+ * @param text      The text to insert, must have some text.
+ * @param repeat    How many times to repeat the insertion, must be > 0.
  *
  * @return The event generated from this insertion (may be `NULL`).
  */
@@ -365,28 +372,35 @@ struct undo_event *insert_lines(struct buf *buf, const struct pos *pos,
 /**
  * Insert given number of lines starting from given position.
  *
- * WARNING: This function does NO clipping on `pos`.
- *
  * @param buf       Buffer to insert in.
  * @param pos       Position to append to.
- * @param num       Lines to insert.
- * @param num_lines Number of lines to insert.
+ * @param text      The text to insert, must be non empty; this
+ *                  function takes ownership of the text object.
+ *
+ * @return The event generated from the insertion.
  */
-void _insert_lines(struct buf *buf, const struct pos *pos,
-                   const struct text *text);
+struct undo_event *_insert_lines(struct buf *buf, const struct pos *pos,
+                                 struct text *text);
+
+/**
+ * Inserts given text block without adding an event.
+ *
+ * @param buf    The buffer to insert the block into.
+ * @param pos    The position to insert the text into, must be in bouind.
+ * @param text   The text to insert as block, must be non empty.
+ */
+void insert_block_no_event(struct buf *buf, const struct pos *pos,
+                           const struct text *text);
 
 /**
  * Insert lines in block mode starting from a given position.
  *
  * All added lines are initialized to given lines and an event is added.
  *
- * WARNING: This function does NO clipping on `pos`.
- *
  * @param buf       Buffer to insert in.
- * @param pos       Position to append to.
- * @param lines     Lines to insert.
- * @param num_lines Number of lines to insert.
- * @param repeat    How many times to repeat the insertion.
+ * @param pos       Position to append to, must be in bound.
+ * @param text      The text ot insert as block.
+ * @param repeat    How many times to repeat the insertion, must be greater 0.
  *
  * @return The event generated from this insertion (may be `NULL`).
  */
@@ -396,15 +410,12 @@ struct undo_event *insert_block(struct buf *buf, const struct pos *pos,
 /**
  * Insert lines in block mode starting from a given position.
  *
- * WARNING: This function does NO clipping on `pos`.
- *
  * @param buf       Buffer to insert in.
- * @param pos       Position to append to.
- * @param lines     Lines to insert.
- * @param num_lines Number of lines to insert.
+ * @param pos       Position to append to, must be in bound.
+ * @param text      Text to insert as block, must be non empty.
  */
-void _insert_block(struct buf *buf, const struct pos *pos,
-                   const struct text *text);
+struct undo_event *_insert_block(struct buf *buf, const struct pos *pos,
+                                 struct text *text);
 
 /**
  * Breaks the line at given position by inserting '\n' and indents the line
@@ -442,13 +453,22 @@ void notice_line_growth(struct buf *buf, line_t line_i, line_t num_lines);
 /**
  * Called after deleting lines from `buf->text`.
  *
- * This does NOT add an event and does NO clipping.
- *
- * @param buf       The buffer 
+ * @param buf       The buffer to insert text into.
  * @param line_i    The index to the first line deleted.
  * @param num_lines The number of lines deleted.
  */
 void notice_line_removal(struct buf *buf, line_t line_i, line_t num_lines);
+
+/**
+ * Deletes given range without adding an event.
+ *
+ * @param buf    The buffer to delete text out of.
+ * @param from   The start of the deletion, must be in boudn.
+ * @param to     The end of the deletion, must be in bound.
+ */
+void delete_range_no_event(struct buf *buf,
+                           const struct pos *from,
+                           const struct pos *to);
 
 /**
  * Deletes a range from a buffer.
@@ -477,32 +497,15 @@ struct undo_event *delete_range(struct buf *buf,
                                 const struct pos *to);
 
 /**
- * Same as delete_range() but no clipping and no event adding.
+ * Deletes a block out of given buffer without adding an event.
  *
- * This function works in an excluseive way. If `*pfrom == *pto` is true, this
- * is already undefined behaviour as this function EXPECTS that there is
- * something to delete.
- * This marks the changed lines as dirty.
- *
- * Example:
- * ```
- * struct buf *buf = ...;
- * struct pos from = { 3, 2 };
- * struct pos to = { 4, 1 };
- * _delete_range(buf, &from, &to);
- * ```
- * This deletes the line at index 4 and moves the rest of line index 4 into line
- * index 3. The first two characters of line index 3 are deleted as well.
- *
- * @param buf   Buffer to delete within.
- * @param from  Start of deletion.
- * @param to    End of deletion.
- *
- * @see delete_range()
+ * @param buf    The buffer to delete text out of.
+ * @param from   The upper left corner of the block.
+ * @param to     The lower right corner of the block.
  */
-void _delete_range(struct buf *buf,
-                   const struct pos *from,
-                   const struct pos *to);
+void delete_block_no_event(struct buf *buf,
+                           const struct pos *from,
+                           const struct pos *to);
 
 /**
  * Deletes given inclusive block.
