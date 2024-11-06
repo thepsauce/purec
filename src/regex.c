@@ -7,20 +7,29 @@
 #include <string.h>
 
 static int Precedences[] = {
-    [RXGROUP_ROUND] = 0,
-    [RXGROUP_OR] = 1,
-    [RXGROUP_CON] = 2,
+    [RXGROUP_ROUND]         = 0,
+    [RXGROUP_OR]            = 1,
+    [RXGROUP_CON]           = 2,
 
-    [RXGROUP_PLUS] = 10,
-    [RXGROUP_STAR] = 10,
-    [RXGROUP_OPT] = 10,
+    [RXGROUP_PLUS]          = 10,
+    [RXGROUP_STAR]          = 10,
+    [RXGROUP_OPT]           = 10,
 
-    [RXGROUP_LIT] = INT_MAX,
+    [RXGROUP_LIT]           = INT_MAX,
+    [RXGROUP_WORD_START]    = INT_MAX,
+    [RXGROUP_WORD_END]      = INT_MAX,
+    [RXGROUP_START]         = INT_MAX,
+    [RXGROUP_END]           = INT_MAX,
 };
 
 void set_char(struct char_set *set, unsigned char ch)
 {
     set->set[ch >> 4] |= 1 << (ch & 0xf);
+}
+
+void toggle_char(struct char_set *set, unsigned char ch)
+{
+    set->set[ch >> 4] ^= 1 << (ch & 0xf);
 }
 
 bool is_char_toggled(struct char_set *set, unsigned char ch)
@@ -86,47 +95,6 @@ static void exchange_group(struct regex_parser *rp, int group_type)
     rp->stack[rp->num_stack - 1] = group;
 }
 
-static int get_magic(char ch)
-{
-    switch (ch) {
-    case '\0':
-        return -1;
-
-    case '+':
-    case '*':
-    case '|':
-    case '.':
-    case '(':
-    case ')':
-        return 1;
-
-    case 'a':
-    case 'b':
-    case 'f':
-    case 'n':
-    case 'r':
-    case 'v':
-    case 't':
-        return 2;
-
-    case 'x':
-    case 'u':
-    case 'U':
-        return 3;
-
-    case 'W':
-    case 'D':
-    case 'S':
-    case 'w':
-    case 'd':
-    case 's':
-        return 4;
-
-    default:
-        return 0;
-    }
-}
-
 static char get_escaped(char ch)
 {
     switch (ch) {
@@ -168,6 +136,35 @@ static void make_special_chars(struct char_set *s, char id)
 
     do_invert = isupper(id);
     switch (id) {
+    case 'D':
+    case 'd':
+        for (c = '0'; c <= '9'; c++) {
+            set_char(s, c);
+        }
+        break;
+
+    case 'K':
+    case 'k':
+        for (c = '0'; c <= '9'; c++) {
+            set_char(s, c);
+        }
+        for (c = 'a'; c <= 'z'; c++) {
+            set_char(s, c);
+        }
+        for (c = 'A'; c <= 'Z'; c++) {
+            set_char(s, c);
+        }
+        set_char(s, '_');
+        break;
+
+    case 'S':
+    case 's':
+        set_char(s, ' ');
+        set_char(s, '\f');
+        set_char(s, '\t');
+        set_char(s, '\v');
+        break;
+
     case 'W':
     case 'w':
         for (c = 'a'; c <= 'z'; c++) {
@@ -176,20 +173,6 @@ static void make_special_chars(struct char_set *s, char id)
         for (c = 'A'; c <= 'Z'; c++) {
             set_char(s, c);
         }
-        break;
-    case 'D':
-    case 'd':
-        for (c = '0'; c <= '9'; c++) {
-            set_char(s, c);
-        }
-        break;
-    case 'S':
-    case 's':
-        set_char(s, ' ');
-        set_char(s, '\f');
-        set_char(s, '\n');
-        set_char(s, '\t');
-        set_char(s, '\v');
         break;
     }
 
@@ -284,21 +267,12 @@ beg:
     if (s[0] == '\\') {
         s++;
         rp.stack[rp.num_stack - 1]->type = RXGROUP_LIT;
-        switch (get_magic(s[0])) {
-        case -1:
+        if (s[0] == '\0') {
             set_char(&rp.stack[rp.num_stack - 1]->chars, '\\');
-            break;
-
-        case 0:
-        case 1:
+        } else if (strchr("+*|()", s[0]) != NULL) {
             set_char(&rp.stack[rp.num_stack - 1]->chars, s[0]);
             s++;
-            break;
-        case 2:
-            set_char(&rp.stack[rp.num_stack - 1]->chars, get_escaped(s[0]));
-            s++;
-            break;
-        case 3:
+        } else if (strchr("xuU", s[0]) != NULL) {
             n = s[0] == 'x' ? 2 : s[0] == 'u' ? 4 : 8;
             s++;
             s = get_hex_sequence(s, &n, chs);
@@ -308,21 +282,35 @@ beg:
                 enter_group(&rp, RXGROUP_LIT);
                 set_char(&rp.stack[rp.num_stack - 1]->chars, chs[i]);
             }
-            break;
-        case 4:
+        } else if (strchr("DdKkSsWw", s[0]) != NULL) {
             make_special_chars(&rp.stack[rp.num_stack - 1]->chars, s[0]);
             s++;
-            break;
+        } else {
+            set_char(&rp.stack[rp.num_stack - 1]->chars, get_escaped(s[0]));
+            s++;
         }
     } else if (s[0] == '[') {
         rp.stack[rp.num_stack - 1]->type = RXGROUP_LIT;
         s = parse_special_group(&rp.stack[rp.num_stack - 1]->chars, s);
     } else if (s[0] == '.') {
         rp.stack[rp.num_stack - 1]->type = RXGROUP_LIT;
-        memset(&rp.stack[rp.num_stack - 1]->chars, 0xff, 16);
-        set_char(&rp.stack[rp.num_stack - 1]->chars, '\n');
+        memset(&rp.stack[rp.num_stack - 1]->chars, 0xff,
+               sizeof(rp.stack[rp.num_stack - 1]->chars));
+        toggle_char(&rp.stack[rp.num_stack - 1]->chars, '\n');
         s++;
-    } else if (s[0] != '\0' && get_magic(s[0]) != 1) {
+    } else if (s[0] == '<') {
+        rp.stack[rp.num_stack - 1]->type = RXGROUP_WORD_START;
+        s++;
+    } else if (s[0] == '>') {
+        rp.stack[rp.num_stack - 1]->type = RXGROUP_WORD_END;
+        s++;
+    } else if (s[0] == '^') {
+        rp.stack[rp.num_stack - 1]->type = RXGROUP_START;
+        s++;
+    } else if (s[0] == '$') {
+        rp.stack[rp.num_stack - 1]->type = RXGROUP_END;
+        s++;
+    } else if (s[0] != '\0' && strchr("+*|()", s[0]) == NULL) {
         rp.stack[rp.num_stack - 1]->type = RXGROUP_LIT;
         set_char(&rp.stack[rp.num_stack - 1]->chars, s[0]);
         s++;
@@ -362,7 +350,7 @@ infix:
         exchange_group(&rp, RXGROUP_OR);
         enter_group(&rp, RXGROUP_NULL);
         s++;
-    } else if (s[0] == '+' || s[0] == '*' || s[0] == '?') {
+    } else if (strchr("+*?", s[0]) != NULL) {
         type = s[0] == '+' ? RXGROUP_PLUS : s[0] == '*' ? RXGROUP_STAR :
                 RXGROUP_OPT;
         walk_up_precedences(&rp, Precedences[type]);
@@ -387,8 +375,8 @@ void free_regex_group(struct regex_group *group)
     free(group);
 }
 
-size_t match_regex(struct regex_group *group, const char *s,
-                   size_t i, size_t len)
+size_t match_regex(struct regex_group *group, struct regex_matcher *matcher,
+                   size_t i)
 {
     size_t          l, l2, total_len;
 
@@ -397,28 +385,35 @@ size_t match_regex(struct regex_group *group, const char *s,
         return SIZE_MAX;
 
     case RXGROUP_ROUND:
-        return match_regex(group->left, s, i, len);
+        if (matcher->num == ARRAY_SIZE(matcher->sub)) {
+            return match_regex(group->left, matcher, i);
+        }
+        matcher->sub[matcher->num].start = i;
+        l = match_regex(group->left, matcher, i);
+        matcher->sub[matcher->num].end = i + l;
+        matcher->num++;
+        return l;
 
     case RXGROUP_OR:
-        l = match_regex(group->left, s, i, len);
+        l = match_regex(group->left, matcher, i);
         if (l != SIZE_MAX) {
             return l;
         }
-        return match_regex(group->right, s, i, len);
+        return match_regex(group->right, matcher, i);
 
     case RXGROUP_CON:
-        l = match_regex(group->left, s, i, len);
+        l = match_regex(group->left, matcher, i);
         if (l == SIZE_MAX) {
             return SIZE_MAX;
         }
-        l2 = match_regex(group->right, s, i + l, len);
+        l2 = match_regex(group->right, matcher, i + l);
         if (l2 == SIZE_MAX) {
             return SIZE_MAX;
         }
         return l + l2;
 
     case RXGROUP_PLUS:
-        l = match_regex(group->left, s, i, len);
+        l = match_regex(group->left, matcher, i);
         if (l == SIZE_MAX) {
             return SIZE_MAX;
         }
@@ -426,14 +421,14 @@ size_t match_regex(struct regex_group *group, const char *s,
         do {
             i += l;
             total_len += l;
-            l = match_regex(group->left, s, i, len);
+            l = match_regex(group->left, matcher, i);
         } while (l != 0 && l != SIZE_MAX);
         return total_len;
 
     case RXGROUP_STAR:
         total_len = 0;
         while (1) {
-            l = match_regex(group->left, s, i, len);
+            l = match_regex(group->left, matcher, i);
             if (l == 0 || l == SIZE_MAX) {
                 break;
             }
@@ -443,22 +438,55 @@ size_t match_regex(struct regex_group *group, const char *s,
         return total_len;
 
     case RXGROUP_OPT:
-        l = match_regex(group->left, s, i, len);
+        l = match_regex(group->left, matcher, i);
         return l == SIZE_MAX ? 0 : l;
 
     case RXGROUP_LIT:
-        if (i < len && is_char_toggled(&group->chars, s[i])) {
+        if (i < matcher->len && is_char_toggled(&group->chars, matcher->s[i])) {
             return 1;
         }
         return SIZE_MAX;
+
+    case RXGROUP_WORD_START:
+        if (!isidentf(matcher->s[i])) {
+            return SIZE_MAX;
+        }
+        if (i > 0 && isidentf(matcher->s[i - 1])) {
+            return SIZE_MAX;
+        }
+        return 0;
+
+    case RXGROUP_WORD_END:
+        if (isidentf(matcher->s[i])) {
+            return SIZE_MAX;
+        }
+        if (i > 0 && !isidentf(matcher->s[i - 1])) {
+            return SIZE_MAX;
+        }
+        return 0;
+
+    case RXGROUP_START:
+        if (i > 0) {
+            return SIZE_MAX;
+        }
+        return 0;
+
+    case RXGROUP_END:
+        if (i < matcher->len) {
+            return SIZE_MAX;
+        }
+        return 0;
     }
     return SIZE_MAX;
 }
 
 bool regex_matches(struct regex_group *group, const char *s)
 {
-    size_t          l;
+    struct regex_matcher    matcher;
+    size_t                  l;
 
-    l = match_regex(group, s, 0, strlen(s));
+    matcher.s = s;
+    matcher.len = strlen(s);
+    l = match_regex(group, &matcher, 0);
     return l != SIZE_MAX && s[l] == '\0';
 }

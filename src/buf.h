@@ -91,6 +91,10 @@ struct match {
     struct pos from;
     /// end position
     struct pos to;
+    /// sub matches within this match
+    struct regex_match sub[9];
+    /// number of sub matches
+    size_t num;
 };
 
 #define FOPEN_PAREN 0x10000000
@@ -183,6 +187,8 @@ struct buf {
     size_t a_matches;
     /// last search pattern
     char *search_pat;
+    /// the parsed search pattern
+    struct regex_group *search_group;
 
     /// next buffer in the buffer linked list
     struct buf *next;

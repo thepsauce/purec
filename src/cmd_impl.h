@@ -325,6 +325,8 @@ int cmd_nohighlight(struct cmd_data *cd)
     SelFrame->buf->num_matches = 0;
     free(SelFrame->buf->search_pat);
     SelFrame->buf->search_pat = NULL;
+    free_regex_group(SelFrame->buf->search_group);
+    SelFrame->buf->search_group = NULL;
     return 0;
 }
 

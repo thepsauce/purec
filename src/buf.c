@@ -193,6 +193,7 @@ void destroy_buffer(struct buf *buf)
     free(buf->parens);
     free(buf->matches);
     free(buf->search_pat);
+    free_regex_group(buf->search_group);
 
     /* remove from linked list */
     if (FirstBuffer == buf) {
@@ -855,32 +856,35 @@ struct undo_event *_replace_lines(struct buf *buf,
 static struct match *search_line_pattern(struct buf *buf, line_t line_i,
                                          size_t *p_num_matches)
 {
-    struct regex_group  *group;
-    struct line         *line;
-    col_t               i;
-    size_t              l;
-    struct match        *matches;
-    size_t              num_matches;
+    struct line             *line;
+    col_t                   i;
+    struct regex_matcher    matcher;
+    size_t                  l;
+    struct match            match, *matches;
+    size_t                  num_matches;
 
-    group = parse_regex(buf->search_pat);
     line = &buf->text.lines[line_i];
     matches = NULL;
     num_matches = 0;
+    matcher.s = line->s;
+    matcher.len = line->n;
     for (i = 0; i < line->n; ) {
-        l = match_regex(group, line->s, i, line->n);
+        matcher.num = 0;
+        l = match_regex(buf->search_group, &matcher, i);
         if (l == 0 || l == SIZE_MAX) {
             i++;
             continue;
         }
-        matches = xreallocarray(matches, num_matches + 1, sizeof(*matches));
-        matches[num_matches].from.line = line_i;
-        matches[num_matches].from.col = i;
-        matches[num_matches].to.line = line_i;
+        match.from.col = i;
+        match.from.line = line_i;
         i += l;
-        matches[num_matches].to.col = i;
-        num_matches++;
+        match.to.col = i;
+        match.to.line = line_i;
+        match.num = matcher.num;
+        memcpy(match.sub, matcher.sub, match.num * sizeof(*match.sub));
+        matches = xreallocarray(matches, num_matches + 1, sizeof(*matches));
+        matches[num_matches++] = match;
     }
-    free_regex_group(group);
     *p_num_matches = num_matches;
     return matches;
 }
@@ -918,6 +922,8 @@ size_t search_pattern(struct buf *buf, const char *pat)
 
     free(buf->search_pat);
     buf->search_pat = xstrdup(pat);
+    free_regex_group(buf->search_group);
+    buf->search_group = parse_regex(pat);
 
     matches = NULL;
     buf->num_matches = 0;
