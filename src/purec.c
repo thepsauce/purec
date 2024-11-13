@@ -174,17 +174,21 @@ struct frame *get_frame_with_buffer(const struct buf *buf)
 
 void set_mode(int mode)
 {
-    struct buf *buf;
+    struct buf      *buf;
+    col_t           indent;
 
     buf = SelFrame->buf;
     if (Core.mode == INSERT_MODE && buf->event_i > 0 &&
             (buf->events[buf->event_i - 1].flags & IS_AUTO_INDENT)) {
-        undo_event_no_trans(buf);
-        if (buf->event_i > 0) {
-            buf->events[buf->event_i - 1].flags |= IS_STOP;
+        (void) get_line_indent(buf, SelFrame->cur.line, &indent);
+        if (indent == buf->text.lines[SelFrame->cur.line].n) {
+            undo_event_no_trans(buf);
+            if (buf->event_i > 0) {
+                buf->events[buf->event_i - 1].flags |= IS_STOP;
+            }
+            SelFrame->cur.col = 0;
+            (void) adjust_scroll(SelFrame);
         }
-        SelFrame->cur.col = 0;
-        (void) adjust_scroll(SelFrame);
     }
     if (IS_VISUAL(mode) && !IS_VISUAL(Core.mode)) {
         Core.pos = SelFrame->cur;
