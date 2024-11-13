@@ -59,12 +59,14 @@ struct buf *create_buffer(const char *path)
 
 size_t detect_language(struct buf *buf)
 {
-    static const char   *commit_detect = "# Please enter the commit message";
-    line_t              i;
-    col_t               j;
-    int                 l;
-    char                *name;
-    struct regex_group  *group;
+    static const char       *commit_detect =
+        "# Please enter the commit message";
+    line_t                  i;
+    col_t                   j;
+    int                     l;
+    char                    *name;
+    struct regex_group      *group;
+    struct regex_matcher    matcher;
 
     if (buf->text.num_lines > 4) {
         if (buf->text.lines[0].n == 0) {
@@ -102,13 +104,21 @@ size_t detect_language(struct buf *buf)
     } else {
         name++;
     }
+    memset(&matcher, 0, sizeof(matcher));
+    matcher.num_lines = 1;
+    matcher.lines = xmalloc(sizeof(*matcher.lines));
+    matcher.lines[0].s = name;
+    matcher.lines[0].n = strlen(name);
     for (l = 1; l < NUM_LANGS; l++) {
         group = parse_regex(Langs[l].file_exts);
-        if (regex_matches(group, name)) {
+        matcher.pos.col = 0;
+        matcher.pos.line = 0;
+        if (match_regex(group, &matcher) == 0) {
             return l;
         }
         free_regex_group(group);
     }
+    free(matcher.lines);
     return NO_LANG;
 }
 
@@ -146,6 +156,7 @@ int init_load_buffer(struct buf *buf)
     char            *file;
 
     buf->rule = Core.rule;
+
 beg:
     if (buf->path == NULL || (fp = fopen(buf->path, "r")) == NULL) {
         init_text(&buf->text, 1);
@@ -853,86 +864,83 @@ struct undo_event *_replace_lines(struct buf *buf,
     return ev;
 }
 
-static struct match *search_line_pattern(struct buf *buf, line_t line_i,
-                                         size_t *p_num_matches)
+static struct match *search_pattern(struct buf *buf, struct pos *from,
+                                    struct pos *to, size_t *p_num_matches)
 {
-    struct line             *line;
-    col_t                   i;
+    struct match            *matches, match;
+    size_t                  a_matches, num_matches;
     struct regex_matcher    matcher;
-    size_t                  l;
-    struct match            match, *matches;
-    size_t                  num_matches;
+    struct pos              p;
 
-    line = &buf->text.lines[line_i];
-    matches = NULL;
+    a_matches = 8;
+    matches = xmalloc(sizeof(*matches) * a_matches);
     num_matches = 0;
-    matcher.s = line->s;
-    matcher.len = line->n;
-    for (i = 0; i < line->n; ) {
-        matcher.num = 0;
-        l = match_regex(buf->search_group, &matcher, i);
-        if (l == 0 || l == SIZE_MAX) {
-            i++;
-            continue;
+    matcher.lines = buf->text.lines;
+    matcher.num_lines = buf->text.num_lines;
+
+    p = *from;
+    while (1) {
+        if ((p.line == to->line && p.col > to->col) || p.line > to->line) {
+            break;
         }
-        match.from.col = i;
-        match.from.line = line_i;
-        i += l;
-        match.to.col = i;
-        match.to.line = line_i;
-        match.num = matcher.num;
-        memcpy(match.sub, matcher.sub, match.num * sizeof(*match.sub));
-        matches = xreallocarray(matches, num_matches + 1, sizeof(*matches));
-        matches[num_matches++] = match;
+        matcher.pos = p;
+        matcher.num = 0;
+        match.from = matcher.pos;
+        if (match_regex(buf->search_group, &matcher) == 1) {
+            if (p.col == buf->text.lines[p.line].n) {
+                p.col = 0;
+                p.line++;
+            } else {
+                p.col++;
+            }
+        } else {
+            match.to = matcher.pos;
+            match.num = matcher.num;
+            memcpy(match.sub, matcher.sub, match.num * sizeof(*match.sub));
+            if (num_matches == a_matches) {
+                a_matches *= 2;
+                matches = xreallocarray(matches, a_matches, sizeof(*matches));
+            }
+            matches[num_matches++] = match;
+            if (is_point_equal(&p, &matcher.pos)) {
+                if (p.col == buf->text.lines[p.line].n) {
+                    p.col = 0;
+                    p.line++;
+                } else {
+                    p.col++;
+                }
+            } else {
+                p = matcher.pos;
+            }
+        }
     }
     *p_num_matches = num_matches;
     return matches;
 }
 
-static void fuse_matches(struct buf *buf, line_t line_i,
-                         struct match *matches, size_t n)
+size_t set_pattern(struct buf *buf, const char *pat)
 {
-    size_t          match_i, end;
-    size_t          take;
-
-    match_i = get_match_line(buf, line_i);
-    end = match_i;
-    while (end < buf->num_matches && buf->matches[end].from.line == line_i) {
-        end++;
-    }
-    take = end - match_i;
-    if (buf->num_matches + n - take > buf->a_matches) {
-        buf->a_matches *= 2;
-        buf->a_matches += n - take;
-        buf->matches = xreallocarray(buf->matches, buf->a_matches,
-                                     sizeof(*buf->matches));
-    }
-    memmove(&buf->matches[match_i + n],
-            &buf->matches[match_i + take],
-            sizeof(*buf->matches) * (buf->num_matches - match_i - take));
-    memcpy(&buf->matches[match_i], matches, sizeof(*matches) * n);
-    buf->num_matches += n - take;
-}
-
-size_t search_pattern(struct buf *buf, const char *pat)
-{
-    struct match    *matches;
-    line_t          i;
+    struct pos      from, to;
     size_t          n;
+    struct match    *matches;
 
     free(buf->search_pat);
     buf->search_pat = xstrdup(pat);
     free_regex_group(buf->search_group);
     buf->search_group = parse_regex(pat);
 
-    matches = NULL;
-    buf->num_matches = 0;
-    for (i = 0; i < buf->text.num_lines; i++) {
-        matches = search_line_pattern(buf, i, &n);
-        fuse_matches(buf, i, matches, n);
-        free(matches);
-    }
-    return buf->num_matches;
+    free(buf->matches);
+
+    from.col = 0;
+    from.line = 0;
+    to.col = buf->text.lines[buf->text.num_lines - 1].n;
+    to.line = buf->text.num_lines - 1;
+    matches = search_pattern(buf, &from, &to, &n);
+    matches = xreallocarray(matches, n, sizeof(*matches));
+    buf->matches = matches;
+    buf->num_matches = n;
+    buf->a_matches = n;
+    return n;
 }
 
 /**
@@ -948,6 +956,8 @@ static void highlight_line(struct buf *buf, size_t line_i, unsigned state)
     col_t               n;
     struct line         *line;
     int                 *attribs;
+
+    clear_parens(buf, line_i);
 
     line = &buf->text.lines[line_i];
 
@@ -965,8 +975,6 @@ static void highlight_line(struct buf *buf, size_t line_i, unsigned state)
     ctx.s = line->s;
     ctx.n = line->n;
 
-    clear_parens(buf, line_i);
-
     for (ctx.pos.col = 0; ctx.pos.col < ctx.n; ) {
         n = (*Langs[buf->lang].fsm[ctx.state & 0xff])(&ctx);
         for (; n > 0; n--) {
@@ -982,11 +990,42 @@ static void highlight_line(struct buf *buf, size_t line_i, unsigned state)
     buf->states[line_i] = ctx.state & ~FSTATE_MULTI;
 }
 
+static void fuse_matches(struct buf *buf, size_t start, size_t end,
+                         struct match *matches, size_t num_matches)
+{
+    size_t          take;
+
+    take = end - start;
+    if (buf->num_matches + num_matches - take > buf->a_matches) {
+        buf->a_matches *= 2;
+        buf->a_matches += num_matches - take;
+        buf->matches = xreallocarray(buf->matches, buf->a_matches,
+                                     sizeof(*buf->matches));
+    }
+    memmove(&buf->matches[start + num_matches],
+            &buf->matches[end],
+            sizeof(*buf->matches) * (buf->num_matches - end));
+    memcpy(&buf->matches[start], matches, sizeof(*matches) * num_matches);
+    buf->num_matches += num_matches - take;
+}
+
 void rehighlight_lines(struct buf *buf, line_t line_i, line_t num_lines)
 {
-    unsigned        state, prev_state;
-    struct match    *matches;
-    size_t          n;
+    struct pos          from, to;
+    struct match        *matches;
+    size_t              num_matches;
+    unsigned            state, prev_state;
+
+    if (buf->search_pat != NULL) {
+        /* TODO: check if multi line match or not */
+        from.col = 0;
+        from.line = 0;
+        to.line = buf->text.num_lines - 1;
+        to.col = buf->text.lines[to.line].n;
+        matches = search_pattern(buf, &from, &to, &num_matches);
+        fuse_matches(buf, 0, buf->num_matches, matches, num_matches);
+        free(matches);
+    }
 
     state = line_i == 0 ? STATE_START : buf->states[line_i - 1];
     for (; num_lines > 0; num_lines--, line_i++) {
@@ -996,11 +1035,6 @@ void rehighlight_lines(struct buf *buf, line_t line_i, line_t num_lines)
         prev_state = buf->states[line_i];
         highlight_line(buf, line_i, state); 
 
-        if (buf->search_pat != NULL) {
-            matches = search_line_pattern(buf, line_i, &n);
-            fuse_matches(buf, line_i, matches, n);
-            free(matches);
-        }
         if (prev_state != buf->states[line_i]) {
             if (num_lines == 1) {
                 num_lines++;

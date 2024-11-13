@@ -5,6 +5,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include "util.h"
+#include "text.h"
+
 struct char_set {
     uint16_t set[16];
 };
@@ -45,9 +48,7 @@ enum rxgroup_type {
     RXGROUP_ROUND,
     RXGROUP_OR,
     RXGROUP_CON,
-    RXGROUP_PLUS,
-    RXGROUP_STAR,
-    RXGROUP_OPT,
+    RXGROUP_RANGE,
     RXGROUP_LIT,
     RXGROUP_WORD_START,
     RXGROUP_WORD_END,
@@ -60,6 +61,7 @@ struct regex_group {
     struct regex_group *left;
     struct regex_group *right;
     struct char_set chars;
+    size_t min, max;
 };
 
 struct regex_parser {
@@ -87,8 +89,9 @@ struct regex_match {
 };
 
 struct regex_matcher {
-    const char *s;
-    size_t len;
+    struct line *lines;
+    line_t num_lines;
+    struct pos pos;
     struct regex_match sub[9];
     size_t num;
 };
@@ -97,22 +100,10 @@ struct regex_matcher {
  * Matches given string against a regex group.
  *
  * @param group     The group to use for matching.
- * @param matcher   The place to store sub matches and the input string.
- * @param i         The index to start matching from.
+ * @param matcher   The place to store sub matches and the input text.
  *
  * @return The length of the match.
  */
-size_t match_regex(struct regex_group *group, struct regex_matcher *matcher,
-                   size_t i);
-
-/**
- * Checks if the given string matches a regex group.
- *
- * @param group The group to use for matching.
- * @param s     The string to match against.
- *
- * @return If the group matched the entire string.
- */
-bool regex_matches(struct regex_group *group, const char *s);
+int match_regex(struct regex_group *group, struct regex_matcher *matcher);
 
 #endif

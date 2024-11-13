@@ -575,7 +575,7 @@ int cmd_substitute(struct cmd_data *cd)
         free(repl);
     }
     buf = SelFrame->buf;
-    search_pattern(buf, &cd->arg[1]);
+    set_pattern(buf, &cd->arg[1]);
     m = &buf->matches[buf->num_matches];
     /* make sure the buffer does not move the matches */
     pat = buf->search_pat;

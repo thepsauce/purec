@@ -730,7 +730,7 @@ struct undo_event *perform_event(struct buf *buf, const struct undo_event *ev)
  * @return The number of matches.
 
  */
-size_t search_pattern(struct buf *buf, const char *pat);
+size_t set_pattern(struct buf *buf, const char *pat);
 
 /**
  * Rehighlights given lines.

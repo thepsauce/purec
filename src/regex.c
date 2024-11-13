@@ -1,5 +1,4 @@
 #include "regex.h"
-#include "util.h"
 #include "xalloc.h"
 
 #include <ctype.h>
@@ -11,9 +10,7 @@ static int Precedences[] = {
     [RXGROUP_OR]            = 1,
     [RXGROUP_CON]           = 2,
 
-    [RXGROUP_PLUS]          = 10,
-    [RXGROUP_STAR]          = 10,
-    [RXGROUP_OPT]           = 10,
+    [RXGROUP_RANGE]         = 10,
 
     [RXGROUP_LIT]           = INT_MAX,
     [RXGROUP_WORD_START]    = INT_MAX,
@@ -98,6 +95,7 @@ static void exchange_group(struct regex_parser *rp, int group_type)
 static char get_escaped(char ch)
 {
     switch (ch) {
+    case '0': return '\0';
     case 'a': return '\a';
     case 'b': return '\b';
     case 'f': return '\f';
@@ -113,6 +111,12 @@ static const char *get_hex_sequence(const char *s, int *amount, char *chs)
 {
     int             a;
     int             c, n;
+
+    if (s[0] == '\0') {
+        chs[0] = 'x';
+        *amount = 1;
+        return s;
+    }
 
     a = *amount;
     n = 0;
@@ -217,7 +221,23 @@ const char *parse_special_group(struct char_set *set, const char *s)
     for (; s != e; s++) {
         if (s[0] == '\\') {
             s++;
-            c = get_escaped(s[0]);
+            if (s[0] == 'x') {
+                if (s[1] == ']') {
+                    c = 'x';
+                } else if (isalpha(s[1]) || isdigit(s[1])) {
+                    s++;
+                    c = isalpha(s[0]) ? tolower(s[0]) - 'a' + 10 :
+                            s[0] - '0';
+                    if (isalpha(s[1]) || isdigit(s[1])) {
+                        s++;
+                        c <<= 4;
+                        c |= isalpha(s[0]) ? tolower(s[0]) - 'a' + 10 :
+                                s[0] - '0';
+                    }
+                }
+            } else {
+                c = get_escaped(s[0]);
+            }
         } else if (s[0] == '-') {
             if (&s[1] == e) {
                 c = '-';
@@ -249,7 +269,6 @@ struct regex_group *parse_regex(const char *s)
     char                chs[4];
     int                 n, i;
     size_t              ns;
-    enum rxgroup_type   type;
     struct regex_group  *gr;
 
     rp.stack = xmalloc(sizeof(*rp.stack));
@@ -310,7 +329,7 @@ beg:
     } else if (s[0] == '$') {
         rp.stack[rp.num_stack - 1]->type = RXGROUP_END;
         s++;
-    } else if (s[0] != '\0' && strchr("+*|()", s[0]) == NULL) {
+    } else if (s[0] != '\0' && strchr("+*|(", s[0]) == NULL) {
         rp.stack[rp.num_stack - 1]->type = RXGROUP_LIT;
         set_char(&rp.stack[rp.num_stack - 1]->chars, s[0]);
         s++;
@@ -351,10 +370,10 @@ infix:
         enter_group(&rp, RXGROUP_NULL);
         s++;
     } else if (strchr("+*?", s[0]) != NULL) {
-        type = s[0] == '+' ? RXGROUP_PLUS : s[0] == '*' ? RXGROUP_STAR :
-                RXGROUP_OPT;
-        walk_up_precedences(&rp, Precedences[type]);
-        exchange_group(&rp, type);
+        walk_up_precedences(&rp, Precedences[RXGROUP_RANGE]);
+        exchange_group(&rp, RXGROUP_RANGE);
+        rp.stack[rp.num_stack - 1]->min = s[0] == '+' ? 1 : 0;
+        rp.stack[rp.num_stack - 1]->max = s[0] == '?' ? 1 : SIZE_MAX;
         s++;
         goto infix;
     } else {
@@ -375,118 +394,186 @@ void free_regex_group(struct regex_group *group)
     free(group);
 }
 
-size_t match_regex(struct regex_group *group, struct regex_matcher *matcher,
-                   size_t i)
+struct matcher_stack {
+    struct matcher_stack_item {
+        struct regex_group *group;
+        struct pos pos;
+        size_t times;
+    } *items;
+    size_t len;
+};
+
+static inline void push_group(struct matcher_stack *stack,
+                              struct regex_group *group,
+                              struct pos *pos)
 {
-    size_t          l, l2, total_len;
-
-    switch (group->type) {
-    case RXGROUP_NULL:
-        return SIZE_MAX;
-
-    case RXGROUP_ROUND:
-        if (matcher->num == ARRAY_SIZE(matcher->sub)) {
-            return match_regex(group->left, matcher, i);
-        }
-        matcher->sub[matcher->num].start = i;
-        l = match_regex(group->left, matcher, i);
-        matcher->sub[matcher->num].end = i + l;
-        matcher->num++;
-        return l;
-
-    case RXGROUP_OR:
-        l = match_regex(group->left, matcher, i);
-        if (l != SIZE_MAX) {
-            return l;
-        }
-        return match_regex(group->right, matcher, i);
-
-    case RXGROUP_CON:
-        l = match_regex(group->left, matcher, i);
-        if (l == SIZE_MAX) {
-            return SIZE_MAX;
-        }
-        l2 = match_regex(group->right, matcher, i + l);
-        if (l2 == SIZE_MAX) {
-            return SIZE_MAX;
-        }
-        return l + l2;
-
-    case RXGROUP_PLUS:
-        l = match_regex(group->left, matcher, i);
-        if (l == SIZE_MAX) {
-            return SIZE_MAX;
-        }
-        total_len = 0;
-        do {
-            i += l;
-            total_len += l;
-            l = match_regex(group->left, matcher, i);
-        } while (l != 0 && l != SIZE_MAX);
-        return total_len;
-
-    case RXGROUP_STAR:
-        total_len = 0;
-        while (1) {
-            l = match_regex(group->left, matcher, i);
-            if (l == 0 || l == SIZE_MAX) {
-                break;
-            }
-            i += l;
-            total_len += l;
-        }
-        return total_len;
-
-    case RXGROUP_OPT:
-        l = match_regex(group->left, matcher, i);
-        return l == SIZE_MAX ? 0 : l;
-
-    case RXGROUP_LIT:
-        if (i < matcher->len && is_char_toggled(&group->chars, matcher->s[i])) {
-            return 1;
-        }
-        return SIZE_MAX;
-
-    case RXGROUP_WORD_START:
-        if (!isidentf(matcher->s[i])) {
-            return SIZE_MAX;
-        }
-        if (i > 0 && isidentf(matcher->s[i - 1])) {
-            return SIZE_MAX;
-        }
-        return 0;
-
-    case RXGROUP_WORD_END:
-        if (isidentf(matcher->s[i])) {
-            return SIZE_MAX;
-        }
-        if (i > 0 && !isidentf(matcher->s[i - 1])) {
-            return SIZE_MAX;
-        }
-        return 0;
-
-    case RXGROUP_START:
-        if (i > 0) {
-            return SIZE_MAX;
-        }
-        return 0;
-
-    case RXGROUP_END:
-        if (i < matcher->len) {
-            return SIZE_MAX;
-        }
-        return 0;
-    }
-    return SIZE_MAX;
+    stack->items = xrealloc(stack->items,
+                            sizeof(*stack->items) * (stack->len + 1));
+    stack->items[stack->len].group = group;
+    stack->items[stack->len].pos = *pos;
+    stack->items[stack->len].times = 0;
+    stack->len++;
 }
 
-bool regex_matches(struct regex_group *group, const char *s)
+static inline struct regex_group *pop_group(struct matcher_stack *stack,
+                                            struct pos *pos)
 {
-    struct regex_matcher    matcher;
-    size_t                  l;
+    struct matcher_stack_item   *item;
 
-    matcher.s = s;
-    matcher.len = strlen(s);
-    l = match_regex(group, &matcher, 0);
-    return l != SIZE_MAX && s[l] == '\0';
+    item = &stack->items[--stack->len];
+    if (pos != NULL) {
+        *pos = item->pos;
+    }
+    return item->group;
+}
+
+static inline int pop_group_success(struct matcher_stack *stack,
+                                    struct regex_group **p_group,
+                                    struct pos *pos)
+{
+    struct regex_group  *group;
+    size_t              times;
+
+    while (stack->len > 0) {
+        group = pop_group(stack, NULL);
+        switch (group->type) {
+        case RXGROUP_OR:
+        case RXGROUP_ROUND:
+            break;
+
+        case RXGROUP_CON:
+            *p_group = group->right;
+            return 0;
+
+        case RXGROUP_RANGE:
+            times = stack->items[stack->len].times + 1;
+            if (times < group->max) {
+                push_group(stack, group, pos);
+                stack->items[stack->len - 1].times = times;
+                *p_group = group->left;
+                return 0;
+            }
+            break;
+
+        default:
+            *p_group = group;
+            return 0;
+        }
+    }
+    *p_group = NULL;
+    return 0;
+}
+
+static inline int pop_group_fail(struct matcher_stack *stack,
+                                 struct regex_group **p_group,
+                                 struct pos *pos)
+{
+    struct regex_group  *group;
+
+    while (stack->len > 0) {
+        group = pop_group(stack, NULL);
+        switch (group->type) {
+        case RXGROUP_OR:
+            *pos = stack->items[stack->len].pos;
+            *p_group = group->right;
+            return 0;
+
+        case RXGROUP_RANGE:
+            if (stack->items[stack->len].times < group->min) {
+                break;
+            }
+            *pos = stack->items[stack->len].pos;
+            return pop_group_success(stack, p_group, pos);
+
+        default:
+            /* nothing */
+            break;
+        }
+    }
+    return -1;
+}
+
+int match_regex(struct regex_group *group, struct regex_matcher *matcher)
+{
+    struct matcher_stack    stack;
+    struct line             *line;
+
+    memset(&stack, 0, sizeof(stack));
+    while (group != NULL) {
+        switch (group->type) {
+        case RXGROUP_NULL:
+            goto fail;
+
+        case RXGROUP_ROUND:
+        case RXGROUP_CON:
+        case RXGROUP_OR:
+        case RXGROUP_RANGE:
+            push_group(&stack, group, &matcher->pos);
+            group = group->left;
+            continue;
+
+        case RXGROUP_WORD_START:
+            line = &matcher->lines[matcher->pos.line];
+            if (matcher->pos.col == line->n ||
+                    !isidentf(line->s[matcher->pos.col]) ||
+                    (matcher->pos.col > 0 &&
+                     isidentf(line->s[matcher->pos.col - 1]))) {
+                goto fail;
+            }
+            break;
+
+        case RXGROUP_WORD_END:
+            line = &matcher->lines[matcher->pos.line];
+            if (matcher->pos.col == line->n || matcher->pos.col == 0 ||
+                    isidentf(line->s[matcher->pos.col]) ||
+                    !isidentf(line->s[matcher->pos.col - 1])) {
+                goto fail;
+            }
+            break;
+
+        case RXGROUP_START:
+            if (matcher->pos.col > 0) {
+                goto fail;
+            }
+            break;
+
+        case RXGROUP_END:
+            line = &matcher->lines[matcher->pos.line];
+            if (matcher->pos.col < line->n) {
+                goto fail;
+            }
+            break;
+
+        case RXGROUP_LIT:
+            line = &matcher->lines[matcher->pos.line];
+            if (matcher->pos.col == line->n) {
+                if (matcher->pos.line + 1 < matcher->num_lines &&
+                        is_char_toggled(&group->chars, '\n')) {
+                    matcher->pos.col = 0;
+                    matcher->pos.line++;
+                    break;
+                }
+            } else if (is_char_toggled(&group->chars,
+                                       line->s[matcher->pos.col])) {
+                matcher->pos.col++;
+                break;
+            }
+            goto fail;
+        }
+
+        (void) pop_group_success(&stack, &group, &matcher->pos);
+        continue;
+
+    fail:
+        if (pop_group_fail(&stack, &group, &matcher->pos) == -1) {
+            goto mismatch;
+        }
+    }
+
+    free(stack.items);
+    return 0;
+
+mismatch:
+    free(stack.items);
+    return 1;
 }

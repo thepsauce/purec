@@ -263,6 +263,11 @@ void render_frame(struct frame *frame)
 
     /* overlay with matches */
     match_i = get_match_line(buf, frame->scroll.line);
+    /* correction if there is a matche out of view but whose tail is in view */
+    if (match_i > 0 &&
+            buf->matches[match_i - 1].from.line < frame->scroll.line) {
+        match_i--;
+    }
     for (match = &buf->matches[match_i];
             match < &buf->matches[buf->num_matches] &&
                 match->from.line < last_line;
@@ -272,20 +277,31 @@ void render_frame(struct frame *frame)
                               buf->rule.tab_size,
                               match->from.col);
         v_start = MAX(v_start, frame->scroll.col);
-        if (v_start >= ri.w) {
-            continue;
+        for (l = match->from.line; l <= match->to.line; l++,
+             v_start = frame->scroll.col) {
+            if (l == match->to.line) {
+                v_end = get_advance(buf->text.lines[l].s,
+                                    buf->text.lines[l].n,
+                                    buf->rule.tab_size,
+                                    match->to.col);
+                /* show empty matches as well */
+                if (l == match->from.line && match->from.col == match->to.col) {
+                    v_end++;
+                }
+            } else {
+                v_end = get_advance(buf->text.lines[l].s,
+                                    buf->text.lines[l].n,
+                                    buf->rule.tab_size,
+                                    buf->text.lines[l].n) + 1;
+            }
+            if (v_start >= v_end) {
+                continue;
+            }
+            mvchgat(frame->y + l - frame->scroll.line,
+                    frame->x + x + v_start - frame->scroll.col,
+                    MIN((int) (v_end - v_start), w),
+                    get_attrib_of(HI_SEARCH), HI_SEARCH, NULL);
         }
-        v_end   = get_advance(buf->text.lines[match->to.line].s,
-                              buf->text.lines[match->to.line].n,
-                              buf->rule.tab_size,
-                              match->to.col);
-        if (v_start >= v_end) {
-            continue;
-        }
-        mvchgat(frame->y + match->from.line - frame->scroll.line,
-                frame->x + x + v_start - frame->scroll.col,
-                MIN((int) (v_end - v_start), w),
-                get_attrib_of(HI_SEARCH), HI_SEARCH, NULL);
     }
 
     if (frame == SelFrame) {

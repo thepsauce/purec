@@ -1357,8 +1357,8 @@ static size_t find_current_match(struct buf *buf, struct pos *pos)
 
 static int _find_prev_match(struct frame *frame)
 {
-    struct pos      p;
     size_t          index;
+    struct pos      p;
 
     index = find_current_match(frame->buf, &frame->cur);
     p = frame->buf->matches[index].from;
@@ -1382,8 +1382,14 @@ static int _find_prev_match(struct frame *frame)
 static int _find_next_match(struct frame *frame)
 {
     size_t          index;
-    
+    struct pos      p;
+
     index = find_current_match(frame->buf, &frame->cur);
+    p = frame->buf->matches[(index + 1) % frame->buf->num_matches].from;
+    if (frame->cur.line == p.line && frame->cur.col + 1 == p.col &&
+            p.col == frame->buf->text.lines[p.line].n) {
+        Core.counter = safe_add(Core.counter, 1);
+    }
     index += Core.counter % frame->buf->num_matches;
     index %= frame->buf->num_matches;
     frame->next_cur = frame->buf->matches[index].from;

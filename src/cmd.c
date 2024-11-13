@@ -600,7 +600,7 @@ void read_command_line(const char *beg)
             if (r == INP_CHANGED && (beg[0] == '/' || beg[0] == '?')) {
                 /* get live results */
                 terminate_input(&Cmd);
-                (void) search_pattern(SelFrame->buf, &Cmd.s[Cmd.prefix]);
+                (void) set_pattern(SelFrame->buf, &Cmd.s[Cmd.prefix]);
                 SelFrame->cur = cur;
                 SelFrame->scroll = scroll;
                 Core.counter = 1;
