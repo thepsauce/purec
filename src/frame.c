@@ -707,28 +707,34 @@ static int move_end(struct frame *frame)
 
 static int move_prev(struct frame *frame)
 {
-    col_t           col, line;
+    col_t           col;
+    line_t          line_i;
+    struct line     *line;
 
     if (frame->cur.col == 0 && frame->cur.line == 0) {
         return 0;
     }
 
     col = frame->cur.col;
-    line = frame->cur.line;
+    line_i = frame->cur.line;
+    line = &frame->buf->text.lines[line_i];
     while (1) {
         for (; Core.counter > 0; Core.counter--) {
             if (col == 0) {
                 break;
             }
-            col = move_back_glyph(frame->buf->text.lines[line].s, col);
+            col = move_back_glyph(line->s, col);
         }
-        if (Core.counter == 0 || line == 0) {
+        if (Core.counter == 0 || line_i == 0) {
             break;
         }
+        line_i--;
         line--;
+        col = get_mode_line_end(line);
+        Core.counter--;
     }
     frame->next_cur.col = col;
-    frame->next_cur.line = line;
+    frame->next_cur.line = line_i;
     frame->next_vct = compute_vct(frame, &frame->next_cur);
     return UPDATE_UI;
 }
@@ -744,7 +750,7 @@ static int move_next(struct frame *frame)
     line = &frame->buf->text.lines[line_i];
     while (line_i != frame->buf->text.num_lines - 1) {
         for (; Core.counter > 0; Core.counter--) {
-            if (col == line->n) {
+            if (col == get_mode_line_end(line)) {
                 break;
             }
             col += get_glyph_count(&line->s[col], line->n - col);
@@ -755,6 +761,7 @@ static int move_next(struct frame *frame)
         col = 0;
         line_i++;
         line++;
+        Core.counter--;
     }
     if (col == frame->cur.col && line_i == frame->cur.line) {
         return 0;
