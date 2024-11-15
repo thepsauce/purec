@@ -380,9 +380,12 @@ void render_frame(struct frame *frame)
 
     set_highlight(OffScreen, HI_STATUS);
 
-    mvwprintw(OffScreen, 0, 0, " %s%s",
+    mvwprintw(OffScreen, 0, 0, " %s%s (%s) (%s)",
               get_pretty_path(buf->path),
-              buf->event_i == buf->save_event_i ?  "" : "[+]");
+              buf->event_i == buf->save_event_i ?  "" : "[+]",
+              buf->file.encoding,
+              buf->file.eol == EOL_NL ? "NL" :
+              buf->file.eol == EOL_CR ? "CR" : "CRNL");
     w = getcurx(OffScreen);
     if (w + orig_x > frame->w) {
         w = frame->w - orig_x;

@@ -2,6 +2,7 @@
 #define TEXT_H
 
 #include "util.h"
+#include "purec.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -51,8 +52,12 @@ void clear_text(struct text *text);
 void make_text(struct text *text, struct line *lines, line_t num_lines);
 void str_to_text(const char *str, size_t len, struct text *text);
 char *text_to_str(struct text *text, size_t *p_len);
-size_t read_text(FILE *fp, struct text *text, line_t max_lines);
-size_t write_text(FILE *fp, struct text *text, line_t from, line_t to);
+struct file_rule;
+size_t read_text(FILE *fp, struct file_rule *rule, struct text *text,
+                 line_t max_lines);
+size_t write_text(FILE *fp, const struct file_rule *rule,
+                  const struct text *text,
+                  line_t from, line_t to);
 bool clip_range(const struct text *text,
                 const struct pos *from, const struct pos *to,
                 struct pos *d_from, struct pos *d_to);

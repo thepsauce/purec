@@ -17,6 +17,7 @@
 #include "util.h"
 
 #include <ncurses.h>
+#include <unistd.h>
 
 /**
  * Off screen window that can be used for measuring.
@@ -36,6 +37,17 @@ extern WINDOW *OffScreen;
 #define VISUAL_MODE 2 /* 2 */
 #define VISUAL_LINE_MODE (2|1) /* 3 */
 #define VISUAL_BLOCK_MODE (2|4) /* 6 */
+
+#define EOL_NL      0
+#define EOL_CR      1
+#define EOL_CRNL    2
+
+struct file_rule {
+    /// the character encoding to use
+    char *encoding;
+    /// end of line rule (see `EOL_*`)
+    int eol;
+};
 
 struct indent_rule {
     /// the number of spaces of a tab
@@ -218,6 +230,7 @@ int copy_clipboard(struct undo_seg *seg, int primary);
  *
  * @return The lines read, they shall NOT be freed or modified.
  */
+struct text;
 bool paste_clipboard(struct text *text, int primary);
 
 /**
@@ -307,6 +320,7 @@ int get_extra_char(void);
  *
  * @return Index of the line ending.
  */
+struct line;
 col_t get_mode_line_end(const struct line *line);
 
 /**

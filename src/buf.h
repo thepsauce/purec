@@ -140,6 +140,8 @@ struct buf {
 
     /// absolute path on the file system (can be `NULL` to signal no file)
     char *path;
+    /// the encoding and end of line rule
+    struct file_rule file;
     /// last statistics of the file
     struct stat st;
     /// the event index at the time of saving

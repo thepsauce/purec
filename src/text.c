@@ -1,6 +1,9 @@
 #include "text.h"
 #include "xalloc.h"
+#include "purec.h"
 
+#include <magic.h>
+#include <iconv.h>
 #include <string.h>
 
 void init_text(struct text *text, size_t num_lines)
@@ -78,50 +81,187 @@ char *text_to_str(struct text *text, size_t *p_len)
     return str;
 }
 
-size_t read_text(FILE *fp, struct text *text, line_t max_lines)
+size_t read_text(FILE *fp, struct file_rule *rule, struct text *text,
+                 line_t max_lines)
 {
-    char            *line;
-    size_t          a_line;
+    static magic_t  magic;
+    const char      *from_code;
+    iconv_t         icv;
+    int             eol;
+    char            *ep;
+    char            in_buf[1024];
+    char            out_buf[1024];
+    char            *in_ptr, *out_ptr;
+    size_t          in_len, out_len;
+    size_t          i, j;
     size_t          num_bytes;
-    ssize_t         len_line;
+    struct line     *line;
 
-    line = NULL;
-    a_line = 0;
-    num_bytes = 0;
-    while (max_lines > 0 && (len_line = get_line(&line, &a_line, fp)) >= 0) {
-        if (text->num_lines == text->a_lines) {
-            text->a_lines *= 2;
-            text->a_lines++;
-            text->lines = xreallocarray(text->lines, text->a_lines,
-                                        sizeof(*text->lines));
+    if (magic == NULL) {
+        magic = magic_open(MAGIC_MIME_ENCODING);
+        if (magic != NULL) {
+            if (magic_load(magic, NULL) == -1) {
+                magic_close(magic);
+                magic = NULL;
+            }
         }
-        text->lines[text->num_lines].n = len_line;
-        text->lines[text->num_lines].s = xmemdup(line, len_line);
-        text->num_lines++;
-        num_bytes += len_line + 1;
-        max_lines--;
     }
-    text->lines = xreallocarray(text->lines, text->a_lines,
-                                sizeof(*text->lines));
-    free(line);
+
+    in_len = fread(in_buf, 1, sizeof(in_buf), fp);
+    ep = strchr(in_buf, '\n');
+    if (ep != NULL) {
+        if (ep > in_buf && ep[-1] == '\r') {
+            eol = EOL_CRNL;
+        } else {
+            eol = EOL_NL;
+        }
+    } else if (strchr(in_buf, '\r') != NULL) {
+        eol = EOL_CR;
+    } else {
+        eol = EOL_NL;
+    }
+
+    from_code = NULL;
+    if (magic != NULL) {
+        from_code = magic_buffer(magic, in_buf, in_len);
+        if (strcmp(from_code, "us-ascii") == 0) {
+            from_code = "utf-8";
+        }
+    }
+
+    if (from_code == NULL) {
+        icv = (iconv_t) -1;
+        from_code = "utf-8";
+    } else {
+        icv = iconv_open("utf-8", from_code);
+    }
+
+    text->a_lines = 8;
+    text->lines = xmalloc(sizeof(*text->lines) * text->a_lines);
+    line = &text->lines[0];
+    line->s = NULL;
+    line->n = 0;
+    text->num_lines = 1;
+    num_bytes = 0;
+    do {
+        if (icv == (iconv_t) -1) {
+            memcpy(out_buf, in_buf, in_len);
+            out_len = in_len;
+            in_len = 0;
+        } else {
+            in_ptr = in_buf;
+            out_ptr = out_buf;
+            out_len = sizeof(out_buf);
+            if (iconv(icv, &in_ptr, &in_len, &out_ptr, &out_len) ==
+                    (size_t) -1) {
+                out_buf[0] = in_buf[0];
+                in_len--;
+                in_ptr++;
+                out_len = 1;
+            } else {
+                out_len = sizeof(out_buf) - out_len;
+            }
+            memmove(in_buf, in_ptr, in_len);
+        }
+        in_len += fread(&in_buf[in_len], 1, sizeof(in_buf) - in_len, fp);
+        i = 0;
+        j = 0;
+        do {
+            for (; i < out_len; i++) {
+                if (eol == EOL_CRNL && i + 1 < out_len && out_buf[i] == '\r' &&
+                        out_buf[i + 1] == '\n') {
+                    break;
+                } else if (eol == EOL_CR && out_buf[i] == '\r') {
+                    break;
+                } else if (eol == EOL_NL && out_buf[i] == '\n') {
+                    break;
+                }
+            }
+            line->s = xrealloc(line->s, line->n + i - j);
+            memcpy(&line->s[line->n], &out_buf[j], i - j);
+            line->n += i - j;
+            if (i < out_len) {
+                num_bytes += line->n + 1;
+                if (text->num_lines == max_lines) {
+                    goto end;
+                }
+                if (text->num_lines == text->a_lines) {
+                    text->a_lines *= 2;
+                    text->lines = xreallocarray(text->lines, text->a_lines,
+                                                sizeof(*text->lines));
+                }
+                line = &text->lines[text->num_lines++];
+                line->s = NULL;
+                line->n = 0;
+                i += eol == EOL_CRNL ? 2 : 1;
+            }
+            j = i;
+        } while (i < out_len);
+    } while (in_len > 0);
+
+    if (icv != (iconv_t) -1) {
+        iconv_close(icv);
+    }
+
+    num_bytes += line->n;
+
+end:
+    if (line->n == 0 && text->num_lines > 1) {
+        text->num_lines--;
+    }
+    if (rule != NULL) {
+        rule->encoding = xstrdup(from_code);
+        rule->eol = eol;
+    }
     return num_bytes;
 }
 
-size_t write_text(FILE *fp, struct text *text, line_t from, line_t to)
+size_t write_text(FILE *fp, const struct file_rule *rule,
+                  const struct text *text,
+                  line_t from, line_t to)
 {
+    static const char eols[3][2] = {
+        [EOL_NL] = { '\n', '\0' },
+        [EOL_CR] = { '\r', '\0' },
+        [EOL_CRNL] = { '\r', '\n' },
+    };
+
+    iconv_t         icv;
     size_t          num_bytes;
     struct line     *line;
+    char            *in_ptr, *out_ptr;
+    char            out_buf[1024];
+    size_t          out_len, in_len;
+
+    icv = iconv_open(rule->encoding, "utf-8");
 
     num_bytes = 0;
     for (; from <= to; from++) {
         line = &text->lines[from];
-        num_bytes += line->n + 1;
-        fwrite(line->s, 1, line->n, fp);
+        in_ptr = line->s;
+        in_len = line->n;
+        while (in_len > 0) {
+            out_ptr = out_buf;
+            out_len = sizeof(out_buf);
+            if (iconv(icv, &in_ptr, &in_len, &out_ptr, &out_len) ==
+                    (size_t) -1) {
+                out_buf[0] = in_ptr[0];
+                out_len = sizeof(out_buf) - 1;
+                in_ptr++;
+                in_len--;
+            }
+            fwrite(out_buf, 1, sizeof(out_buf) - out_len, fp);
+            num_bytes += sizeof(out_buf) - out_len;
+        }
         if (from + 1 != text->num_lines || line->n != 0) {
-            fputc('\n', fp);
+            fputc(eols[rule->eol][0], fp);
+            if (eols[rule->eol][1] != '\0') {
+                fputc(eols[rule->eol][1], fp);
+            }
             num_bytes++;
         }
     }
+    iconv_close(icv);
     return num_bytes;
 }
 

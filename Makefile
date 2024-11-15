@@ -4,7 +4,7 @@ C_FLAGS := -Isrc -std=gnu99 -Wall -Wextra -Wpedantic
 RELEASE_FLAGS := -O3
 
 # Libraries
-C_LIBS := -lncursesw -lX11 -lm
+C_LIBS := -lncursesw -lX11 -lm -lmagic
 
 # Input
 SRC := src

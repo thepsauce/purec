@@ -159,6 +159,8 @@ int init_load_buffer(struct buf *buf)
 
 beg:
     if (buf->path == NULL || (fp = fopen(buf->path, "r")) == NULL) {
+        buf->file.encoding = xstrdup("utf-8");
+        buf->file.eol = EOL_NL;
         init_text(&buf->text, 1);
         notice_line_growth(buf, 0, 1);
         /* this will detect the language based on the file extension */
@@ -176,7 +178,9 @@ beg:
         goto beg;
     }
 
-    if (read_text(fp, &buf->text, LINE_MAX) == 0) {
+    if (read_text(fp, &buf->file, &buf->text, LINE_MAX) == 0) {
+        buf->file.encoding = xstrdup("utf-8");
+        buf->file.eol = EOL_NL;
         init_text(&buf->text, 1);
         notice_line_growth(buf, 0, 1);
     } else {
@@ -200,6 +204,7 @@ void destroy_buffer(struct buf *buf)
     free(buf->attribs);
     free(buf->states);
     clear_text(&buf->text);
+    free(buf->file.encoding);
     free(buf->events);
     free(buf->parens);
     free(buf->matches);
@@ -320,7 +325,7 @@ size_t write_file(struct buf *buf, line_t from, line_t to, FILE *fp)
     }
     from = MIN(from, buf->text.num_lines - 1);
 
-    return write_text(fp, &buf->text, from, to);
+    return write_text(fp, &buf->file, &buf->text, from, to);
 }
 
 struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
@@ -328,7 +333,7 @@ struct undo_event *read_file(struct buf *buf, const struct pos *pos, FILE *fp)
     struct text         text;
     struct undo_event   *ev;
 
-    if (read_text(fp, &text, LINE_MAX) == 0) {
+    if (read_text(fp, NULL, &text, LINE_MAX) == 0) {
         return NULL;
     }
     ev = insert_lines(buf, pos, &text, 1);
