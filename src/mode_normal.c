@@ -3,6 +3,7 @@
 #include "fuzzy.h"
 #include "purec.h"
 #include "xalloc.h"
+#include "charnum.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -968,6 +969,72 @@ static int play_dot_recording(void)
     return DO_NOT_RECORD;
 }
 
+static int add_to_number(int dir)
+{
+    struct line     *line;
+    col_t           c, e;
+    struct text     text;
+    struct pos      from, to;
+    size_t          n;
+    struct charnum  num1, num2, sum;
+
+    line = &SelFrame->buf->text.lines[SelFrame->cur.line];
+    for (c = SelFrame->cur.col; c < line->n; c++) {
+        if (isdigit(line->s[c])) {
+            break;
+        }
+    }
+    for (; c > 0; c--) {
+        if (!isdigit(line->s[c - 1])) {
+            break;
+        }
+    }
+    if (c == line->n || !isdigit(line->s[c])) {
+        return DO_NOT_RECORD;
+    }
+    e = c;
+    while (e < line->n && isdigit(line->s[e])) {
+        e++;
+    }
+
+    if (c > 0 && line->s[c - 1] == '-') {
+        c--;
+    }
+
+    str_to_char_num(&line->s[c], e - c, &num1);
+    num_to_char_num(Core.counter, &num2);
+    if (dir < 0) {
+        num2.sign = -1;
+    }
+    add_char_nums(&num1, &num2, &sum);
+
+    from.col = c;
+    from.line = SelFrame->cur.line;
+    to.col = e;
+    to.line = SelFrame->cur.line;
+    init_text(&text, 1);
+    text.lines[0].s = char_num_to_str(&sum, &n);
+    text.lines[0].n = n;
+    replace_lines(SelFrame->buf, &from, &to, &text);
+    SelFrame->cur.col = from.col;
+    (void) adjust_scroll(SelFrame);
+    clear_text(&text);
+    clear_char_num(&num1);
+    clear_char_num(&num2);
+    clear_char_num(&sum);
+    return UPDATE_UI | DO_NOT_RECORD;
+}
+
+static int increment_number(void)
+{
+    return add_to_number(1);
+}
+
+static int decrement_number(void)
+{
+    return add_to_number(-1);
+}
+
 int normal_handle_input(int c)
 {
     static int (*const binds[])(void) = {
@@ -1019,6 +1086,8 @@ int normal_handle_input(int c)
         ['q']           = do_recording,
         ['@']           = play_recording,
         ['.']           = play_dot_recording,
+        [CONTROL('A')]  = increment_number,
+        [CONTROL('X')]  = decrement_number,
     };
 
     if (c < (int) ARRAY_SIZE(binds) && binds[c] != NULL) {

@@ -2,6 +2,7 @@
 #include "frame.h"
 #include "purec.h"
 #include "util.h"
+#include "charnum.h"
 
 #include <ctype.h>
 #include <ncurses.h>
@@ -308,6 +309,103 @@ static int increase_line_indent(void)
     return do_action_till(SelFrame, '>', sel.beg.line, sel.end.line);
 }
 
+static int add_to_number(int dir)
+{
+    struct selection    sel;
+    line_t              i;
+    struct line         *line;
+    col_t               m_c, c, s;
+    struct text         text;
+    struct pos          from, to;
+    size_t              n;
+    struct charnum      num1, num2, sum;
+
+    num_to_char_num(Core.counter, &num2);
+    if (dir < 0) {
+        num2.sign = -1;
+    }
+
+    get_selection(&sel);
+    if (Core.mode == VISUAL_LINE_MODE) {
+        sel.beg.col = 0;
+        sel.end.col = SelFrame->buf->text.lines[sel.end.line].n;
+    }
+    for (i = sel.beg.line; i <= sel.end.line; i++) {
+        line = &SelFrame->buf->text.lines[i];
+        m_c = sel.beg.col;
+        c = MIN(sel.end.col + 1, line->n);
+        if (Core.mode != VISUAL_BLOCK_MODE) {
+            if (i != sel.end.line) {
+                c = line->n;
+            }
+            if (i != sel.beg.line) {
+                m_c = 0;
+            }
+        }
+        while (c > m_c) {
+            for (; c > m_c; c--) {
+                if (isdigit(line->s[c - 1])) {
+                    break;
+                }
+            }
+            if (c == m_c) {
+                break;
+            }
+            for (s = c; s > m_c; s--) {
+                if (!isdigit(line->s[s - 1])) {
+                    break;
+                }
+            }
+            while (s > m_c && isdigit(line->s[s - 1])) {
+                s--;
+            }
+
+            if (s > 0 && line->s[s - 1] == '-') {
+                s--;
+            }
+
+            str_to_char_num(&line->s[s], c - s, &num1);
+            add_char_nums(&num1, &num2, &sum);
+
+            from.col = s;
+            from.line = i;
+            to.col = c;
+            to.line = i;
+            init_text(&text, 1);
+            text.lines[0].s = char_num_to_str(&sum, &n);
+            text.lines[0].n = n;
+            replace_lines(SelFrame->buf, &from, &to, &text);
+            clear_text(&text);
+            clear_char_num(&num1);
+            clear_char_num(&sum);
+            c = s;
+        }
+        if (Core.mode == VISUAL_BLOCK_MODE) {
+            g_one.sign = dir;
+            add_char_nums(&num2, &g_one, &sum);
+            g_one.sign = 1;
+            clear_char_num(&num2);
+            num2 = sum;
+        }
+    }
+    clear_char_num(&num2);
+    Core.pos.col = MIN(Core.pos.col,
+                       SelFrame->buf->text.lines[Core.pos.line].n);
+    SelFrame->cur.col = MIN(SelFrame->cur.col,
+                            SelFrame->buf->text.lines[SelFrame->cur.line].n);
+    return UPDATE_UI | DO_NOT_RECORD;
+}
+
+static int increment_numbers(void)
+{
+    return add_to_number(1);
+}
+
+static int decrement_numbers(void)
+{
+    return add_to_number(-1);
+}
+
 int visual_handle_input(int c)
 {
     static int (*const binds[])(void) = {
@@ -336,6 +434,8 @@ int visual_handle_input(int c)
         ['=']           = reset_line_indent,
         ['<']           = decrease_line_indent,
         ['>']           = increase_line_indent,
+        [CONTROL('A')]  = increment_numbers,
+        [CONTROL('X')]  = decrement_numbers,
     };
 
     if (c < (int) ARRAY_SIZE(binds) && binds[c] != NULL) {
